@@ -39,5 +39,5 @@ Tankstellen sind gesetzlich verpflichtet ihre Preise an das Bundeskartellamt zu 
 
 ## Wer hat das gemacht ?
 
-Bei Fragen kontaktieren Sie bitte Raphael Volz (rv@volzinnovation.com). Alle Anregungen sind willkommen
+Bei Fragen kontaktieren Sie bitte Raphael Volz (rv@volzinnovation.com). Alle Anregungen sind willkommen.
 
