@@ -1,4 +1,5 @@
-# Untertägige Preisveränderungen
+# Untertägige Preisveränderungen für Treibstoffe
+
 Berechnung der Preisveränderungen innerhalb eines Tages für Diesel, E10 und E5 an allen deutschen Tankstellen.
 
 Datenquelle: MTS-K via [Tankerkönig](https://www.tankerkoenig.de/).
@@ -25,3 +26,18 @@ Jeweils gleichartiger Aufbau dieser Dateien für alle Tankstellen
 
 * 2 Spalten: Uhrzet, Preisdifferenz in Euro
 * 25 Zeilen, Header, dann Stunde, Preisdifferenz
+
+# Frequently Asked Questions (FAQ)
+
+## Wozu? Weshalb? Warum?
+
+Wer sparen will tankt zum richtigen Zeitpunkt
+
+## Wie funktioniert das ?
+
+Tankstellen sind gesetzlich verpflichtet ihre Preise an das Bundeskartellamt zu melden. Dieses Amt publiziert den Datensatz MTS-K auf umständlicher Weise. Tankerkönig veröffentlicht und archiviert diese Preise. Die Preise des letzten Tages werden von uns aufbereitet, um die Preisveränderungen nach Stunde aufzubereiten. Das macht das Script calcuation.r, welches sie in diesem Repository finden und mit der freien Software R auf einem System ihrer Wahl ausführen können.
+
+## Wer hat das gemacht ?
+
+Bei Fragen kontaktieren Sie bitte Raphael Volz (rv@volzinnovation.com). Alle Anregungen sind willkommen
+
