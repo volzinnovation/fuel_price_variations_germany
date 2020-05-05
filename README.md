@@ -24,14 +24,14 @@ In jedem Ordner finden sich drei CSV Dateien für
 
 Jeweils gleichartiger Aufbau dieser Dateien für alle Tankstellen
 
-* 2 Spalten: Uhrzet, Preisdifferenz in Euro
+* 2 Spalten: Uhrzeit, Preisdifferenz in Euro
 * 25 Zeilen, Header, dann Stunde, Preisdifferenz
 
 # Frequently Asked Questions (FAQ)
 
 ## Wozu? Weshalb? Warum?
 
-Wer sparen will tankt zum richtigen Zeitpunkt
+Wer sparen will tankt zum richtigen Zeitpunkt.
 
 ## Wie funktioniert das ?
 
