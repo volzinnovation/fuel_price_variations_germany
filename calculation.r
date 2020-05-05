@@ -64,6 +64,7 @@ result.frame[,2] = round (  result.frame[,2] ,2) # Show only two Digits
 result.frame =  result.frame[order( result.frame$hour), ]
 # Write File
 dirname=path_join(str_split(station$station_uuid[1],"-"))
+dirname=path_join(c(path("data"), dirname))
 filename=path("diesel.csv")
 dir_create(dirname, recursive=T)
 filename=path_join(c(dirname,filename))
@@ -87,6 +88,7 @@ names(result.frame)  = c("hour","price")
 result.frame[,2] = round (  result.frame[,2] ,2) # Show only two Digits
 # Write File
 dirname=path_join(str_split(station$station_uuid[1],"-"))
+dirname=path_join(c(path("data"), dirname))
 filename=path("e10.csv")
 dir_create(dirname, recursive=T)
 filename=path_join(c(dirname,filename))
@@ -111,6 +113,7 @@ result.frame[,2] = round (  result.frame[,2] ,2) # Show only two Digits
 result.frame =  result.frame[order( result.frame$hour), ]
 # Write File
 dirname=path_join(str_split(station$station_uuid[1],"-"))
+dirname=path_join(c(path("data"), dirname))
 filename=path("e5.csv")
 dir_create(dirname, recursive=T)
 filename=path_join(c(dirname,filename))
