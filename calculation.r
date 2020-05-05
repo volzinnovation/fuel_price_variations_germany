@@ -67,7 +67,7 @@ result.frame =  result.frame[order( result.frame$hour), ]
 dirname=path_join(str_split(station$station_uuid[1],"-"))
 dirname=path_join(c(path("data"), dirname))
 filename=path("diesel.csv")
-dir_create(dirname, recursive=T)
+dir_create(dirname, recurse=T)
 filename=path_join(c(dirname,filename))
 write.csv(result.frame, filename, row.names=F)
 #
@@ -91,7 +91,7 @@ result.frame[,2] = round (  result.frame[,2] ,2) # Show only two Digits
 dirname=path_join(str_split(station$station_uuid[1],"-"))
 dirname=path_join(c(path("data"), dirname))
 filename=path("e10.csv")
-dir_create(dirname, recursive=T)
+dir_create(dirname, recurse=T)
 filename=path_join(c(dirname,filename))
 write.csv(result.frame, filename, row.names=F)
 #
@@ -116,7 +116,7 @@ result.frame =  result.frame[order( result.frame$hour), ]
 dirname=path_join(str_split(station$station_uuid[1],"-"))
 dirname=path_join(c(path("data"), dirname))
 filename=path("e5.csv")
-dir_create(dirname, recursive=T)
+dir_create(dirname, recurse=T)
 filename=path_join(c(dirname,filename))
 write.csv(result.frame, filename, row.names=F)
     }) # TRY
