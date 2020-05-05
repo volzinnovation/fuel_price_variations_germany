@@ -34,6 +34,7 @@ stations= unique(data$station_uuid)
 ## WITHIN FOR LOOP 
 for(s in stations) {
   cat(paste0("Processing ", s, "...\n"))
+  try({
 station = subset(data, station_uuid==s)
 station$date = as.POSIXlt(station$date, format="%Y-%m-%d %H:%M:%OS")
 # Calculate Savings for last day
@@ -118,4 +119,5 @@ filename=path("e5.csv")
 dir_create(dirname, recursive=T)
 filename=path_join(c(dirname,filename))
 write.csv(result.frame, filename, row.names=F)
+    }) # TRY
 }
