@@ -7,7 +7,7 @@ urltail = "-prices.csv&versionDescriptor%5BversionOptions%5D=0&versionDescriptor
 urlhead ="https://dev.azure.com/tankerkoenig/362e70d1-bafa-4cf7-a346-1f3613304973/_apis/git/repositories/0d6e7286-91e4-402c-af56-fa75be1f223d/items?path=%2Fprices%2F"
 #file = "2020%2F05%2F2020-05-04"
 # Load Data from two days ago to get last price update before midnight
-date=Sys.Date()-3
+date=Sys.Date()-2
 year = format(date,"%Y")
 month = format(date,"%m")
 day = format(date,"%d")
@@ -15,7 +15,7 @@ file = paste0(year,"%2F", month, "%2F", year, "-", month, "-", day )
 url=paste0(urlhead, file, urltail)
 d=read.csv(url)
 # Load Data for yesterday to get last price updates
-date=Sys.Date()-2
+date=Sys.Date()-1
 year = format(date,"%Y")
 month = format(date,"%m")
 day = format(date,"%d")
