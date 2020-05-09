@@ -2,13 +2,35 @@
 # README FIRST
 #
 # Uncomment the following line to install required packages
-# install.packages("zoo","xts","stringr","fs")
+# install.packages("zoo","xts","stringr","fs","readr","jsonlite")
 #
 # Load libraries
 library(zoo)
 library(stringr)
 library(fs)
 library(xts)
+library(readr)
+library(jsonlite)
+#
+# General options
+#
+# File encoding in UTF-8
+options("encoding" = "UTF-8")
+#
+# Download latest stations file and convert it to JSON
+#
+urlhead = "https://dev.azure.com/tankerkoenig/362e70d1-bafa-4cf7-a346-1f3613304973/_apis/git/repositories/0d6e7286-91e4-402c-af56-fa75be1f223d/items?path=%2Fstations%2F2020%2F05%2F"
+urltail = "-stations.csv&versionDescriptor%5BversionOptions%5D=0&versionDescriptor%5BversionType%5D=0&versionDescriptor%5Bversion%5D=master&resolveLfs=true&api-version=5.0"
+url = paste0(urlhead, (Sys.Date() -1 ) ,urltail)
+url
+d = read_csv(url)
+d$openingtimes_json=NULL
+d$first_active=NULL
+json = toJSON(d, dataframe="rows")
+write(json, "data/stations.json")
+#
+# Download latest price updates and calculate savings per time interval
+#
 # Calculate Files to download
 # End of URL
 urltail = "-prices.csv&versionDescriptor%5BversionOptions%5D=0&versionDescriptor%5BversionType%5D=0&versionDescriptor%5Bversion%5D=master&resolveLfs=true&%24format=octetStream&api-version=5.0&download=true"
@@ -91,7 +113,13 @@ for(s in stations) {
     filename=path("diesel.csv")
     dir_create(dirname, recurse=T)
     filename=path_join(c(dirname,filename))
+    # Write as CSV
     write.csv(result.frame, filename, row.names=F)
+    # Write as JSON
+    filename=path("diesel.json")
+    filename=path_join(c(dirname,filename))
+    json = toJSON(d, dataframe="rows")
+    write(json, filename)
     #
     # E10
     #
@@ -117,6 +145,11 @@ for(s in stations) {
     dir_create(dirname, recurse=T)
     filename=path_join(c(dirname,filename))
     write.csv(result.frame, filename, row.names=F)
+    # Write as JSON
+    filename=path("e10.json")
+    filename=path_join(c(dirname,filename))
+    json = toJSON(d, dataframe="rows")
+    write(json, filename)
     #
     # E5
     #
@@ -142,6 +175,11 @@ for(s in stations) {
     filename=path("e5.csv")
     dir_create(dirname, recurse=T)
     filename=path_join(c(dirname,filename))
-    write.csv(result.frame, filename, row.names=F)
+    write.csv(result.frame, filename, row.names=F)    
+    # Write as JSON
+    filename=path("e5.json")
+    filename=path_join(c(dirname,filename))
+    json = toJSON(d, dataframe="rows")
+    write(json, filename)
   }) # END TRY
 } # END FOR LOOP
