@@ -43,7 +43,7 @@ Wer sparen will tankt zum richtigen Zeitpunkt.
 
 ## Wie funktioniert das ?
 
-Tankstellen sind gesetzlich verpflichtet ihre Preise an das Bundeskartellamt zu melden. Dieses Amt publiziert den Datensatz MTS-K auf umständlicher Weise. Tankerkönig veröffentlicht und archiviert diese Preise. Die Preise des letzten Tages werden von uns aufbereitet, um die Preisveränderungen nach Stunde aufzubereiten. Das macht das Script [calculation.r](https://github.com/volzinnovation/fuel_price_variations_germany/blob/master/calculation.r), welches sie mit der freien Software R auf einem System ihrer Wahl selbst ausführen und den eigenen Bedürfnissen anpassen können.
+Tankstellen sind gesetzlich verpflichtet ihre Preise an das Bundeskartellamt zu melden. Dieses Amt publiziert den Datensatz MTS-K auf umständlicher Weise. Tankerkönig veröffentlicht und archiviert diese Preise. Die Preise des letzten Tages werden von uns aufbereitet, um die Preisveränderungen nach Stunde darzustellen. Das macht das Script [calculation.r](https://github.com/volzinnovation/fuel_price_variations_germany/blob/master/calculation.r), welches sie mit der freien Software R auf einem System ihrer Wahl selbst ausführen und den eigenen Bedürfnissen anpassen können.
 
 ## Wer hat das gemacht ?
 
