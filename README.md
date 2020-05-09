@@ -51,4 +51,4 @@ Bei Fragen kontaktieren Sie bitte Raphael Volz (rv@volzinnovation.com). Alle Anr
 
 ## Welche Tankstellen gibt es denn in Deutschland und was ist deren MTS-K ID ?
 
-[Eine Liste der Tankstellen und deren ID im Format JSON finden Sie hier](https://www.volzinnovation.com/fuel_price_variations_germany/data/stations.json), diese Liste entspricht meist der letzten [CSV Datei, die Tankerkönig in ihrem Repository publizieren](https://dev.azure.com/tankerkoenig/_git/tankerkoenig-data).
+[Eine Liste der Tankstellen und deren ID im Format JSON finden Sie hier](https://www.volzinnovation.com/fuel_price_variations_germany/data/stations.json), diese Liste entspricht meist der letzten [CSV Datei, die Tankerkönig in ihrem Repository publizieren](https://dev.azure.com/tankerkoenig/_git/tankerkoenig-data). [Sie können die Tankstellen auch alle auf einer Karte betrachten (ACHTUNG: Rechner wird schwitzen...)](https://rpubs.com/loffenauer/mts-k)
