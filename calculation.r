@@ -118,7 +118,7 @@ for(s in stations) {
     # Write as JSON
     filename=path("diesel.json")
     filename=path_join(c(dirname,filename))
-    json = toJSON(d, dataframe="rows")
+    json = toJSON(result.frame, dataframe="rows")
     write(json, filename)
     #
     # E10
@@ -148,7 +148,7 @@ for(s in stations) {
     # Write as JSON
     filename=path("e10.json")
     filename=path_join(c(dirname,filename))
-    json = toJSON(d, dataframe="rows")
+    json = toJSON(result.frame, dataframe="rows")
     write(json, filename)
     #
     # E5
@@ -179,7 +179,7 @@ for(s in stations) {
     # Write as JSON
     filename=path("e5.json")
     filename=path_join(c(dirname,filename))
-    json = toJSON(d, dataframe="rows")
+    json = toJSON(result.frame, dataframe="rows")
     write(json, filename)
   }) # END TRY
 } # END FOR LOOP
