@@ -8,17 +8,16 @@ Die berechneten Preisunterschiede für jede Tankstelle finden sich im Ordner dat
 
 Abbildung der MTS-K Tankstellen ID auf Ordnerstrukur aus
 
-0d58c4ba-3267-404a-89d6-6ba15a8fc422
+
+Beispiel OMV Bad Herrenalb (ID b4ed695f-2cfc-4688-8ecf-268b10cdb93e)
+
 
 wird
 
-[0d58c4ba/3267/404a/89d6/6ba15a8fc422](https://www.volzinnovation.com/fuel_price_variations_germany/data/0d58c4ba/3267/404a/89d6/6ba15a8fc422/) 
+[/b4ed695f/2cfc/4688/8ecf/268b10cdb93e/](https://www.volzinnovation.com/fuel_price_variations_germany/data/b4ed695f/2cfc/4688/8ecf/268b10cdb93e/) 
 
 mit Daten der jeweiligen Tankstelle
 
-In jedem Ordner finden sich drei CSV Dateien 
-
-Beispiel OMV Bad Herrenalb (ID b4ed695f-2cfc-4688-8ecf-268b10cdb93e)
 
 * [Diesel](https://www.volzinnovation.com/fuel_price_variations_germany/data/b4ed695f/2cfc/4688/8ecf/268b10cdb93e/diesel.csv)
 * [E10](https://www.volzinnovation.com/fuel_price_variations_germany/data/b4ed695f/2cfc/4688/8ecf/268b10cdb93e/e10.csv)
@@ -29,7 +28,6 @@ In jedem Ordner finden sich auch JSON Dateien für
 * [Diesel](https://www.volzinnovation.com/fuel_price_variations_germany/data/b4ed695f/2cfc/4688/8ecf/268b10cdb93e/diesel.json)
 * [E10](https://www.volzinnovation.com/fuel_price_variations_germany/data/b4ed695f/2cfc/4688/8ecf/268b10cdb93e/e10.json)
 * [E5](https://www.volzinnovation.com/fuel_price_variations_germany/data/b4ed695f/2cfc/4688/8ecf/268b10cdb93e/e5.json)
-
 CSV und JSON sind inhaltlich gleich, aber unterschiedlich formatiert.
 
 Jeweils gleichartiger Aufbau dieser Dateien für alle Tankstellen
