@@ -249,7 +249,7 @@ for(s in stations) {
     }
       }
     bt_txt = paste0(bt_txt, rstart, " - ", rend, "h")
-    json = paste0('{"hourly":',json, ',"text":"', bt_txt,',"besthours":', toJSON(mins$hour), ',"min":', min, ',"max":', max, ',"span":', span, '}')
+    json = paste0('{"hourly":',json, ',"text":"', bt_txt,"',"besthours":', toJSON(mins$hour),',"min":', min, ',"max":', max, ',"span":', span, '}')
       #cat(json)
     write(json, filename)
   }) # END TRY
