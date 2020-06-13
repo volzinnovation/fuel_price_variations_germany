@@ -1,0 +1,159 @@
+<html>
+    <style>
+        .tooltip {
+            position: relative;
+            display: inline-block;
+            border-bottom: 1px dotted black;
+        }
+        
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 120px;
+            background-color: black;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px 0;
+        
+            /* Position the tooltip */
+            position: absolute;
+            z-index: 1;
+            top: -5px;
+            left: 105%;
+        }
+        
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+        }
+        </style>
+  <head>  
+  <meta charset="UTF-8"/>
+    <title>Preise in der Nähe</title>
+  </head>
+
+  <body onload="getLocation()">
+      <body>
+          <h1>Aktuelle Preise in ihrer Nähe für Treibstoff der Sorte E10</h1>
+          <table style='text-align:center;'>
+              <thead>    
+                <tr>
+                  <th>Name</th>
+                  <th>Preis (€ / l)</th>
+                  <th>Beste Zeit</th>
+                  <th>Spare bis zu ( ¢ / l)</th>
+                  <th></th>
+              </tr>
+              </thead>
+              <tbody id = "x">
+              </tbody>
+                      
+          </table>
+          <p>
+              <i>Datenquelle: Tankerkönig/MTS-K. Hinweis: Bester Zeitpunkt und max. Ersparnis wurden ermittelt durch Beobachtung der Preisvariationen der letzten Tage.</i>
+          </p>
+          <a href="index.html">[ Nur Favoriten Anzeigen ]</a>
+  </body>
+  <script>
+    var vis_head =
+      "https://www.volzinnovation.com/fuel_price_variations_germany/data2/";
+    var vis_tail = "/e10.json";
+
+      var x = document.getElementById("x");
+      var ids = JSON.parse(localStorage.getItem("ids"));
+      var fav = JSON.parse(localStorage.getItem("fav"));
+      if(fav == null) {
+          fav = new Array();
+          ids = new Array();
+      }
+  
+      function addAndStore(id, name, lat, lng) {
+          element = { "id": id, "name" : name, "lat" : lat, "lng":  lng  }
+          if (ids.indexOf(id) === -1) {
+              fav.push(element);
+              ids.push(id)
+          }
+          localStorage.setItem("fav", JSON.stringify(fav));
+          localStorage.setItem("ids", JSON.stringify(ids));
+      }
+  
+      function removeAndStore(element) {
+          if(fav != null) {
+              const index = fav.indexOf(element);
+              fav.splice(index, 1);
+              localStorage.setItem("fav", JSON.stringify(fav));
+          }
+      }
+  
+  
+      function getLocation() {
+          if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(showPosition);
+          } else {
+            x.innerHTML = "Geolocation is not supported by this browser.";
+          }
+        }
+  
+        function showPosition(position) {
+          var url =
+            "https://creativecommons.tankerkoenig.de/json/list.php?rad=10&type=all&sort=dist&lat=" +
+            position.coords.latitude +
+            "&lng=" +
+            position.coords.longitude +
+            "&apikey=fe8673d1-47be-1156-77e4-040e06cb785c";
+          console.log(url);
+          tankerkoenig.open("GET", url, false);
+          tankerkoenig.send();
+      }
+  
+        // Tankerkoenig API with call back
+        var tankerkoenig = new XMLHttpRequest();
+        tankerkoenig.onreadystatechange = function() {
+          if (this.readyState == 4 && this.status == 200) {
+            prices = JSON.parse(this.responseText);
+            s = prices.stations;
+            let html = "";
+            for (var i=0; i < (s.length > 10 ? 10 : s.length); i++) {
+              html += "<tr><td>"
+              html += "<a href='https://www.google.com/maps/search/?api=1&amp;query=" 
+              html += s[i].lat + "," + s[i].lng + "'>"
+              html += s[i].brand + " " + s[i].name + "</a></td>"
+              html += "<td>" + s[i].e10 + "</td>"
+              html += "<td id = '" + s[i].id + "t'>besthour</td>"
+              html += "<td id = '" + s[i].id + "s'>savings</td>"
+              html += "<td class='tooltip' style='font-weight: bold;' onclick=addAndStore('"
+              html += s[i].id + "','" + s[i].brand + "'," + s[i].lat + ',' + s[i].lng 
+              html += ")><span class='tooltiptext'>Favorit setzen</span>&#9733;</span></td>"
+              html += "</tr>"
+            }
+            x.innerHTML = html
+            for (var i=0; i < (s.length > 10 ? 10 : s.length); i++) {
+              url = vis_head + s[i].id + vis_tail;
+              url = url.split("-").join("/");
+              console.log(url);
+              vis.open("GET", url, false); // Cannot be asynchronous, have to wait until issueing second request via URL (Using Deprecated Feature)
+              vis.send();
+            }
+          }
+        };
+  
+         // Volz Innovation Service with callback
+    var vis = new XMLHttpRequest();
+    vis.onreadystatechange = function() {
+      if (this.readyState == 4 && this.status == 200) {
+        let currentID = this.responseURL.substring(
+          vis_head.length,
+          this.responseURL.length - vis_tail.length
+        );
+        currentID = currentID.split("/").join("-");
+        console.log(currentID);
+        stats = JSON.parse(this.responseText);
+        //console.log(stats);
+        var t = document.getElementById(currentID + "t"); // Best times
+        var s = document.getElementById(currentID + "s"); // Best times
+        t.innerText = stats.besthours;
+        s.innerText = Math.round((stats.max - stats.min) * 100);
+      }
+    };
+  
+      </script>
+</html>
