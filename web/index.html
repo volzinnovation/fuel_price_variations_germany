@@ -1,0 +1,181 @@
+<html>
+  <style>
+    .tooltip {
+      position: relative;
+      display: inline-block;
+      border-bottom: 1px dotted black;
+    }
+
+    .tooltip .tooltiptext {
+      visibility: hidden;
+      width: 120px;
+      background-color: black;
+      color: #fff;
+      text-align: center;
+      border-radius: 6px;
+      padding: 5px 0;
+
+      /* Position the tooltip */
+      position: absolute;
+      z-index: 1;
+      top: -5px;
+      left: 105%;
+    }
+
+    .tooltip:hover .tooltiptext {
+      visibility: visible;
+    }
+  </style>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Preise in der Nähe</title>
+  </head>
+
+  <body onload="load()">
+    <h1>Ihre Lieblingstankstellen</h1>
+    <div id="x">
+      werden gerade geladen
+    </div>
+    <p>
+      <i>Datenquelle: Tankerkönig/MTS-K.</i>
+    </p>
+    <p>
+      <a href="umkreis.html">Finden Sie weitere Tankstellen in ihrer Nähe.</a>
+    </p>
+  </body>
+  <script>
+    var vis_head =
+      "https://www.volzinnovation.com/fuel_price_variations_germany/data2/";
+    var vis_tail = "/e10.json";
+    var prices;
+    // Tankerkoenig API with call back
+    var tankerkoenig = new XMLHttpRequest();
+    tankerkoenig.onreadystatechange = function() {
+      if (this.readyState == 4 && this.status == 200) {
+        prices = JSON.parse(this.responseText);
+        // console.log(prices);
+        for (i = 0; i < ids.length; i++) {
+          var p = document.getElementById(ids[i]);
+          p.innerText =
+            prices.prices[ids[i]].status == "closed"
+              ? "- (Geschlossen)"
+              : prices.prices[ids[i]].e10;
+        }
+      }
+    };
+    // Volz Innovation Service with callback
+    var vis = new XMLHttpRequest();
+    vis.onreadystatechange = function() {
+      if (this.readyState == 4 && this.status == 200) {
+        let currentID = this.responseURL.substring(
+          vis_head.length,
+          this.responseURL.length - vis_tail.length
+        );
+        currentID = currentID.split("/").join("-");
+        console.log(currentID);
+        stats = JSON.parse(this.responseText);
+        //console.log(stats);
+        var t = document.getElementById(currentID + "t"); // Best times
+        var s = document.getElementById(currentID + "s"); // Best times
+        t.innerText = stats.besthours;
+        s.innerText = (stats.max - stats.min) * 100;
+      }
+    };
+
+    var x = document.getElementById("x");
+    var ids = JSON.parse(localStorage.getItem("ids"));
+    var fav = JSON.parse(localStorage.getItem("fav"));
+
+    function removeAndStore(id) {
+      if (fav != null) {
+        const index = fav.indexOf(id);
+        fav.splice(index, 1);
+        ids.splice(index, 1);
+        localStorage.setItem("fav", JSON.stringify(fav));
+        localStorage.setItem("ids", JSON.stringify(ids));
+        load();
+      }
+    }
+    var link;
+
+    function getLocation() {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(showPosition);
+      } else {
+        x.innerHTML = "Geolocation is not supported by this browser.";
+      }
+    }
+
+    function showPosition(position) {
+      link =
+        "preise/suche?lat=" +
+        position.coords.latitude +
+        "&lng=" +
+        position.coords.longitude;
+      console.log(link);
+      //  window.location.href = link;
+    }
+
+    function onClick() {
+      window.location.href = link;
+      return false;
+    }
+
+    function loadPrices() {
+      var url = "https://creativecommons.tankerkoenig.de/json/prices.php?ids=";
+      for (i = 0; i < ids.length - 1; i++) {
+        url += ids[i] + ",";
+      }
+      url += ids[ids.length - 1];
+      url += "&apikey=fe8673d1-47be-1156-77e4-040e06cb785c";
+      console.log(url);
+      tankerkoenig.open("GET", url);
+      tankerkoenig.send();
+      for (i = 0; i < ids.length; i++) {
+        url = vis_head + ids[i] + vis_tail;
+        url = url.split("-").join("/");
+        console.log(url);
+        vis.open("GET", url, false); // Cannot be asynchronous, have to wait until issueing second request via URL (Using Deprecated Feature)
+        vis.send();
+      }
+    }
+
+    function load() {
+      var html;
+      // getLocation();
+      if (fav != null && fav.length > 0) {
+        html =
+          "<table><tr><th>Name</th><th>Preis</th><th>Beste Zeit</th>" +
+          "<th>Spare bis zu ( ¢ / l)</th><th></th></tr>";
+        for (i = 0; i < fav.length; i++) {
+          html +=
+            "<tr><td><a href='https://www.google.com/maps/search/?api=1&amp;query=" +
+            fav[i].lat +
+            "," +
+            fav[i].lng +
+            "'>" +
+            fav[i].name +
+            "</a></td>";
+          html += "<td id='" + fav[i].id + "'>...</td>"; // >" + prices.prices[fav[i].id].e10 + "
+
+          html += "<td id='" + fav[i].id + "t'>...</td>";
+          html += "<td id='" + fav[i].id + "s'>...</td>";
+
+          js = "removeAndStore('" + fav[i].id + "')";
+          html += "<td style='color:red; font-weight: bold;' class='tooltip'";
+          html += " onclick=" + js + ">";
+          html += '<span class="tooltiptext">Favorit löschen</span>';
+          html += "❌</td></tr>";
+        }
+        html += "</table>";
+      } else {
+        html = "Sie haben keine Lieblingstankstellen.";
+      }
+      x.innerHTML = html;
+      if (fav.length > 0) {
+        loadPrices();
+      }
+      // console.log(html);
+    }
+  </script>
+</html>
