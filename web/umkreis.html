@@ -113,7 +113,7 @@
             s = prices.stations;
             let html = "";
             for (var i=0; i < (s.length > 10 ? 10 : s.length); i++) {
-              html += "<tr><td>"
+              html += "<tr id = '" + s[i].id + "'><td>"
               html += "<a href='https://www.google.com/maps/search/?api=1&amp;query=" 
               html += s[i].lat + "," + s[i].lng + "'>"
               html += s[i].brand + " " + s[i].name + "</a></td>"
@@ -150,8 +150,15 @@
         //console.log(stats);
         var t = document.getElementById(currentID + "t"); // Best times
         var s = document.getElementById(currentID + "s"); // Best times
+        var r = document.getElementById(currentID );
         t.innerText = stats.text;
-        s.innerText = Math.round((stats.max - stats.min) * 100);
+        s.innerText = Math.round((stats.max - stats.min) * 100); 
+        var r = document.getElementById(currentID ); // Best times
+        var today = new Date();
+        var hour = today.getHours();
+        if(stats.besthours.includes(hour)) {
+          r.setAttribute("style","background-color:lightgreen;") 
+        }
       }
     };
   
