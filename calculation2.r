@@ -38,7 +38,7 @@ urltail = "-prices.csv&versionDescriptor%5BversionOptions%5D=0&versionDescriptor
 urlhead ="https://dev.azure.com/tankerkoenig/362e70d1-bafa-4cf7-a346-1f3613304973/_apis/git/repositories/0d6e7286-91e4-402c-af56-fa75be1f223d/items?path=%2Fprices%2F"
 # Load Data from two days ago to get last price update before midnight
 # two days ago
-date=Sys.Date()-2
+date=Sys.Date()-3
 year = format(date,"%Y")
 month = format(date,"%m")
 day = format(date,"%d")
@@ -49,7 +49,7 @@ url=paste0(urlhead, file, urltail)
 # Load file from Web
 d=read.csv(url)
 # Load Data for yesterday to get last price updates, see comments above
-date=Sys.Date()-1
+date=Sys.Date()-2
 year = format(date,"%Y")
 month = format(date,"%m")
 day = format(date,"%d")
@@ -106,7 +106,7 @@ for(s in stations) {
     result.frame = data.frame(key=names(result), value=result)
     names(result.frame)  = c("hour","price")
     result.frame[,2] = round (  result.frame[,2] ,2) # Show only two Digits
-    result.frame$hour = as.numeric(result.frame$hour)
+    result.frame$hour = as.numeric(result.frame$hour)-1
     result.frame =  result.frame[order( result.frame$hour), ]
     # Write File and create required directories
     dirname=path_join(str_split(station$station_uuid[1],"-"))
@@ -126,8 +126,18 @@ for(s in stations) {
     mins = subset(result.frame, price == min)
     # summarize min_frame_hour to text
     rstart = mins$hour[1]
-    rend = rstart+1
-    bt_txt = paste0(rstart, " - ", rend, "h")
+    rend = rstart+1    
+    bt_txt = ""
+    for (h in mins$hour[2:nrow(mins)]) {
+      if (h==rend) { 
+        rend = rend+1
+      } else {
+        bt_txt = paste0(bt_txt, rstart, " - ", rend, "h, ")
+        rstart = h
+        rend = h +1
+      }
+    }
+    bt_txt = paste0(bt_txt, rstart, " - ", rend, "h")
     json = paste0('{"hourly":',json, ',"besthours":"', bt_txt, '","min":', min, ',"max":', max, ',"span":', span, '}')
     #cat(json)
     write(json,filename)
@@ -148,7 +158,7 @@ for(s in stations) {
     result <- tapply(table$price, table$hour, mean)
     result.frame = data.frame(key=names(result), value=result)
     names(result.frame)  = c("hour","price")
-    result.frame$hour = as.numeric(result.frame$hour)
+    result.frame$hour = as.numeric(result.frame$hour)-1
     result.frame[,2] = round (  result.frame[,2] ,2) # Show only two Digits
     # Write File
     dirname=path_join(str_split(station$station_uuid[1],"-"))
@@ -167,8 +177,18 @@ for(s in stations) {
     mins = subset(result.frame, price == min)
     # summarize min_frame_hour to text
     rstart = mins$hour[1]
-    rend = rstart+1
-    bt_txt = paste0(rstart, " - ", rend, "h")
+    rend = rstart+1    
+    bt_txt = ""
+    for (h in mins$hour[2:nrow(mins)]) {
+      if (h==rend) { 
+        rend = rend+1
+      } else {
+        bt_txt = paste0(bt_txt, rstart, " - ", rend, "h, ")
+        rstart = h
+        rend = h +1
+      }
+    }
+    bt_txt = paste0(bt_txt, rstart, " - ", rend, "h")
     json = paste0('{"hourly":',json, ',"besthours":"', bt_txt, '","min":', min, ',"max":', max, ',"span":', span, '}')
     #cat(json)
     write(json, filename)
@@ -189,7 +209,7 @@ for(s in stations) {
     result <- tapply(table$price, table$hour, mean)
     result.frame = data.frame(key=names(result), value=result)
     names(result.frame)  = c("hour","price")
-    result.frame$hour = as.numeric(result.frame$hour)
+    result.frame$hour = as.numeric(result.frame$hour)-1
     result.frame[,2] = round (  result.frame[,2] ,2) # Show only two Digits
     result.frame =  result.frame[order( result.frame$hour), ]
     # Write File
@@ -207,10 +227,20 @@ for(s in stations) {
     max = max(result.frame$price)
     span = max - min
     mins = subset(result.frame, price == min)
-    # summarize min_frame_hour to text
+ # summarize min_frame_hour to text
     rstart = mins$hour[1]
-    rend = rstart+1
-    bt_txt = paste0(rstart, " - ", rend, "h")
+    rend = rstart+1    
+    bt_txt = ""
+    for (h in mins$hour[2:nrow(mins)]) {
+      if (h==rend) { 
+        rend = rend+1
+      } else {
+        bt_txt = paste0(bt_txt, rstart, " - ", rend, "h, ")
+        rstart = h
+        rend = h +1
+      }
+    }
+    bt_txt = paste0(bt_txt, rstart, " - ", rend, "h")
     json = paste0('{"hourly":',json, ',"besthours":"', bt_txt, '","min":', min, ',"max":', max, ',"span":', span, '}')
     #cat(json)
     write(json, filename)
