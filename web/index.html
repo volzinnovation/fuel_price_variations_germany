@@ -1,48 +1,48 @@
-<html>
-  <style>
-    .tooltip {
-      position: relative;
-      display: inline-block;
-      border-bottom: 1px dotted black;
-    }
-
-    .tooltip .tooltiptext {
-      visibility: hidden;
-      width: 120px;
-      background-color: black;
-      color: #fff;
-      text-align: center;
-      border-radius: 6px;
-      padding: 5px 0;
-
-      /* Position the tooltip */
-      position: absolute;
-      z-index: 1;
-      top: -5px;
-      left: 105%;
-    }
-
-    .tooltip:hover .tooltiptext {
-      visibility: visible;
-    }
-  </style>
+<!doctype html>
+<html lang="de">
   <head>
     <meta charset="UTF-8" /> 
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
-    <title>Preise in der Nähe</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no">
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css" integrity="sha384-9aIt2nRpC12Uk9gS9baDl411NQApFmC26EwAOH8WgZl5MYYxFfc+NcPb1dKGj7Sk" crossorigin="anonymous">
+
+    <title>E10 bei ihren Lieblingstankstellen</title>
   </head>
 
   <body onload="load()">
-    <h1>Ihre Lieblingstankstellen</h1>
-    <div id="x">
-      werden gerade geladen
+  <div class="container">
+    <div class="row">
+      <div class="col">
+        <h2>E10 für mich</h2>
+      </div>
+      <div class="col">
+        <a href="umkreis.html" class="btn btn-primary">Andere Tankstellen finden</a>
+      </div>
     </div>
-    <p>
-      <i>Datenquelle: Tankerkönig/MTS-K.</i>
-    </p>
-    <p>
-      <a href="umkreis.html">Finden Sie weitere Tankstellen in ihrer Nähe.</a>
-    </p>
+    <div class="row">
+      <table class="table table-hover">
+        <caption><em>Daten via <a href="http://www.tankerkoenig.de/">Tankerkönig</a>.
+          Beste Zeit und mögliche Ersparnis ermittelt durch Beobachtung der Preise der letzten Tage.</em>
+        </caption>
+          <thead>
+        <tr>
+          <th>Name</th>
+          <th>€/l</th>
+          <th>Gute Zeit</th>
+          <th>Schwankung</th>
+          <th></th>
+        </tr>
+        </thead>
+        <tbody id = "x" />
+      </table>
+    </div>
+    <div class="row">
+      <em><strong>&copy; Volz Innovation GmbH</strong>
+        Alle Rechte zur kommerziellen Nutzung bleiben uns vorbehalten.
+        <a href="https://www.volzinnovation.com/">Wir freuen uns über ihren Kontakt.</a></em>
+    </div>
+  </div>
+
   </body>
   <script>
     var vis_head =
@@ -79,7 +79,7 @@
         var t = document.getElementById(currentID + "t"); // Best times
         var s = document.getElementById(currentID + "s"); // Best times
         t.innerText = stats.text;
-        s.innerText = (stats.max - stats.min) * 100;
+        s.innerText = "± " + Math.round(stats.max - stats.min) * 100  + " ¢/l";;
       }
     };
 
@@ -145,32 +145,28 @@
       var html;
       // getLocation();
       if (fav != null && fav.length > 0) {
-        html =
-          "<table><tr><th>Name</th><th>Preis</th><th>Beste Zeit</th>" +
-          "<th>Spare bis zu ( ¢ / l)</th><th></th></tr>";
+        html = ""
         for (i = 0; i < fav.length; i++) {
           html +=
-            "<tr><td><a href='https://www.google.com/maps/search/?api=1&amp;query=" +
+            "<tr class=\"align-middle\"><td class=\"align-middle\"><a href='https://www.google.com/maps/search/?api=1&amp;query=" +
             fav[i].lat +
             "," +
             fav[i].lng +
             "'>" +
             fav[i].name +
             "</a></td>";
-          html += "<td id='" + fav[i].id + "'>...</td>"; // >" + prices.prices[fav[i].id].e10 + "
+          html += "<td class=\"align-middle\" id='" + fav[i].id + "'>...</td>"; // >" + prices.prices[fav[i].id].e10 + "
 
-          html += "<td id='" + fav[i].id + "t'>...</td>";
-          html += "<td id='" + fav[i].id + "s'>...</td>";
+          html += "<td  class=\"align-middle\" id='" + fav[i].id + "t'>...</td>";
+          html += "<td  class=\"align-middle\" id='" + fav[i].id + "s'>...</td>";
 
           js = "removeAndStore('" + fav[i].id + "')";
-          html += "<td style='color:red; font-weight: bold;' class='tooltip'";
-          html += " onclick=" + js + ">";
-          html += '<span class="tooltiptext">Favorit löschen</span>';
-          html += "❌</td></tr>";
+          html += "<td class=\"align-middle\">";
+          html += "<a class=\"btn btn-light\" data-toggle=\"tooltip\" data-placement=\"left\" title=\"Aus Lieblingstankstellen löschen\" onclick=" + js + ">";
+          html += "❌</a></td></tr>";
         }
-        html += "</table>";
       } else {
-        html = "Sie haben keine Lieblingstankstellen.";
+        html = "<tr><td colspan=4>Sie haben noch keine Lieblingstankstellen können über nach Tankstellen in ihrer Nähe suchen und sich dann ihre Liebstankstellen merken. Deren Preise und Beobachtungen erscheinen dann anstelle dieses Textes.</td></tr>";
       }
       x.innerHTML = html;
       if (fav.length > 0) {

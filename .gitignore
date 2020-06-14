@@ -1,3 +1,6 @@
 
 .RData
 .Rhistory
+web/.idea/misc.xml
+*.xml
+*.iml

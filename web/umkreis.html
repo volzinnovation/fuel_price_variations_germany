@@ -1,59 +1,52 @@
 <html>
-    <style>
-        .tooltip {
-            position: relative;
-            display: inline-block;
-            border-bottom: 1px dotted black;
-        }
-        
-        .tooltip .tooltiptext {
-            visibility: hidden;
-            width: 120px;
-            background-color: black;
-            color: #fff;
-            text-align: center;
-            border-radius: 6px;
-            padding: 5px 0;
-        
-            /* Position the tooltip */
-            position: absolute;
-            z-index: 1;
-            top: -5px;
-            left: 105%;
-        }
-        
-        .tooltip:hover .tooltiptext {
-            visibility: visible;
-        }
-        </style>
   <head>  
-  <meta charset="UTF-8"/> 
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" /> 
-    <title>Preise in der Nähe</title>
+  <meta charset="UTF-8"/>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no">
+      <!-- Bootstrap CSS -->
+      <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css" integrity="sha384-9aIt2nRpC12Uk9gS9baDl411NQApFmC26EwAOH8WgZl5MYYxFfc+NcPb1dKGj7Sk" crossorigin="anonymous">
+      <title>E10 in der Nähe</title>
   </head>
 
   <body onload="getLocation()">
-      <body>
-          <h1>Aktuelle Preise in ihrer Nähe für Treibstoff der Sorte E10</h1>
-          <table style='text-align:center;'>
+      <div class="container">
+
+          <div class="row">
+              <div class="col">
+                  <h2>E10 in der Nähe</h2>
+              </div>
+              <div class="col">
+                  <a href="index.html" class="btn btn-primary">Zurück zu Lieblingstankstellen</a>
+              </div>
+          </div>
+          <div class="row">
+          <table class="table table-hover">
+              <caption><em>Daten via <a href="http://www.tankerkoenig.de/">Tankerkönig</a>.
+                  Beste Zeit und mögliche Ersparnis ermittelt durch Beobachtung der Preise der letzten Tage.</em>
+              </caption>
               <thead>    
                 <tr>
                   <th>Name</th>
-                  <th>Preis (€ / l)</th>
-                  <th>Beste Zeit</th>
-                  <th>Spare bis zu ( ¢ / l)</th>
+                  <th>€/l</th>
+                  <th>Gute Zeit</th>
+                  <th>Schwankung</th>
                   <th></th>
               </tr>
               </thead>
               <tbody id = "x">
+              <tr><td colspan="5">
+                  <div class="alert alert-primary" role="alert" id="alert">
+                  Wir suchen und bitten um ein bischen Geduld.
+              </div></td></tr>
               </tbody>
-                      
           </table>
-          <p>
-              <i>Datenquelle: Tankerkönig/MTS-K. Hinweis: Bester Zeitpunkt und max. Ersparnis wurden ermittelt durch Beobachtung der Preisvariationen der letzten Tage.</i>
-          </p>
-          <a href="index.html">[ Nur Favoriten Anzeigen ]</a>
-  </body>
+          </div>
+          <div class="row">
+              <em><strong>&copy; Volz Innovation GmbH</strong>
+              Alle Rechte zur kommerziellen Nutzung bleiben uns vorbehalten.
+              <a href="https://www.volzinnovation.com/">Wir freuen uns über ihren Kontakt.</a></em>
+          </div>
+      </div>
+      </body>
   <script>
     var vis_head =
       "https://www.volzinnovation.com/fuel_price_variations_germany/data2/";
@@ -114,16 +107,16 @@
             s = prices.stations;
             let html = "";
             for (var i=0; i < (s.length > 10 ? 10 : s.length); i++) {
-              html += "<tr id = '" + s[i].id + "'><td>"
+              html += "<tr  class=\"align-middle\" id='" + s[i].id + "' class=\"align-middle\"><td>"
               html += "<a href='https://www.google.com/maps/search/?api=1&amp;query=" 
               html += s[i].lat + "," + s[i].lng + "'>"
-              html += s[i].brand + " " + s[i].name + "</a></td>"
-              html += "<td>" + s[i].e10 + "</td>"
-              html += "<td id = '" + s[i].id + "t'>besthour</td>"
-              html += "<td id = '" + s[i].id + "s'>savings</td>"
-              html += "<td class='tooltip' style='font-weight: bold;' onclick=addAndStore('"
-              html += s[i].id + "','" + s[i].brand + "'," + s[i].lat + ',' + s[i].lng 
-              html += ")><span class='tooltiptext'>Favorit setzen</span>&#9733;</span></td>"
+              html += s[i].name + " (" + s[i].brand + ")</a></td>"
+              html += "<td  class=\"align-middle\">" + s[i].e10 + "</td>"
+              html += "<td class=\"align-middle\" id = '" + s[i].id + "t'>besthour</td>"
+              html += "<td class=\"align-middle\" id = '" + s[i].id + "s'>savings</td>"
+              html += "<td class=\"align-middle\"> <a class=\"btn btn-light\" data-toggle=\"tooltip\" data-placement=\"left\" title=\"Zu Lieblingstankstellen hinzufügen\" onclick=addAndStore('"
+              html += s[i].id + "','" + s[i].brand + "'," + s[i].lat + ',' + s[i].lng
+              html += ")>&#9733;</a></td>" // &#9733;
               html += "</tr>"
             }
             x.innerHTML = html
@@ -153,12 +146,12 @@
         var s = document.getElementById(currentID + "s"); // Best times
         var r = document.getElementById(currentID );
         t.innerText = stats.text;
-        s.innerText = Math.round((stats.max - stats.min) * 100); 
+        s.innerText = "± " + Math.round((stats.max - stats.min) * 100) + " ¢/l";
         var r = document.getElementById(currentID ); // Best times
         var today = new Date();
         var hour = today.getHours();
         if(stats.besthours.includes(hour)) {
-          r.setAttribute("style","background-color:lightgreen;") 
+          r.setAttribute("class","table-success")
         }
       }
     };
