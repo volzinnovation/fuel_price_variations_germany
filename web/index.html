@@ -164,15 +164,12 @@
           html += "<td class=\"align-middle\">";
           html += "<a class=\"btn btn-light\" data-toggle=\"tooltip\" data-placement=\"left\" title=\"Aus Lieblingstankstellen löschen\" onclick=" + js + ">";
           html += "❌</a></td></tr>";
+          x.innerHTML = html;
+          loadPrices();
         }
       } else {
-        html = "<tr><td colspan=4>Sie haben noch keine Lieblingstankstellen! Finden Sie Tankstellen und merken sie sich ihre Liebstankstellen, danach erscheinen deren Preise und Beobachtungen anstelle dieses Textes.</td></tr>";
+        window.location.href="umkreis.html";
       }
-      x.innerHTML = html;
-      if (fav.length > 0) {
-        loadPrices();
-      }
-      // console.log(html);
     }
   </script>
 </html>
