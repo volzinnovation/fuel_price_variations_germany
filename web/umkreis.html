@@ -107,10 +107,11 @@
             s = prices.stations;
             let html = "";
             for (var i=0; i < (s.length > 10 ? 10 : s.length); i++) {
+                if(s[i].isOpen && s[i].e10 != null) {
               html += "<tr  class=\"align-middle\" id='" + s[i].id + "' class=\"align-middle\"><td>"
               html += "<a href='https://www.google.com/maps/search/?api=1&amp;query=" 
               html += s[i].lat + "," + s[i].lng + "'>"
-              html += s[i].name + " (" + s[i].brand + ")</a></td>"
+              html +=  s[i].name.toLowerCase().replace(/(^\w|\s\w)/g, m => m.toUpperCase())  + " (" + s[i].brand + ")</a></td>"
               html += "<td  class=\"align-middle\">" + s[i].e10 + "</td>"
               html += "<td class=\"align-middle\" id = '" + s[i].id + "t'>besthour</td>"
               html += "<td class=\"align-middle\" id = '" + s[i].id + "s'>savings</td>"
@@ -118,6 +119,7 @@
               html += s[i].id + "','" + s[i].brand + "'," + s[i].lat + ',' + s[i].lng
               html += ")>&#9733;</a></td>" // &#9733;
               html += "</tr>"
+                }
             }
             x.innerHTML = html
             for (var i=0; i < (s.length > 10 ? 10 : s.length); i++) {
