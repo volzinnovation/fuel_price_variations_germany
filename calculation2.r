@@ -102,7 +102,11 @@ for(s in stations) {
     res <- window(x = res,start = start, end= end)
     # Aggregate by hour and calculate average
     ends <- endpoints(res,'minutes',60)
-    table =  period.apply(res, ends ,mean)-mean(res)  # abs. savings in cents rounded to two digits
+    table =  period.apply(res, ends ,mean)
+    maxabs = max(table)
+    minabs = min(table)
+    cat(paste0(station_uuid,":",minabs,"-",maxabs," for Diesel"))
+    table = table-mean(res)  # abs. savings in cents rounded to two digits
     # Create new data structure for aggregation
     table = data.frame(date=index(table), coredata(table))
     table$hour = format(table$date, "%H")
@@ -149,7 +153,7 @@ for(s in stations) {
     }
       }
     bt_txt = paste0(bt_txt, rstart, " - ", rend, "h")
-    json = paste0('{"hourly":',json, ',"text":"', bt_txt,'","besthours":', toJSON(mins$hour),',"min":', min, ',"max":', max, ',"span":', span, '}')
+    json = paste0('{"hourly":',json, ',"text":"', bt_txt,'","besthours":', toJSON(mins$hour),',"min":', min, ',"max":', max, ',"minabs":', minabs, ',"maxabs":', maxabs, ',"span":', span, '}')
     #cat(json)
     write(json,filename)
     #
@@ -161,7 +165,11 @@ for(s in stations) {
     res <- na.locf(res, na.rm = TRUE)
     res <- window(x = res,start = start, end= end)
     ends <- endpoints(res,'minutes',60)
-    table =  period.apply(res, ends ,mean)-mean(res)  # abs. savings in cents rounded to two digits
+        table =  period.apply(res, ends ,mean)
+        maxabs = max(table)
+        minabs = min(table)
+        table = table-mean(res)  # abs. savings in cents rounded to two digits
+    cat(paste0(station_uuid,":",minabs,"-",maxabs," for E10"))
     table = data.frame(date=index(table), coredata(table))
     table$hour = format(table$date, "%H")
     table$date = NULL
@@ -202,7 +210,7 @@ for(s in stations) {
     }
     }
     bt_txt = paste0(bt_txt, rstart, " - ", rend, "h")
-    json = paste0('{"hourly":',json, ',"text":"', bt_txt,'","besthours":', toJSON(mins$hour),',"min":', min, ',"max":', max, ',"span":', span, '}')
+    json = paste0('{"hourly":',json, ',"text":"', bt_txt,'","besthours":', toJSON(mins$hour),',"min":', min, ',"max":', max, ',"minabs":', minabs, ',"maxabs":', maxabs, ',"span":', span, '}')
     #cat(json)
     write(json, filename)
     #
@@ -213,8 +221,14 @@ for(s in stations) {
     res <- merge(x, xts(, ts.1min))
     res <- na.locf(res, na.rm = TRUE)
     res <- window(x = res,start = start, end= end)
-    ends <- endpoints(res,'minutes',60)
-    table =  period.apply(res, ends ,mean)-mean(res)  # abs. savings in cents rounded to two digits
+    # Aggregate by hour and calculate average
+        ends <- endpoints(res,'minutes',60)
+        table =  period.apply(res, ends ,mean)
+        maxabs = max(table)
+        minabs = min(table)
+        table = table-mean(res)  # abs. savings in cents rounded to two digits
+
+    cat(paste0(station_uuid,":",minabs,"-",maxabs," for E5"))
     table = data.frame(date=index(table), coredata(table))
     table$hour = format(table$date, "%H")
     table$date = NULL
@@ -257,7 +271,7 @@ for(s in stations) {
     }
       }
     bt_txt = paste0(bt_txt, rstart, " - ", rend, "h")
-    json = paste0('{"hourly":',json, ',"text":"', bt_txt,'","besthours":', toJSON(mins$hour),',"min":', min, ',"max":', max, ',"span":', span, '}')
+    json = paste0('{"hourly":',json, ',"text":"', bt_txt,'","besthours":', toJSON(mins$hour),',"min":', min, ',"max":', max, ',"minabs":', minabs, ',"maxabs":', maxabs, ',"span":', span, '}')
       #cat(json)
     write(json, filename)
   }) # END TRY
