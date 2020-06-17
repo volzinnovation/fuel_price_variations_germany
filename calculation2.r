@@ -36,9 +36,8 @@ url = paste0(urlhead, (Sys.Date() -1 ) ,urltail)
 urltail = "-prices.csv&versionDescriptor%5BversionOptions%5D=0&versionDescriptor%5BversionType%5D=0&versionDescriptor%5Bversion%5D=master&resolveLfs=true&%24format=octetStream&api-version=5.0&download=true"
 # Start of URL
 urlhead ="https://dev.azure.com/tankerkoenig/362e70d1-bafa-4cf7-a346-1f3613304973/_apis/git/repositories/0d6e7286-91e4-402c-af56-fa75be1f223d/items?path=%2Fprices%2F"
-# Load Data from two days ago to get last price update before midnight
-# two days ago
-date=Sys.Date()-2
+# Load Data from yesterday to get last price update before midnight
+date = Sys.Date()-1
 year = format(date,"%Y")
 month = format(date,"%m")
 day = format(date,"%d")
@@ -47,17 +46,26 @@ file = paste0(year,"%2F", month, "%2F", year, "-", month, "-", day )
 # Calculate full URL of file to download
 url=paste0(urlhead, file, urltail)
 # Load file from Web
-d=read.csv(url)
+data=read.csv(url)
 # Load Data for yesterday to get last price updates, see comments above
-date=Sys.Date()-1
-year = format(date,"%Y")
-month = format(date,"%m")
-day = format(date,"%d")
-file = paste0(year,"%2F", month, "%2F", year, "-", month, "-", day )
-url=paste0(urlhead, file, urltail)
-d2 = read.csv(url)
-# Concatenate data sets
-data = rbind(d,d2)
+daysfrom = Sys.Date()-8
+daysto = Sys.Date()-2
+daysrange = seq(daysfrom,daysto,by=1)
+for(date in daysrange) {
+  
+  date = as.Date(date, origin = "1970-01-01")
+  year = format(date,"%Y")
+  month = format(date,"%m")
+  day = format(date,"%d")
+  file = paste0(year,"%2F", month, "%2F", year, "-", month, "-", day )
+  url=paste0(urlhead, file, urltail)
+  d2 = read.csv(url)
+  # Concatenate data sets
+  data = rbind(data,d2)
+  cat(paste0("Obtained Price Updates: ", nrow(data),"\n"))
+}
+daysto = Sys.Date()-1
+daysfrom= Sys.Date()-7
 # Find all stations providing price updates
 stations= unique(data$station_uuid)
 #
@@ -75,9 +83,9 @@ for(s in stations) {
     # Convert date and time to R format
     station$date = as.POSIXlt(station$date, format="%Y-%m-%d %H:%M:%OS")
     # Calculate Savings for yesterday
-    start = as.POSIXlt(paste0(date, " 0:00:00"))
-    end = as.POSIXlt(paste0(date, " 23:59:59"))
-    # Find the last price update two days ago that is valid until first update yesterday
+    start = as.POSIXlt(paste0(daysfrom, " 0:00:00"))
+    end = as.POSIXlt(paste0(daysto, " 23:59:59"))
+    # Find the last price update day prior to date of interes
     last = subset(station, date < start)
     last = last$date[nrow(last)]
     # Get only data relevant for yesterday
@@ -141,7 +149,7 @@ for(s in stations) {
     }
       }
     bt_txt = paste0(bt_txt, rstart, " - ", rend, "h")
-    json = paste0('{"hourly":',json, ',"text":"', bt_txt,',"besthours":', toJSON(mins$hour), ',"min":', min, ',"max":', max, ',"span":', span, '}')
+    json = paste0('{"hourly":',json, ',"text":"', bt_txt,'","besthours":', toJSON(mins$hour),',"min":', min, ',"max":', max, ',"span":', span, '}')
     #cat(json)
     write(json,filename)
     #
@@ -194,7 +202,7 @@ for(s in stations) {
     }
     }
     bt_txt = paste0(bt_txt, rstart, " - ", rend, "h")
-    json = paste0('{"hourly":',json, ',"text":"', bt_txt,',"besthours":', toJSON(mins$hour), ',"min":', min, ',"max":', max, ',"span":', span, '}')
+    json = paste0('{"hourly":',json, ',"text":"', bt_txt,'","besthours":', toJSON(mins$hour),',"min":', min, ',"max":', max, ',"span":', span, '}')
     #cat(json)
     write(json, filename)
     #
@@ -249,7 +257,7 @@ for(s in stations) {
     }
       }
     bt_txt = paste0(bt_txt, rstart, " - ", rend, "h")
-    json = paste0('{"hourly":',json, ',"text":"', bt_txt,"',"besthours":', toJSON(mins$hour),',"min":', min, ',"max":', max, ',"span":', span, '}')
+    json = paste0('{"hourly":',json, ',"text":"', bt_txt,'","besthours":', toJSON(mins$hour),',"min":', min, ',"max":', max, ',"span":', span, '}')
       #cat(json)
     write(json, filename)
   }) # END TRY
