@@ -97,15 +97,16 @@ for(s in stations) {
     #
     x = xts(x=station$diesel , order.by=station$date, name="Diesel")
     # Carry forward updates on a per minute basis to calculate correct averages
+    maxabs = max(x)
+    minabs = min(x)
+    #cat(paste0(s,":",minabs,"-",maxabs," for Diesel\n"))
+    # Carry forward
     res <- merge(x, xts(, ts.1min))
     res <- na.locf(res, na.rm = TRUE)
     res <- window(x = res,start = start, end= end)
     # Aggregate by hour and calculate average
     ends <- endpoints(res,'minutes',60)
     table =  period.apply(res, ends ,mean)
-    maxabs = max(table)
-    minabs = min(table)
-    cat(paste0(station_uuid,":",minabs,"-",maxabs," for Diesel"))
     table = table-mean(res)  # abs. savings in cents rounded to two digits
     # Create new data structure for aggregation
     table = data.frame(date=index(table), coredata(table))
@@ -165,11 +166,11 @@ for(s in stations) {
     res <- na.locf(res, na.rm = TRUE)
     res <- window(x = res,start = start, end= end)
     ends <- endpoints(res,'minutes',60)
-        table =  period.apply(res, ends ,mean)
-        maxabs = max(table)
-        minabs = min(table)
-        table = table-mean(res)  # abs. savings in cents rounded to two digits
-    cat(paste0(station_uuid,":",minabs,"-",maxabs," for E10"))
+    table =  period.apply(res, ends ,mean)
+    maxabs = max(x)
+    minabs = min(x)
+    table = table-mean(res)  # abs. savings in cents rounded to two digits
+    #cat(paste0(s,":",minabs,"-",maxabs," for E10\n"))
     table = data.frame(date=index(table), coredata(table))
     table$hour = format(table$date, "%H")
     table$date = NULL
@@ -217,18 +218,17 @@ for(s in stations) {
     # E5
     #
     # Comments see Diesel
-    x = xts(x=station$e5 , order.by=station$date, name="E5")
+    x = xts(x=station$e5 , order.by=station$date, name="E5\n")    
+    maxabs = max(x)
+    minabs = min(x)
     res <- merge(x, xts(, ts.1min))
     res <- na.locf(res, na.rm = TRUE)
     res <- window(x = res,start = start, end= end)
     # Aggregate by hour and calculate average
-        ends <- endpoints(res,'minutes',60)
-        table =  period.apply(res, ends ,mean)
-        maxabs = max(table)
-        minabs = min(table)
-        table = table-mean(res)  # abs. savings in cents rounded to two digits
-
-    cat(paste0(station_uuid,":",minabs,"-",maxabs," for E5"))
+    ends <- endpoints(res,'minutes',60)
+    table =  period.apply(res, ends ,mean)
+    table = table-mean(res)  # abs. savings in cents rounded to two digits
+    #cat(paste0(s,":",minabs,"-",maxabs," for E5\n\n"))
     table = data.frame(date=index(table), coredata(table))
     table$hour = format(table$date, "%H")
     table$date = NULL
