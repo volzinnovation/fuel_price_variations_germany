@@ -148,7 +148,7 @@
         var s = document.getElementById(currentID + "s"); // Best times
         var r = document.getElementById(currentID );
         t.innerText = stats.text;
-        s.innerText = "± " + Math.round((stats.max - stats.min) * 100) + " ¢/l";
+        s.innerText = "" + stats.minabs + " - " + stats.maxabs + " ( ± " + Math.round((stats.maxabs - stats.minabs) * 100) + " ¢/l) ";
         var r = document.getElementById(currentID ); // Best times
         var today = new Date();
         var hour = today.getHours();
