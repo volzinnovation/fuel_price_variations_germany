@@ -19,7 +19,7 @@ options("encoding" = "UTF-8")
 #
 # Download latest stations file and convert it to JSON
 #
-urlhead = "https://dev.azure.com/tankerkoenig/362e70d1-bafa-4cf7-a346-1f3613304973/_apis/git/repositories/0d6e7286-91e4-402c-af56-fa75be1f223d/items?path=%2Fstations%2F2020%2F06%2F"
+urlhead = "https://dev.azure.com/tankerkoenig/362e70d1-bafa-4cf7-a346f3613304973/_apis/git/repositories/0d6e7286-91e4-402c-af56-fa75be1f223d/items?path=%2Fstations%2F2020%2F06%2F"
 urltail = "-stations.csv&versionDescriptor%5BversionOptions%5D=0&versionDescriptor%5BversionType%5D=0&versionDescriptor%5Bversion%5D=master&resolveLfs=true&api-version=5.0"
 url = paste0(urlhead, (Sys.Date() -1 ) ,urltail)
 #url
@@ -119,7 +119,7 @@ for(s in stations) {
     result.frame = data.frame(key=names(result), value=result)
     names(result.frame)  = c("hour","price")
     result.frame[,2] = round (  result.frame[,2] ,2) # Show only two Digits
-    result.frame$hour = as.numeric(result.frame$hour)-1
+    result.frame$hour = as.numeric(result.frame$hour)
     result.frame =  result.frame[order( result.frame$hour), ]
     # Write File and create required directories
     dirname=path_join(str_split(station$station_uuid[1],"-"))
@@ -178,7 +178,7 @@ for(s in stations) {
     result <- tapply(table$price, table$hour, mean)
     result.frame = data.frame(key=names(result), value=result)
     names(result.frame)  = c("hour","price")
-    result.frame$hour = as.numeric(result.frame$hour)-1
+    result.frame$hour = as.numeric(result.frame$hour)
     result.frame[,2] = round (  result.frame[,2] ,2) # Show only two Digits
     # Write File
     dirname=path_join(str_split(station$station_uuid[1],"-"))
@@ -236,7 +236,7 @@ for(s in stations) {
     result <- tapply(table$price, table$hour, mean)
     result.frame = data.frame(key=names(result), value=result)
     names(result.frame)  = c("hour","price")
-    result.frame$hour = as.numeric(result.frame$hour)-1
+    result.frame$hour = as.numeric(result.frame$hour)
     result.frame[,2] = round (  result.frame[,2] ,2) # Show only two Digits
     result.frame =  result.frame[order( result.frame$hour), ]
     # Write File
