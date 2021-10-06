@@ -12,7 +12,7 @@
 
           <div class="row">
               <div class="col">
-                  <h2>E10 in der Nähe</h2>
+                  <h2>Diesel in der Nähe</h2>
               </div>
               <div class="col">
                   <a href="index.html" class="btn btn-primary">Favoriten zeigen</a>
@@ -50,7 +50,7 @@
   <script>
     var vis_head =
       "https://www.volzinnovation.com/fuel_price_variations_germany/data2/";
-    var vis_tail = "/e10.json";
+    var vis_tail = "/diesel.json";
 
       var x = document.getElementById("x");
       var ids = JSON.parse(localStorage.getItem("ids"));
@@ -112,7 +112,7 @@
               html += "<a href='https://www.google.com/maps/search/?api=1&amp;query=" 
               html += s[i].lat + "," + s[i].lng + "'>"
               html +=  s[i].name.toLowerCase().replace(/(^\w|\s\w)/g, m => m.toUpperCase())  + " (" + s[i].brand + ")</a></td>"
-              html += "<td  class=\"align-middle\">" + s[i].e10 + "</td>"
+              html += "<td  class=\"align-middle\">" + s[i].diesel + "</td>"
               html += "<td class=\"align-middle\" id = '" + s[i].id + "t'>besthour</td>"
               html += "<td class=\"align-middle\" id = '" + s[i].id + "s'>savings</td>"
               html += "<td class=\"align-middle\"> <a class=\"btn btn-light\" data-toggle=\"tooltip\" data-placement=\"left\" title=\"Zu Lieblingstankstellen hinzufügen\" onclick=addAndStore('"
