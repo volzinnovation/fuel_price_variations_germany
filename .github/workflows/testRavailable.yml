@@ -12,12 +12,19 @@ jobs:
   installieren:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout latest version
+        uses: actions/checkout@v2
       - name: Installiere notwendige Pakete 
         run:  |
           mkdir R_libs
+          export R_LIBS_USER="R_libs"
           R -e 'install.packages("zoo", lib="R_libs")'
           R -e 'install.packages("xts", lib="R_libs")'
           R -e 'install.packages("stringr", lib="R_libs")'
           R -e 'install.packages("fs", lib="R_libs")'
           R -e 'install.packages("readr", lib="R_libs")'
           R -e 'install.packages("jsonlite", lib="R_libs")'
+      - name: Teste notwendige Pakete
+        run: |
+           R -e 'library("zoo")'
+           echo $R_LIBS_USER
