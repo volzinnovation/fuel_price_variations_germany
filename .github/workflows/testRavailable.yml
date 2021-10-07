@@ -12,10 +12,6 @@ jobs:
   installieren:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout latest version
-        uses: actions/checkout@v2
-      - name: List files
-        run: ls -lah
       - name: Installiere notwendige Pakete 
         run:  |
           mkdir R_libs
@@ -28,6 +24,11 @@ jobs:
           R -e 'install.packages("crayon", dependencies = TRUE, lib="R_libs")'
           R -e 'install.packages("readr", dependencies = TRUE, lib="R_libs")'
           R -e 'install.packages("jsonlite", dependencies = TRUE, lib="R_libs")'
+      - name: Checkout latest version
+        uses: actions/checkout@v2
+      - name: List files
+        run: ls -lah
+
       - name: Führe Analyse Batch aus
         run: Rscript calculation2.r # Test libs -e 'library("zoo", lib.loc="R_libs")'
       - name: setup git config
