@@ -12,7 +12,5 @@ jobs:
   installieren:
     runs-on: ubuntu-latest
     steps:
-      - name: Installiere pandoc tool
-        run: |
-          sudo apt-get update
-          sudo apt-get install pandoc
+      - name: Installiere notwendige Pakete 
+        run:  R -e 'install.packages("zoo","xts","stringr","fs","readr","jsonlite")'
