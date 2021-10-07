@@ -24,7 +24,14 @@ jobs:
           R -e 'install.packages("fs", lib="R_libs")'
           R -e 'install.packages("readr", lib="R_libs")'
           R -e 'install.packages("jsonlite", lib="R_libs")'
-      - name: Teste notwendige Pakete
+      - name: Führe Analyse Batch aus
+        run: Rscript calculations2.R # Test libs -e 'library("zoo", lib.loc="R_libs")'
+      - name: setup git config
         run: |
-           echo $R_LIBS_USER
-           R -e 'library("zoo", lib.loc="R_libs")'
+          git config user.name "GitHub Actions Bot"    # setup the username and email. I tend to use 'GitHub Actions Bot' with no email by default
+          git config user.email "<>"
+      - name: commit update
+        run: |
+          git add data2
+          git commit -m "Daily Update."
+          git push origin master    # Stage the file, commit and push
