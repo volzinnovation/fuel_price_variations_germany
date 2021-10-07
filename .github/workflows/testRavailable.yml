@@ -17,7 +17,7 @@ jobs:
       - name: List files
         run: ls -lah
       - name: Führe Analyse Batch aus
-        run: Rscript calculation2.R # Test libs -e 'library("zoo", lib.loc="R_libs")'
+        run: Rscript calculation2.r # Test libs -e 'library("zoo", lib.loc="R_libs")'
       - name: Installiere notwendige Pakete 
         run:  |
           mkdir R_libs
