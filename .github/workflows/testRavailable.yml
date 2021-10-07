@@ -27,7 +27,7 @@ jobs:
           R -e 'install.packages("stringr", dependencies = TRUE, lib="R_libs")'
           R -e 'install.packages("fs", dependencies = TRUE, lib="R_libs")'
           R -e 'install.packages("crayon", dependencies = TRUE, lib="R_libs")'
-          R -e 'install.packages("readr", dependencies = TRUE, lib="R_libs")'
+          R -e 'install.packages("tidyverse", dependencies = TRUE, lib="R_libs")'
           R -e 'install.packages("jsonlite", dependencies = TRUE, lib="R_libs")'
       - name: Führe Analyse Batch aus
         run: Rscript calculation2.r # Test libs -e 'library("zoo", lib.loc="R_libs")'
