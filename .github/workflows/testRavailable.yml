@@ -24,6 +24,7 @@ jobs:
           R -e 'install.packages("xts", lib="R_libs")'
           R -e 'install.packages("stringr", lib="R_libs")'
           R -e 'install.packages("fs", lib="R_libs")'
+          R -e 'install.packages("crayon", lib="R_libs")'
           R -e 'install.packages("readr", lib="R_libs")'
           R -e 'install.packages("jsonlite", lib="R_libs")'
       - name: Führe Analyse Batch aus
