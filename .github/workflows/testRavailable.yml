@@ -13,4 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Installiere notwendige Pakete 
-        run:  R -e 'install.packages("zoo","xts","stringr","fs","readr","jsonlite")'
+        run:  |
+          R -e 'install.packages("zoo")'
+          R -e 'install.packages("xts")'
+          R -e 'install.packages("stringr")'
+          R -e 'install.packages("fs")'
+          R -e 'install.packages("readr")'
+          R -e 'install.packages("jsonlite")'
