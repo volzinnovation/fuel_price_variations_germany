@@ -26,5 +26,5 @@ jobs:
           R -e 'install.packages("jsonlite", lib="R_libs")'
       - name: Teste notwendige Pakete
         run: |
-           R -e 'library("zoo")'
            echo $R_LIBS_USER
+           R -e 'library("zoo", lib.loc="R_libs")'
