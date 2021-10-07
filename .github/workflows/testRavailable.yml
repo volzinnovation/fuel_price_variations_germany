@@ -18,6 +18,7 @@ jobs:
         run: ls -lah
       - name: Installiere notwendige Pakete 
         run:  |
+          sudo apt-get install -y tzdata
           mkdir R_libs
           export R_LIBS_USER="R_libs"
           R -e 'install.packages("tzdb", dependencies = TRUE, lib="R_libs")'
