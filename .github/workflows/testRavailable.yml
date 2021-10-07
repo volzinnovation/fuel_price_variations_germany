@@ -14,9 +14,10 @@ jobs:
     steps:
       - name: Installiere notwendige Pakete 
         run:  |
-          R -e 'install.packages("zoo")'
-          R -e 'install.packages("xts")'
-          R -e 'install.packages("stringr")'
-          R -e 'install.packages("fs")'
-          R -e 'install.packages("readr")'
-          R -e 'install.packages("jsonlite")'
+          mkdir R_libs
+          R -e 'install.packages("zoo", lib="R_libs")'
+          R -e 'install.packages("xts", lib="R_libs")'
+          R -e 'install.packages("stringr", lib="R_libs")'
+          R -e 'install.packages("fs", lib="R_libs")'
+          R -e 'install.packages("readr", lib="R_libs")'
+          R -e 'install.packages("jsonlite", lib="R_libs")'
