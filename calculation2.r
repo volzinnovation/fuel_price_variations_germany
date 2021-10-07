@@ -5,12 +5,12 @@
 # install.packages("zoo","xts","stringr","fs","readr","jsonlite")
 #
 # Load libraries
-library(zoo)
-library(stringr)
-library(fs)
-library(xts)
-library(readr)
-library(jsonlite)
+library(zoo, lib.loc="R_libs")
+library(stringr, lib.loc="R_libs")
+library(fs, lib.loc="R_libs")
+library(xts, lib.loc="R_libs")
+library(readr, lib.loc="R_libs")
+library(jsonlite, lib.loc="R_libs")
 #
 # General options
 #
