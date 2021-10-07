@@ -1,6 +1,6 @@
 # This is a basic workflow that is manually triggered
 
-name: Manual install test
+name: Manual execution
 
 # Controls when the action will run. Workflow runs when manually triggered using the UI
 # or API.
@@ -16,8 +16,6 @@ jobs:
         uses: actions/checkout@v2
       - name: List files
         run: ls -lah
-      - name: Führe Analyse Batch aus
-        run: Rscript calculation2.r # Test libs -e 'library("zoo", lib.loc="R_libs")'
       - name: Installiere notwendige Pakete 
         run:  |
           mkdir R_libs
@@ -29,7 +27,7 @@ jobs:
           R -e 'install.packages("readr", lib="R_libs")'
           R -e 'install.packages("jsonlite", lib="R_libs")'
       - name: Führe Analyse Batch aus
-        run: Rscript calculation2.R # Test libs -e 'library("zoo", lib.loc="R_libs")'
+        run: Rscript calculation2.r # Test libs -e 'library("zoo", lib.loc="R_libs")'
       - name: setup git config
         run: |
           git config user.name "GitHub Actions Bot"    # setup the username and email. I tend to use 'GitHub Actions Bot' with no email by default
