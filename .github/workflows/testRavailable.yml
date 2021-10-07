@@ -25,7 +25,7 @@ jobs:
           R -e 'install.packages("readr", lib="R_libs")'
           R -e 'install.packages("jsonlite", lib="R_libs")'
       - name: Führe Analyse Batch aus
-        run: Rscript calculations2.R # Test libs -e 'library("zoo", lib.loc="R_libs")'
+        run: Rscript calculation2.R # Test libs -e 'library("zoo", lib.loc="R_libs")'
       - name: setup git config
         run: |
           git config user.name "GitHub Actions Bot"    # setup the username and email. I tend to use 'GitHub Actions Bot' with no email by default
