@@ -17,7 +17,7 @@ jobs:
       - name: Installiere notwendige Pakete 
         run:  |
           mkdir R_libs
-          export R_LIBS_USER="R_libs"
+          set R_LIBS_USER="R_libs"
           R -e 'install.packages("tzdb", dependencies = TRUE, lib="R_libs")'
           R -e 'install.packages("zoo", dependencies = TRUE, lib="R_libs")'
           R -e 'install.packages("xts", dependencies = TRUE, lib="R_libs")'
