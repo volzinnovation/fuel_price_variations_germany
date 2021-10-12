@@ -1,0 +1,8 @@
+install.packages("tzdb", dependencies = TRUE, lib="R_libs")
+install.packages("zoo", dependencies = TRUE, lib="R_libs")
+install.packages("xts", dependencies = TRUE, lib="R_libs")
+install.packages("stringr", dependencies = TRUE, lib="R_libs")
+install.packages("fs", dependencies = TRUE, lib="R_libs")
+install.packages("crayon", dependencies = TRUE, lib="R_libs")
+install.packages("tidyverse", dependencies = TRUE, lib="R_libs")
+install.packages("jsonlite", dependencies = TRUE, lib="R_libs")
