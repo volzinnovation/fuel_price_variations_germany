@@ -11,7 +11,7 @@ library(stringr, lib.loc="R_libs")
 library(fs, lib.loc="R_libs")
 library(xts, lib.loc="R_libs")
 library(tzdb, lib.loc="R_libs")
-library(tidyverse, lib.loc="R_libs")
+library(readr, lib.loc="R_libs")
 library(jsonlite, lib.loc="R_libs")
 #
 # General options
