@@ -4,5 +4,5 @@ install.packages("xts", repos= "https://cloud.r-project.org/", dependencies = TR
 install.packages("stringr", repos= "https://cloud.r-project.org/", dependencies = TRUE, lib="R_libs")
 install.packages("fs", repos= "https://cloud.r-project.org/", dependencies = TRUE, lib="R_libs")
 install.packages("crayon", repos= "https://cloud.r-project.org/", dependencies = TRUE, lib="R_libs")
-install.packages("tidyverse", repos= "https://cloud.r-project.org/", dependencies = TRUE, lib="R_libs")
+install.packages("readr", repos= "https://cloud.r-project.org/", dependencies = TRUE, lib="R_libs")
 install.packages("jsonlite", repos= "https://cloud.r-project.org/", dependencies = TRUE, lib="R_libs")
