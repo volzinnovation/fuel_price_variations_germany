@@ -5,7 +5,8 @@ name: Cron job
 # Controls when the action will run. Workflow runs when manually triggered using the UI
 # or API.
 on:
- schedule: '5 0 * * *'  # every day at 5 am
+  cron:
+  - schedule: '5 0 * * *'  # every day at 5 am
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
