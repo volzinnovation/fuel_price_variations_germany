@@ -11,14 +11,14 @@ on:
 jobs:
   installieren:
     runs-on: windows-latest
-    steps:
-      - name: Checkout latest version
-        uses: actions/checkout@v2
+    steps:      
       - name: Installiere notwendige Pakete 
         run:  |
           mkdir R_libs
           set R_LIBS_USER="R_libs"
           Rscript install.r
+      - name: Checkout latest version
+        uses: actions/checkout@v2
       - name: Führe Analyse Batch aus
         run: Rscript calculation2.r # Test libs -e 'library("zoo", lib.loc="R_libs")'
       - name: setup git config
