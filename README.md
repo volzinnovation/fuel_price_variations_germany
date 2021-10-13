@@ -1,16 +1,16 @@
-# Untertägige Preisveränderungen für Treibstoffe
+# [Untertägige Preisveränderungen für Treibstoffe](https://www.volzinnovation.com/fuel_price_variations_germany/web/index.html)
 
-Berechnung der Preisveränderungen innerhalb eines Tages für Diesel, E10 und E5 an allen deutschen Tankstellen.
+[Finden Sie die beste Zeit zum Tanken](https://www.volzinnovation.com/fuel_price_variations_germany/web/index.html)
+
+Dieses Repository beobachtet die Preisveränderungen innerhalb eines Tages für Diesel, E10 und E5 an allen deutschen Tankstellen.
 
 Datenquelle: MTS-K via [Tankerkönig](https://www.tankerkoenig.de/).
 
-Die berechneten Preisunterschiede für jede Tankstelle finden sich im Ordner data. 
+Die berechneten Preisunterschiede und stündlichen Mittelwerte der Preise für jede Tankstelle finden sich im Ordner data2. 
 
 Abbildung der MTS-K Tankstellen ID auf Ordnerstrukur aus
 
-
 Beispiel OMV Bad Herrenalb (ID b4ed695f-2cfc-4688-8ecf-268b10cdb93e)
-
 
 wird
 
@@ -39,7 +39,7 @@ Jeweils gleichartiger Aufbau dieser Dateien für alle Tankstellen
 
 ## Wozu? Weshalb? Warum?
 
-Wer sparen will tankt zum richtigen Zeitpunkt.
+Wer sparen will tankt zum richtigen Zeitpunkt. Siehe [Untertägige Preisveränderungen für Treibstoffe](https://www.volzinnovation.com/fuel_price_variations_germany/web/index.html).
 
 ## Wie funktioniert das ?
 
@@ -47,7 +47,7 @@ Tankstellen sind gesetzlich verpflichtet ihre Preise an das Bundeskartellamt zu 
 
 ## Wer hat das gemacht ?
 
-Bei Fragen kontaktieren Sie bitte Raphael Volz (rv@volzinnovation.com). Alle Anregungen sind willkommen.
+Bei Fragen kontaktieren Sie bitte Raphael Volz (raphael.volz@hs-pforzheim.de). Alle Anregungen sind willkommen.
 
 ## Welche Tankstellen gibt es denn in Deutschland und was ist deren MTS-K ID ?
 
