@@ -4,3 +4,5 @@
 web/.idea/misc.xml
 *.xml
 *.iml
+.DS_Store
+data2/.DS_Store
