@@ -5,6 +5,7 @@
 # install.packages("zoo","xts","stringr","fs","readr","jsonlite")
 #
 # Load libraries
+options(tz="Europe/Berlin")
 library(crayon, lib.loc="R_libs")
 library(zoo, lib.loc="R_libs")
 library(stringr, lib.loc="R_libs")
