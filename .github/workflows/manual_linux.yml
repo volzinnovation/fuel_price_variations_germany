@@ -1,0 +1,32 @@
+# This is a basic workflow that is manually triggered on uses linux
+
+name: Manual execution
+
+# Controls when the action will run. Workflow runs when manually triggered using the UI
+# or API.
+on:
+  workflow_dispatch
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  installieren:
+    runs-on: linux-latest
+    steps:      
+      - name: Checkout latest version
+        uses: actions/checkout@v2
+      - name: Installiere notwendige Pakete 
+        run:  |
+          mkdir R_libs
+          set R_LIBS_USER="R_libs"
+          Rscript install.r
+      - name: Führe Analyse Batch aus
+        run: Rscript calculation2.r # Test libs -e 'library("zoo", lib.loc="R_libs")'
+      - name: setup git config
+        run: |
+          git config user.name "GitHub Actions Bot"    # setup the username and email. I tend to use 'GitHub Actions Bot' with no email by default
+          git config user.email "<>"
+      - name: commit update
+        run: |
+          git add data2
+          git commit -m "Daily Update."
+          git push origin master    # Stage the file, commit and push
