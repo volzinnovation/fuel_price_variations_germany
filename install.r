@@ -1,4 +1,6 @@
 options(tz="Europe/Berlin")
+Sys.setenv(TZ="Europe/Berlin")
+
 install.packages("tzdb", repos= "https://cloud.r-project.org/", dependencies = TRUE, lib="R_libs")
 install.packages("zoo", repos= "https://cloud.r-project.org/", dependencies = TRUE, lib="R_libs")
 install.packages("xts", repos= "https://cloud.r-project.org/", dependencies = TRUE, lib="R_libs")
