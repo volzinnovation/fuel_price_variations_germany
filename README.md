@@ -1,6 +1,6 @@
-# [Untertägige Preisveränderungen für Treibstoffe](https://www.volzinnovation.com/fuel_price_variations_germany/web/index.html)
+# [Untertägige Preisveränderungen für Treibstoffe](https://tankzeit.de)
 
-[Finden Sie die beste Zeit zum Tanken](https://www.volzinnovation.com/fuel_price_variations_germany/web/index.html)
+[Finden Sie die beste Zeit zum Tanken](https://tankzeit.de)
 
 Dieses Repository beobachtet die Preisveränderungen innerhalb eines Tages für Diesel, E10 und E5 an allen deutschen Tankstellen.
 
@@ -14,20 +14,20 @@ Beispiel OMV Bad Herrenalb (ID b4ed695f-2cfc-4688-8ecf-268b10cdb93e)
 
 wird
 
-[/b4ed695f/2cfc/4688/8ecf/268b10cdb93e/](https://www.volzinnovation.com/fuel_price_variations_germany/data/b4ed695f/2cfc/4688/8ecf/268b10cdb93e/) 
+[/b4ed695f/2cfc/4688/8ecf/268b10cdb93e/](https://www.volzinnovation.com/fuel_price_variations_germany/data2/b4ed695f/2cfc/4688/8ecf/268b10cdb93e/) 
 
 mit Daten der jeweiligen Tankstelle
 
 
-* [Diesel](https://www.volzinnovation.com/fuel_price_variations_germany/data/b4ed695f/2cfc/4688/8ecf/268b10cdb93e/diesel.csv)
+* [Diesel](https://www.volzinnovation.com/fuel_price_variations_germany/data2/b4ed695f/2cfc/4688/8ecf/268b10cdb93e/diesel.csv)
 * [E10](https://www.volzinnovation.com/fuel_price_variations_germany/data/b4ed695f/2cfc/4688/8ecf/268b10cdb93e/e10.csv)
 * [E5](https://www.volzinnovation.com/fuel_price_variations_germany/data/b4ed695f/2cfc/4688/8ecf/268b10cdb93e/e5.csv)
 
 In jedem Ordner finden sich auch JSON Dateien für 
 
-* [Diesel](https://www.volzinnovation.com/fuel_price_variations_germany/data/b4ed695f/2cfc/4688/8ecf/268b10cdb93e/diesel.json)
-* [E10](https://www.volzinnovation.com/fuel_price_variations_germany/data/b4ed695f/2cfc/4688/8ecf/268b10cdb93e/e10.json)
-* [E5](https://www.volzinnovation.com/fuel_price_variations_germany/data/b4ed695f/2cfc/4688/8ecf/268b10cdb93e/e5.json)
+* [Diesel](https://www.volzinnovation.com/fuel_price_variations_germany/data2/b4ed695f/2cfc/4688/8ecf/268b10cdb93e/diesel.json)
+* [E10](https://www.volzinnovation.com/fuel_price_variations_germany/data2/b4ed695f/2cfc/4688/8ecf/268b10cdb93e/e10.json)
+* [E5](https://www.volzinnovation.com/fuel_price_variations_germany/data2/b4ed695f/2cfc/4688/8ecf/268b10cdb93e/e5.json)
 CSV und JSON sind inhaltlich gleich, aber unterschiedlich formatiert.
 
 Jeweils gleichartiger Aufbau dieser Dateien für alle Tankstellen
@@ -39,7 +39,7 @@ Jeweils gleichartiger Aufbau dieser Dateien für alle Tankstellen
 
 ## Wozu? Weshalb? Warum?
 
-Wer sparen will tankt zum richtigen Zeitpunkt. Siehe [Untertägige Preisveränderungen für Treibstoffe](https://www.volzinnovation.com/fuel_price_variations_germany/web/index.html).
+Wer sparen will tankt zum richtigen Zeitpunkt. Siehe [Untertägige Preisveränderungen für Treibstoffe](https://tankzeit.de).
 
 ## Wie funktioniert das ?
 
