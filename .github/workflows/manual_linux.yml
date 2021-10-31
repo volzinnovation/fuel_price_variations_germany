@@ -10,7 +10,7 @@ on:
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   installieren:
-    runs-on: unix-latest
+    runs-on: ubuntu-latest
     steps:      
       - name: Checkout latest version
         uses: actions/checkout@v2
