@@ -1,4 +1,4 @@
-
+R_libs/*
 .RData
 .Rhistory
 web/.idea/misc.xml
