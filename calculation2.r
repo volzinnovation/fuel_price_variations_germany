@@ -24,30 +24,31 @@ options("encoding" = "UTF-8")
 #
 # Download latest stations file and convert it to JSON
 #
-urlhead = "https://dev.azure.com/tankerkoenig/362e70d1-bafa-4cf7-a346f3613304973/_apis/git/repositories/0d6e7286-91e4-402c-af56-fa75be1f223d/items?path=%2Fstations%2F2020%2F06%2F"
-urltail = "-stations.csv&versionDescriptor%5BversionOptions%5D=0&versionDescriptor%5BversionType%5D=0&versionDescriptor%5Bversion%5D=master&resolveLfs=true&api-version=5.0"
-url = paste0(urlhead, (Sys.Date() -1 ) ,urltail)
+urlhead = "https://dev.azure.com/tankerkoenig/362e70d1-bafa-4cf7-a346-1f3613304973/_apis/git/repositories/0d6e7286-91e4-402c-af56-fa75be1f223d/items?path=/stations/"
+date = Sys.Date()-1
+year = format(date,"%Y")
+month = format(date,"%m")
+day = format(date,"%d")
+urltail = "-stations.csv&versionDescriptor%5BversionOptions%5D=0&versionDescriptor%5BversionType%5D=0&versionDescriptor%5Bversion%5D=master&resolveLfs=true&%24format=octetStream&api-version=5.0&download=true" 
+file = paste0(year,"%2F", month, "%2F", year, "-", month, "-", day )
+# Calculate full URL of file to download
+url=paste0(urlhead, file, urltail)
 #url
-#d = read_csv(url)
-#d$openingtimes_json=NULL
-#d$first_active=NULL
-#json = toJSON(d, dataframe="rows")
-#write(json, "data/stations.json")
+d = read_csv(url)
+d$openingtimes_json=NULL
+d$first_active=NULL
+json = toJSON(d, dataframe="rows")
+write(json, "data/stations.json")
 #
 # Download latest price updates and calculate savings per time interval
 #
 # Calculate Files to download
 # End of URL
-urltail = "-prices.csv&versionDescriptor%5BversionOptions%5D=0&versionDescriptor%5BversionType%5D=0&versionDescriptor%5Bversion%5D=master&resolveLfs=true&%24format=octetStream&api-version=5.0&download=true"
 # Start of URL
-urlhead ="https://dev.azure.com/tankerkoenig/362e70d1-bafa-4cf7-a346-1f3613304973/_apis/git/repositories/0d6e7286-91e4-402c-af56-fa75be1f223d/items?path=%2Fprices%2F"
+urlhead ="https://dev.azure.com/tankerkoenig/362e70d1-bafa-4cf7-a346-1f3613304973/_apis/git/repositories/0d6e7286-91e4-402c-af56-fa75be1f223d/items?path=/prices/"
+urltail = "-prices.csv&versionDescriptor%5BversionOptions%5D=0&versionDescriptor%5BversionType%5D=0&versionDescriptor%5Bversion%5D=master&resolveLfs=true&%24format=octetStream&api-version=5.0&download=true"
 # Load Data from yesterday to get last price update before midnight
-date = Sys.Date()-1
-year = format(date,"%Y")
-month = format(date,"%m")
-day = format(date,"%d")
 # Calculate pattern of file on Azure GIT repository
-file = paste0(year,"%2F", month, "%2F", year, "-", month, "-", day )
 # Calculate full URL of file to download
 url=paste0(urlhead, file, urltail)
 # Load file from Web
