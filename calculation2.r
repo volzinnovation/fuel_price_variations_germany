@@ -8,6 +8,7 @@
 Sys.setenv(TZ="Europe/Berlin")
 options(tz="Europe/Berlin")
 
+library(vroom,  lib.loc="R_libs")
 library(crayon, lib.loc="R_libs")
 library(zoo, lib.loc="R_libs")
 library(stringr, lib.loc="R_libs")
@@ -16,7 +17,6 @@ library(xts, lib.loc="R_libs")
 library(tzdb, lib.loc="R_libs")
 library(readr, lib.loc="R_libs")
 library(jsonlite, lib.loc="R_libs")
-library(vroom,  lib.loc="R_libs")
 #
 # General options
 #
