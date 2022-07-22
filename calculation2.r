@@ -8,14 +8,14 @@
 Sys.setenv(TZ="Europe/Berlin")
 options(tz="Europe/Berlin")
 
+require(tzdb, lib.loc="R_libs")
 require(vroom,  lib.loc="R_libs")
 require(crayon, lib.loc="R_libs")
-require(zoo, lib.loc="R_libs")
 require(stringr, lib.loc="R_libs")
+require(zoo, lib.loc="R_libs")
 require(fs, lib.loc="R_libs")
 require(xts, lib.loc="R_libs")
-require(tzdb, lib.loc="R_libs")
-require(readr, lib.loc="R_libs")
+# require(readr, lib.loc="R_libs")
 require(jsonlite, lib.loc="R_libs")
 #
 # General options
@@ -34,12 +34,13 @@ urltail = "-stations.csv&versionDescriptor%5BversionOptions%5D=0&versionDescript
 file = paste0(year,"%2F", month, "%2F", year, "-", month, "-", day )
 # Calculate full URL of file to download
 url=paste0(urlhead, file, urltail)
-#url
-d = read_csv(url)
+url
+d = read.csv(url)
 d$openingtimes_json=NULL
 d$first_active=NULL
 json = toJSON(d, dataframe="rows")
 write(json, "data/stations.json")
+
 #
 # Download latest price updates and calculate savings per time interval
 #
