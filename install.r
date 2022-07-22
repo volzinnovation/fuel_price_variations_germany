@@ -9,3 +9,4 @@ install.packages("fs", repos= "https://cloud.r-project.org/", dependencies = TRU
 install.packages("crayon", repos= "https://cloud.r-project.org/", dependencies = TRUE, lib="R_libs")
 install.packages("readr", repos= "https://cloud.r-project.org/", dependencies = TRUE, lib="R_libs")
 install.packages("jsonlite", repos= "https://cloud.r-project.org/", dependencies = TRUE, lib="R_libs")
+install.packages("vroom", repos= "https://cloud.r-project.org/", dependencies = TRUE, lib="R_libs")
