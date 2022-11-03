@@ -14,7 +14,7 @@ jobs:
     runs-on: windows-latest
     steps:      
       - name: Checkout latest version
-        uses: actions/checkout@v2
+        uses: actions/checkout
       - name: Installiere notwendige Pakete 
         run:  |
           mkdir R_libs
