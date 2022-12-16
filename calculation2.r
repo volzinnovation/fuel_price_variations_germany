@@ -7,7 +7,7 @@
 # Load libraries
 Sys.setenv(TZ="Europe/Berlin")
 options(tz="Europe/Berlin")
-
+require(vctrs, lib.loc="R_libs")
 require(tzdb, lib.loc="R_libs")
 require(vroom,  lib.loc="R_libs")
 require(crayon, lib.loc="R_libs")
