@@ -1,167 +1,313 @@
-<html>
-  <head>  
-  <meta charset="UTF-8"/>
-      <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=yes">
-      <!-- Bootstrap CSS -->
-      <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css" integrity="sha384-9aIt2nRpC12Uk9gS9baDl411NQApFmC26EwAOH8WgZl5MYYxFfc+NcPb1dKGj7Sk" crossorigin="anonymous">
-      <title>Diesel in der Nähe</title>
-  </head>
-
-  <body onload="getLocation()">
-      <div class="container">
-          <div class="row">
-              <div style="text-align:center" class="col-sm-12">
-              <h1>T&#x1F551;NKZEIT</h1>
-              </div>
-          </div>
-          <div class="row">
-              <div class="col">
-                  <h2>Diesel in der Nähe</h2>
-              </div>
-              <div class="col">
-                  <a href="favoriten.html" class="btn btn-primary">Favoriten zeigen</a>
-                  <a href="e10.html" class="btn btn-primary">E10 zeigen</a>
-              </div>
-          </div>
-          <div class="row">
-          <table class="table table-hover">
-              <caption><em>Daten via <a href="http://www.tankerkoenig.de/">Tankerkönig</a>.Sortierung nach Distanz zu ihrer Position (kürzeste Fahrt ist Position 1).
-                  Gute Zeiten und Schwankung ermittelt durch Beobachtung der Preise der letzten Tage.</em>
-              </caption>
-              <thead>    
-                <tr>
-                  <th>Name</th>
-                  <th>€/l</th>
-                  <th>Gute Zeiten</th>
-                  <th>Schwankung</th>
-                  <th></th>
-              </tr>
-              </thead>
-              <tbody id = "x">
-              <tr><td colspan="5">
-                  <div class="alert alert-primary" role="alert" id="alert">
-                  Wir suchen und bitten um Geduld.
-              </div></td></tr>
-              </tbody>
-          </table>
-          </div>
-          <div class="row">
-              <em><strong>&copy; Volz Innovation GmbH</strong>
-              Alle Rechte zur kommerziellen Nutzung bleiben uns vorbehalten.
-              <a href="https://www.volzinnovation.com/">Wir freuen uns über ihren Kontakt.</a></em>
-          </div>
-      </div>
-      </body>
-  <script>
-    var vis_head =
-      "https://raw.githubusercontent.com/volzinnovation/fuel_price_variations_germany/master/data2/";
-    var vis_tail = "/diesel.json";
-
-      var x = document.getElementById("x");
-      var ids = JSON.parse(localStorage.getItem("ids"));
-      var fav = JSON.parse(localStorage.getItem("fav"));
-      if(fav == null) {
-          fav = new Array();
-          ids = new Array();
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tankzeit | Diesel in der Nähe</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --bg: #f6f4ef;
+        --ink: #121212;
+        --muted: #5f5f5f;
+        --accent: #007a5a;
+        --accent-2: #ffb703;
+        --card: #ffffff;
+        --shadow: 0 20px 50px rgba(10, 10, 10, 0.12);
       }
-  
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "Manrope", "Segoe UI", sans-serif;
+        color: var(--ink);
+        background: radial-gradient(circle at top, #fff1d6 0%, #f6f4ef 45%, #edf0f5 100%);
+        min-height: 100vh;
+      }
+      .app {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 32px 20px 48px;
+      }
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      .brand {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .brand h1 {
+        font-size: clamp(26px, 4vw, 40px);
+        margin: 0;
+        letter-spacing: 0.04em;
+      }
+      .brand p {
+        margin: 0;
+        color: var(--muted);
+      }
+      .actions {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .btn {
+        padding: 10px 16px;
+        border-radius: 999px;
+        border: 1px solid transparent;
+        font-weight: 600;
+        cursor: pointer;
+        text-decoration: none;
+        color: var(--ink);
+        background: #fff;
+        box-shadow: 0 8px 20px rgba(10, 10, 10, 0.08);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+      .btn.primary {
+        background: var(--accent);
+        color: #fff;
+      }
+      .btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 12px 24px rgba(10, 10, 10, 0.12);
+      }
+      .status {
+        margin: 24px 0 18px;
+        padding: 14px 16px;
+        border-radius: 12px;
+        background: #fff8e7;
+        color: #8a5b00;
+        display: none;
+      }
+      .status.error {
+        background: #ffe8e8;
+        color: #8c1d1d;
+      }
+      .card {
+        background: var(--card);
+        border-radius: 24px;
+        padding: 20px;
+        box-shadow: var(--shadow);
+      }
+      .table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .table th, .table td {
+        padding: 14px 10px;
+        border-bottom: 1px solid #ececec;
+        text-align: left;
+        font-size: 0.95rem;
+      }
+      .table th {
+        font-weight: 600;
+        color: var(--muted);
+      }
+      .row-highlight {
+        background: #ecf8f4;
+      }
+      .fav {
+        border: none;
+        background: #f3f4f6;
+        border-radius: 999px;
+        padding: 6px 10px;
+        cursor: pointer;
+      }
+      .manual {
+        margin-top: 14px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+      }
+      .manual input {
+        border: 1px solid #d8d8d8;
+        border-radius: 10px;
+        padding: 8px 10px;
+        min-width: 140px;
+        font-family: inherit;
+      }
+      footer {
+        margin-top: 28px;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+      @media (max-width: 700px) {
+        .table th:nth-child(4),
+        .table td:nth-child(4) {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <header>
+        <div class="brand">
+          <h1>Tankzeit</h1>
+          <p>Diesel in der Nähe, sortiert nach Distanz.</p>
+        </div>
+        <div class="actions">
+          <a class="btn" href="favoriten.html">Favoriten</a>
+          <a class="btn primary" href="e10.html">E10 anzeigen</a>
+        </div>
+      </header>
+
+      <div id="status" class="status"></div>
+
+      <section class="card">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Preis €/l</th>
+              <th>Beste Zeiten</th>
+              <th>Schwankung</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="stations">
+            <tr><td colspan="5">Wir laden die Daten...</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <footer>
+        Daten via Tankerkönig. Gute Zeiten und Schwankung basieren auf den letzten Tagen.
+      </footer>
+    </main>
+
+    <script>
+      const DATA_BASE = "https://huggingface.co/datasets/loffenauer/fuel-prices-germany/resolve/main/data2/";
+      const FUEL = "diesel";
+
+      const statusEl = document.getElementById("status");
+      const stationsEl = document.getElementById("stations");
+      const ids = JSON.parse(localStorage.getItem("ids")) || [];
+      const fav = JSON.parse(localStorage.getItem("fav")) || [];
+
+      function setStatus(message, type = "info") {
+        statusEl.textContent = message;
+        statusEl.className = `status ${type === "error" ? "error" : ""}`;
+        statusEl.style.display = "block";
+      }
+
+      function clearStatus() {
+        statusEl.style.display = "none";
+      }
+
       function addAndStore(id, name, lat, lng) {
-          element = { "id": id, "name" : name, "lat" : lat, "lng":  lng  }
-          if (ids.indexOf(id) === -1) {
-              fav.push(element);
-              ids.push(id)
-          }
+        if (!ids.includes(id)) {
+          fav.push({ id, name, lat, lng });
+          ids.push(id);
           localStorage.setItem("fav", JSON.stringify(fav));
           localStorage.setItem("ids", JSON.stringify(ids));
-      }
-  
-      function removeAndStore(element) {
-          if(fav != null) {
-              const index = fav.indexOf(element);
-              fav.splice(index, 1);
-              localStorage.setItem("fav", JSON.stringify(fav));
-          }
-      }
-  
-  
-      function getLocation() {
-          if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(showPosition);
-          } else {
-            x.innerHTML = "Geolocation is not supported by this browser.";
-          }
         }
-  
-        function showPosition(position) {
-          var url =
-            "https://creativecommons.tankerkoenig.de/json/list.php?rad=10&type=all&sort=dist&lat=" +
-            position.coords.latitude +
-            "&lng=" +
-            position.coords.longitude +
-            "&apikey=fe8673d1-47be-1156-77e4-040e06cb785c";
-          console.log(url);
-          tankerkoenig.open("GET", url, false);
-          tankerkoenig.send();
       }
-  
-        // Tankerkoenig API with call back
-        var tankerkoenig = new XMLHttpRequest();
-        tankerkoenig.onreadystatechange = function() {
-          if (this.readyState == 4 && this.status == 200) {
-            prices = JSON.parse(this.responseText);
-            s = prices.stations;
-            let html = "";
-            for (var i=0; i < (s.length > 10 ? 10 : s.length); i++) {
-                if(s[i].isOpen && s[i].e10 != null) {
-              html += "<tr  class=\"align-middle\" id='" + s[i].id + "' class=\"align-middle\"><td>"
-              html += "<a href='https://www.google.com/maps/search/?api=1&amp;query=" 
-              html += s[i].lat + "," + s[i].lng + "'>"
-              html +=  s[i].name.toLowerCase().replace(/(^\w|\s\w)/g, m => m.toUpperCase())  + " (" + s[i].brand + ")</a></td>"
-              html += "<td  class=\"align-middle\">" + s[i].diesel + "</td>"
-              html += "<td class=\"align-middle\" id = '" + s[i].id + "t'>besthour</td>"
-              html += "<td class=\"align-middle\" id = '" + s[i].id + "s'>savings</td>"
-              html += "<td class=\"align-middle\"> <a class=\"btn btn-light\" data-toggle=\"tooltip\" data-placement=\"left\" title=\"Zu Lieblingstankstellen hinzufügen\" onclick=addAndStore('"
-              html += s[i].id + "','" + s[i].brand + "'," + s[i].lat + ',' + s[i].lng
-              html += ")>&#9733;</a></td>" // &#9733;
-              html += "</tr>"
-                }
-            }
-            x.innerHTML = html
-            for (var i=0; i < (s.length > 10 ? 10 : s.length); i++) {
-              url = vis_head + s[i].id + vis_tail;
-              url = url.split("-").join("/");
-              console.log(url);
-              vis.open("GET", url, false); // Cannot be asynchronous, have to wait until issueing second request via URL (Using Deprecated Feature)
-              vis.send();
-            }
+
+      function manualLocationForm() {
+        const wrapper = document.createElement("div");
+        wrapper.className = "manual";
+        wrapper.innerHTML = `
+          <input id="manual-lat" type="number" step="0.0001" placeholder="Breitengrad" />
+          <input id="manual-lng" type="number" step="0.0001" placeholder="Laengengrad" />
+          <button class="btn" id="manual-btn">Manuell suchen</button>
+        `;
+        statusEl.appendChild(wrapper);
+        document.getElementById("manual-btn").onclick = () => {
+          const lat = parseFloat(document.getElementById("manual-lat").value);
+          const lng = parseFloat(document.getElementById("manual-lng").value);
+          if (Number.isFinite(lat) && Number.isFinite(lng)) {
+            loadStations(lat, lng);
           }
         };
-  
-         // Volz Innovation Service with callback
-    var vis = new XMLHttpRequest();
-    vis.onreadystatechange = function() {
-      if (this.readyState == 4 && this.status == 200) {
-        let currentID = this.responseURL.substring(
-          vis_head.length,
-          this.responseURL.length - vis_tail.length
+      }
+
+      function geoError(err) {
+        let message = "Standort konnte nicht ermittelt werden.";
+        if (err && err.code === 1) message = "Standortzugriff wurde verweigert.";
+        if (err && err.code === 2) message = "Standort ist aktuell nicht verfuegbar.";
+        if (err && err.code === 3) message = "Standortabfrage ist abgelaufen.";
+        setStatus(`${message} Bitte manuell eingeben.`, "error");
+        manualLocationForm();
+      }
+
+      function requestLocation() {
+        if (!navigator.geolocation) {
+          geoError({ code: 2 });
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            loadStations(position.coords.latitude, position.coords.longitude);
+          },
+          geoError,
+          { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
         );
-        currentID = currentID.split("/").join("-");
-        console.log(currentID);
-        stats = JSON.parse(this.responseText);
-        //console.log(stats);
-        var t = document.getElementById(currentID + "t"); // Best times
-        var s = document.getElementById(currentID + "s"); // Best times
-        var r = document.getElementById(currentID );
-        t.innerText = stats.text;
-        s.innerText = "" + stats.minabs + " - " + stats.maxabs + " ( ± " + Math.round((stats.maxabs - stats.minabs) * 100) + " ¢/l) ";
-        var r = document.getElementById(currentID ); // Best times
-        var today = new Date();
-        var hour = today.getHours();
-        if(stats.besthours.includes(hour)) {
-          r.setAttribute("class","table-success")
+      }
+
+      async function fetchJson(url) {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+        return response.json();
+      }
+
+      async function loadStations(lat, lng) {
+        setStatus("Stationen werden geladen...");
+        const url = `https://creativecommons.tankerkoenig.de/json/list.php?rad=10&type=all&sort=dist&lat=${lat}&lng=${lng}&apikey=fe8673d1-47be-1156-77e4-040e06cb785c`;
+        try {
+          const prices = await fetchJson(url);
+          const stations = (prices.stations || []).filter((s) => s.isOpen && s[FUEL] != null);
+          if (!stations.length) {
+            stationsEl.innerHTML = "<tr><td colspan='5'>Keine offenen Stationen gefunden.</td></tr>";
+            setStatus("Keine Stationen im Umkreis.");
+            return;
+          }
+          const limited = stations.slice(0, 10);
+          stationsEl.innerHTML = limited.map((s) => `
+            <tr id="${s.id}">
+              <td><a href="https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lng}" target="_blank" rel="noopener">${s.name} (${s.brand || ""})</a></td>
+              <td>${s[FUEL]}</td>
+              <td id="${s.id}-best">...</td>
+              <td id="${s.id}-span">...</td>
+              <td><button class="fav" data-id="${s.id}">Favorit</button></td>
+            </tr>
+          `).join("");
+
+          document.querySelectorAll(".fav").forEach((btn) => {
+            btn.addEventListener("click", () => {
+              const station = limited.find((s) => s.id === btn.dataset.id);
+              addAndStore(station.id, station.brand || station.name, station.lat, station.lng);
+              btn.textContent = "Gespeichert";
+            });
+          });
+
+          await Promise.allSettled(limited.map(async (s) => {
+            const statsUrl = `${DATA_BASE}${s.id.split("-").join("/")}/${FUEL}.json`;
+            const stats = await fetchJson(statsUrl);
+            document.getElementById(`${s.id}-best`).textContent = stats.text || "-";
+            document.getElementById(`${s.id}-span`).textContent = `${stats.minabs} - ${stats.maxabs} (± ${Math.round((stats.maxabs - stats.minabs) * 100)} ¢/l)`;
+
+            const nowHour = new Date().getHours();
+            if (stats.besthours && stats.besthours.includes(nowHour)) {
+              const row = document.getElementById(s.id);
+              row.classList.add("row-highlight");
+            }
+          }));
+
+          clearStatus();
+        } catch (err) {
+          stationsEl.innerHTML = "<tr><td colspan='5'>Fehler beim Laden der Stationen.</td></tr>";
+          setStatus("Fehler beim Laden der Daten. Bitte spaeter erneut versuchen.", "error");
         }
       }
-    };
-  
-      </script>
+
+      requestLocation();
+    </script>
+  </body>
 </html>

@@ -1,187 +1,240 @@
 <!doctype html>
 <html lang="de">
   <head>
-    <meta charset="UTF-8" /> 
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no">
-    <!-- Bootstrap CSS -->
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css" integrity="sha384-9aIt2nRpC12Uk9gS9baDl411NQApFmC26EwAOH8WgZl5MYYxFfc+NcPb1dKGj7Sk" crossorigin="anonymous">
-
-    <title>Preise ihrer Lieblingstankstellen</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tankzeit | Favoriten</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --ink: #141414;
+        --muted: #6b6b6b;
+        --accent: #1d3557;
+        --card: #ffffff;
+        --shadow: 0 20px 50px rgba(10, 10, 10, 0.12);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "Manrope", "Segoe UI", sans-serif;
+        color: var(--ink);
+        background: radial-gradient(circle at top, #e9f1ff 0%, #f6f7fb 55%, #eef2f5 100%);
+        min-height: 100vh;
+      }
+      .app {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 32px 20px 48px;
+      }
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      h1 {
+        margin: 0 0 6px;
+        font-size: clamp(26px, 4vw, 40px);
+      }
+      p {
+        margin: 0;
+        color: var(--muted);
+      }
+      .actions {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .btn {
+        padding: 10px 16px;
+        border-radius: 999px;
+        border: 1px solid transparent;
+        font-weight: 600;
+        cursor: pointer;
+        text-decoration: none;
+        color: var(--ink);
+        background: #fff;
+        box-shadow: 0 8px 20px rgba(10, 10, 10, 0.08);
+      }
+      .btn.primary {
+        background: var(--accent);
+        color: #fff;
+      }
+      .status {
+        margin: 24px 0 18px;
+        padding: 14px 16px;
+        border-radius: 12px;
+        background: #fff8e7;
+        color: #8a5b00;
+        display: none;
+      }
+      .status.error {
+        background: #ffe8e8;
+        color: #8c1d1d;
+      }
+      .card {
+        background: var(--card);
+        border-radius: 24px;
+        padding: 20px;
+        box-shadow: var(--shadow);
+      }
+      .table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .table th, .table td {
+        padding: 14px 10px;
+        border-bottom: 1px solid #ececec;
+        text-align: left;
+        font-size: 0.95rem;
+      }
+      .table th {
+        font-weight: 600;
+        color: var(--muted);
+      }
+      .remove {
+        border: none;
+        background: #f3f4f6;
+        border-radius: 999px;
+        padding: 6px 10px;
+        cursor: pointer;
+      }
+      @media (max-width: 700px) {
+        .table th:nth-child(4),
+        .table td:nth-child(4) {
+          display: none;
+        }
+      }
+    </style>
   </head>
+  <body>
+    <main class="app">
+      <header>
+        <div>
+          <h1>Favoriten</h1>
+          <p>Deine gespeicherten Tankstellen im Ueberblick.</p>
+        </div>
+        <div class="actions">
+          <a class="btn" href="index.html">Diesel</a>
+          <a class="btn primary" href="e10.html">E10</a>
+        </div>
+      </header>
 
-  <body onload="load()">
-  <div class="container">
-    <div class="row">
-      <div style="text-align:center" class="col-sm-12">
-       <h1>T&#x1F551;NKZEIT</h1>
-      </div>
-    </div>
-    <div class="row">
-      <div class="col">
-        <h2>Meine Lieblingstankstellen</h2>
-      </div>
-      <div class="col">
-          <a href="index.html" class="btn btn-primary">Diesel hier finden</a>
-          <a href="e10.html" class="btn btn-primary">E10 hier finden</a>
-      </div>
-    </div>
-    <div class="row">
-      <table class="table table-hover">
-        <caption><em>Daten via <a href="http://www.tankerkoenig.de/">Tankerkönig</a>.  Gute Zeiten und Schwankung ermittelt durch Beobachtung der Preise der letzten Tage.</em>
-        </caption>
+      <div id="status" class="status"></div>
+
+      <section class="card">
+        <table class="table">
           <thead>
-        <tr>
-          <th>Name</th>
-          <th>E10 €/l</th>
-          <th>Diesel €/l</th>
-          <th>Gute Zeiten</th>
-          <th>Schwankung</th>
-          <th></th>
-        </tr>
-        </thead>
-        <tbody id = "x" />
-      </table>
-    </div>
-    <div class="row">
-      <em><strong>&copy; Volz Innovation GmbH</strong>
-        Alle Rechte zur kommerziellen Nutzung bleiben uns vorbehalten.
-        <a href="https://www.volzinnovation.com/">Wir freuen uns über ihren Kontakt.</a></em>
-    </div>
-  </div>
+            <tr>
+              <th>Name</th>
+              <th>E10 €/l</th>
+              <th>Diesel €/l</th>
+              <th>Beste Zeiten</th>
+              <th>Schwankung</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="favorites">
+            <tr><td colspan="6">Favoriten werden geladen...</td></tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
 
+    <script>
+      const DATA_BASE = "https://huggingface.co/datasets/loffenauer/fuel-prices-germany/resolve/main/data2/";
+      const statusEl = document.getElementById("status");
+      const favoritesEl = document.getElementById("favorites");
+      const ids = JSON.parse(localStorage.getItem("ids")) || [];
+      const fav = JSON.parse(localStorage.getItem("fav")) || [];
+
+      function setStatus(message, type = "info") {
+        statusEl.textContent = message;
+        statusEl.className = `status ${type === "error" ? "error" : ""}`;
+        statusEl.style.display = "block";
+      }
+
+      function clearStatus() {
+        statusEl.style.display = "none";
+      }
+
+      function removeAndStore(id) {
+        const index = ids.indexOf(id);
+        if (index >= 0) {
+          ids.splice(index, 1);
+          fav.splice(index, 1);
+          localStorage.setItem("fav", JSON.stringify(fav));
+          localStorage.setItem("ids", JSON.stringify(ids));
+          render();
+        }
+      }
+
+      async function fetchJson(url) {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+        return response.json();
+      }
+
+      async function loadPrices() {
+        if (!ids.length) {
+          favoritesEl.innerHTML = "<tr><td colspan='6'>Keine Favoriten gespeichert.</td></tr>";
+          setStatus("Noch keine Favoriten. Fuege welche auf der Startseite hinzu.");
+          return;
+        }
+
+        const url = `https://creativecommons.tankerkoenig.de/json/prices.php?ids=${ids.join(",")}&apikey=fe8673d1-47be-1156-77e4-040e06cb785c`;
+        try {
+          const prices = await fetchJson(url);
+          await Promise.allSettled(ids.map(async (id) => {
+            const statsUrl = `${DATA_BASE}${id.split("-").join("/")}/e10.json`;
+            const stats = await fetchJson(statsUrl);
+            const best = document.getElementById(`${id}-best`);
+            const span = document.getElementById(`${id}-span`);
+            if (best) best.textContent = stats.text || "-";
+            if (span) span.textContent = `${stats.minabs} - ${stats.maxabs} (± ${Math.round((stats.maxabs - stats.minabs) * 100)} ¢/l)`;
+          }));
+
+          ids.forEach((id) => {
+            const e10 = document.getElementById(`${id}-e10`);
+            const diesel = document.getElementById(`${id}-diesel`);
+            if (!prices.prices || !prices.prices[id]) return;
+            const entry = prices.prices[id];
+            e10.textContent = entry.status === "closed" ? "- (Geschlossen)" : entry.e10;
+            diesel.textContent = entry.status === "closed" ? "-" : entry.diesel;
+          });
+          clearStatus();
+        } catch (err) {
+          setStatus("Fehler beim Laden der Favoriten.", "error");
+        }
+      }
+
+      function render() {
+        if (!fav.length) {
+          favoritesEl.innerHTML = "<tr><td colspan='6'>Keine Favoriten gespeichert.</td></tr>";
+          return;
+        }
+        favoritesEl.innerHTML = fav.map((station) => `
+          <tr>
+            <td><a href="https://www.google.com/maps/search/?api=1&query=${station.lat},${station.lng}" target="_blank" rel="noopener">${station.name}</a></td>
+            <td id="${station.id}-e10">...</td>
+            <td id="${station.id}-diesel">...</td>
+            <td id="${station.id}-best">...</td>
+            <td id="${station.id}-span">...</td>
+            <td><button class="remove" data-id="${station.id}">Entfernen</button></td>
+          </tr>
+        `).join("");
+
+        document.querySelectorAll(".remove").forEach((btn) => {
+          btn.addEventListener("click", () => removeAndStore(btn.dataset.id));
+        });
+
+        loadPrices();
+      }
+
+      render();
+    </script>
   </body>
-  <script>
-    var vis_head =
-      "https://raw.githubusercontent.com/volzinnovation/fuel_price_variations_germany/master/data2/";
-    var vis_tail = "/e10.json";
-    var prices;
-    // Tankerkoenig API with call back
-    var tankerkoenig = new XMLHttpRequest();
-    tankerkoenig.onreadystatechange = function() {
-      if (this.readyState == 4 && this.status == 200) {
-        prices = JSON.parse(this.responseText);
-        // console.log(prices);
-        for (i = 0; i < ids.length; i++) {
-          var p = document.getElementById(ids[i]+'e');
-          p.innerText =
-            prices.prices[ids[i]].status == "closed"
-              ? "- (Geschlossen)"
-              : prices.prices[ids[i]].e10;
-              p = document.getElementById(ids[i]+'d');
-              p.innerText =
-                prices.prices[ids[i]].status == "closed"
-                  ? "-"
-                  : prices.prices[ids[i]].diesel;
-        }
-      }
-    };
-    // Volz Innovation Service with callback
-    var vis = new XMLHttpRequest();
-    vis.onreadystatechange = function() {
-      if (this.readyState == 4 && this.status == 200) {
-        let currentID = this.responseURL.substring(
-          vis_head.length,
-          this.responseURL.length - vis_tail.length
-        );
-        currentID = currentID.split("/").join("-");
-        console.log(currentID);
-        stats = JSON.parse(this.responseText);
-        //console.log(stats);
-        var t = document.getElementById(currentID + "t"); // Best times
-        var s = document.getElementById(currentID + "s"); // Best times
-        t.innerText = stats.text;
-        s.innerText =  ± " + Math.round((stats.maxabs - stats.minabs) * 100) + " ¢/l ";
-      }
-    };
-
-    var x = document.getElementById("x");
-    var ids = JSON.parse(localStorage.getItem("ids"));
-    var fav = JSON.parse(localStorage.getItem("fav"));
-
-    function removeAndStore(id) {
-      if (fav != null) {
-        const index = fav.indexOf(id);
-        fav.splice(index, 1);
-        ids.splice(index, 1);
-        localStorage.setItem("fav", JSON.stringify(fav));
-        localStorage.setItem("ids", JSON.stringify(ids));
-        load();
-      }
-    }
-    var link;
-
-    function getLocation() {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(showPosition);
-      } else {
-        x.innerHTML = "Geolocation is not supported by this browser.";
-      }
-    }
-
-    function showPosition(position) {
-      link =
-        "preise/suche?lat=" +
-        position.coords.latitude +
-        "&lng=" +
-        position.coords.longitude;
-      console.log(link);
-      //  window.location.href = link;
-    }
-
-    function onClick() {
-      window.location.href = link;
-      return false;
-    }
-
-    function loadPrices() {
-      var url = "https://creativecommons.tankerkoenig.de/json/prices.php?ids=";
-      for (i = 0; i < ids.length - 1; i++) {
-        url += ids[i] + ",";
-      }
-      url += ids[ids.length - 1];
-      url += "&apikey=fe8673d1-47be-1156-77e4-040e06cb785c";
-      console.log(url);
-      tankerkoenig.open("GET", url);
-      tankerkoenig.send();
-      for (i = 0; i < ids.length; i++) {
-        url = vis_head + ids[i] + vis_tail;
-        url = url.split("-").join("/");
-        console.log(url);
-        vis.open("GET", url, false); // Cannot be asynchronous, have to wait until issueing second request via URL (Using Deprecated Feature)
-        vis.send();
-      }
-    }
-
-    function load() {
-      var html;
-      // getLocation();
-      if (fav != null && fav.length > 0) {
-        html = ""
-        for (i = 0; i < fav.length; i++) {
-          html +=
-            "<tr class=\"align-middle\"><td class=\"align-middle\"><a href='https://www.google.com/maps/search/?api=1&amp;query=" +
-            fav[i].lat +
-            "," +
-            fav[i].lng +
-            "'>" +
-            fav[i].name +
-            "</a></td>";
-            html += "<td class=\"align-middle\" id='" + fav[i].id + "e'>...</td>"; // >" + prices.prices[fav[i].id].e10 + "
-            html += "<td class=\"align-middle\" id='" + fav[i].id + "d'>...</td>"; // >" + prices.prices[fav[i].id].e10 + "
-
-          html += "<td  class=\"align-middle\" id='" + fav[i].id + "t'>...</td>";
-          html += "<td  class=\"align-middle\" id='" + fav[i].id + "s'>...</td>";
-
-          js = "removeAndStore('" + fav[i].id + "')";
-          html += "<td class=\"align-middle\">";
-          html += "<a class=\"btn btn-light\" data-toggle=\"tooltip\" data-placement=\"left\" title=\"Aus Lieblingstankstellen löschen\" onclick=" + js + ">";
-          html += "❌</a></td></tr>";
-          x.innerHTML = html;
-          loadPrices();
-        }
-      } else {
-        window.location.href="index.html";
-      }
-    }
-  </script>
 </html>
