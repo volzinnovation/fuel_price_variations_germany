@@ -7,138 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap" rel="stylesheet" />
-    <style>
-      :root {
-        --bg: #f6f4ef;
-        --ink: #121212;
-        --muted: #5f5f5f;
-        --accent: #264653;
-        --accent-2: #f4a261;
-        --card: #ffffff;
-        --shadow: 0 20px 50px rgba(10, 10, 10, 0.12);
-      }
-      * { box-sizing: border-box; }
-      body {
-        margin: 0;
-        font-family: "Manrope", "Segoe UI", sans-serif;
-        color: var(--ink);
-        background: radial-gradient(circle at top, #ffe8d6 0%, #f6f4ef 50%, #edf0f5 100%);
-        min-height: 100vh;
-      }
-      .app {
-        max-width: 1100px;
-        margin: 0 auto;
-        padding: 32px 20px 48px;
-      }
-      header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 16px;
-        flex-wrap: wrap;
-      }
-      .brand h1 {
-        font-size: clamp(26px, 4vw, 40px);
-        margin: 0 0 6px;
-        letter-spacing: 0.04em;
-      }
-      .brand p {
-        margin: 0;
-        color: var(--muted);
-      }
-      .actions {
-        display: flex;
-        gap: 12px;
-        flex-wrap: wrap;
-      }
-      .btn {
-        padding: 10px 16px;
-        border-radius: 999px;
-        border: 1px solid transparent;
-        font-weight: 600;
-        cursor: pointer;
-        text-decoration: none;
-        color: var(--ink);
-        background: #fff;
-        box-shadow: 0 8px 20px rgba(10, 10, 10, 0.08);
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-      }
-      .btn.primary {
-        background: var(--accent);
-        color: #fff;
-      }
-      .btn:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 12px 24px rgba(10, 10, 10, 0.12);
-      }
-      .status {
-        margin: 24px 0 18px;
-        padding: 14px 16px;
-        border-radius: 12px;
-        background: #fff8e7;
-        color: #8a5b00;
-        display: none;
-      }
-      .status.error {
-        background: #ffe8e8;
-        color: #8c1d1d;
-      }
-      .card {
-        background: var(--card);
-        border-radius: 24px;
-        padding: 20px;
-        box-shadow: var(--shadow);
-      }
-      .table {
-        width: 100%;
-        border-collapse: collapse;
-      }
-      .table th, .table td {
-        padding: 14px 10px;
-        border-bottom: 1px solid #ececec;
-        text-align: left;
-        font-size: 0.95rem;
-      }
-      .table th {
-        font-weight: 600;
-        color: var(--muted);
-      }
-      .row-highlight {
-        background: #eef7ff;
-      }
-      .fav {
-        border: none;
-        background: #f3f4f6;
-        border-radius: 999px;
-        padding: 6px 10px;
-        cursor: pointer;
-      }
-      .manual {
-        margin-top: 14px;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        align-items: center;
-      }
-      .manual input {
-        border: 1px solid #d8d8d8;
-        border-radius: 10px;
-        padding: 8px 10px;
-        min-width: 140px;
-        font-family: inherit;
-      }
-      footer {
-        margin-top: 28px;
-        color: var(--muted);
-        font-size: 0.9rem;
-      }
-      @media (max-width: 700px) {
-        .table th:nth-child(4),
-        .table td:nth-child(4) {
-          display: none;
-        }
-      }
-    </style>
+    <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <main class="app">
@@ -152,6 +21,11 @@
           <a class="btn primary" href="index.html">Diesel anzeigen</a>
         </div>
       </header>
+
+      <section class="hero" id="location-hint">
+        <div class="tip"><strong>Hinweis:</strong> Bitte Standortzugriff erlauben, damit wir Tankstellen in deiner Nähe finden.</div>
+        <div class="tip">Kein Zugriff? Nutze die manuelle Eingabe weiter unten.</div>
+      </section>
 
       <div id="status" class="status"></div>
 
@@ -173,12 +47,37 @@
       </section>
 
       <footer>
-        Daten via Tankerkönig. Gute Zeiten und Schwankung basieren auf den letzten Tagen.
+        <div>
+          Open Data: (c)
+          <a href="https://www.tankerkoenig.de/" target="_blank" rel="noopener"
+            >Tankerkönig</a
+          >
+          Code:
+          <a
+            href="https://github.com/volzinnovation/fuel_price_variations_germany"
+            target="_blank"
+            rel="noopener"
+            >Open Source</a
+          >
+        </div>
+        <div>
+          (c) 2020-2026
+          <a href="https://www.raphaelvolz.de/" target="_blank" rel="noopener"
+            >Prof. Dr. Raphael Volz (<a
+              href="https://www.hs-pforzheim.de/"
+              target="_blank"
+              rel="noopener"
+              >Hochschule Pforzheim</a
+            >
+            )</a
+          >
+        </div>
+        <div></div>
       </footer>
     </main>
 
     <script>
-      const DATA_BASE = "https://huggingface.co/datasets/loffenauer/fuel-prices-germany/resolve/main/data2/";
+      const DATA_BASE = "data2/";
       const FUEL = "e10";
 
       const statusEl = document.getElementById("status");
@@ -228,7 +127,7 @@
         if (err && err.code === 1) message = "Standortzugriff wurde verweigert.";
         if (err && err.code === 2) message = "Standort ist aktuell nicht verfuegbar.";
         if (err && err.code === 3) message = "Standortabfrage ist abgelaufen.";
-        setStatus(`${message} Bitte manuell eingeben.`, "error");
+        setStatus(`${message} Bitte Browser-Zugriff pruefen oder manuell eingeben.`, "error");
         manualLocationForm();
       }
 
@@ -239,6 +138,8 @@
         }
         navigator.geolocation.getCurrentPosition(
           (position) => {
+            const hint = document.getElementById("location-hint");
+            if (hint) hint.style.display = "none";
             loadStations(position.coords.latitude, position.coords.longitude);
           },
           geoError,

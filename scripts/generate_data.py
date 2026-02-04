@@ -15,6 +15,7 @@ import certifi
 import pandas as pd
 import pytz
 import requests
+from tqdm import tqdm
 
 TZ = pytz.timezone("Europe/Berlin")
 TANKER_BASE = (
@@ -39,10 +40,12 @@ def _data_path(prefix: str, day: date) -> str:
     return f"{prefix}/{day:%Y}/{day:%m}/{day:%Y-%m-%d}-{prefix}.csv"
 
 
-def _read_csv_from_url(url: str) -> pd.DataFrame:
+def _read_csv_from_url(url: str, label: str | None = None, show: bool = True) -> pd.DataFrame:
     user = os.environ.get("TK_USER")
     password = os.environ.get("TK_PASS")
     auth = (user, password) if user and password else None
+    if label and show:
+        print(f"Downloading {label}...")
     response = requests.get(url, timeout=120, verify=certifi.where(), auth=auth)
     response.raise_for_status()
     text = response.text.lstrip()
@@ -57,7 +60,7 @@ def download_stations(target_path: Path, target_day: date) -> None:
     for day in candidates:
         url = f"{TANKER_BASE}/{_data_path('stations', day)}"
         try:
-            df = _read_csv_from_url(url)
+            df = _read_csv_from_url(url, label=f"stations {day:%Y-%m-%d}")
             break
         except Exception:
             continue
@@ -75,10 +78,10 @@ def download_stations(target_path: Path, target_day: date) -> None:
 
 def _load_prices(days: DateRange) -> pd.DataFrame:
     frames: List[pd.DataFrame] = []
-    for day in days.iter_days():
+    for day in tqdm(list(days.iter_days()), desc="Downloading prices", unit="day"):
         url = f"{TANKER_BASE}/{_data_path('prices', day)}"
         try:
-            frames.append(_read_csv_from_url(url))
+            frames.append(_read_csv_from_url(url, label=f"prices {day:%Y-%m-%d}", show=False))
         except Exception:
             continue
     if not frames:
@@ -143,11 +146,16 @@ def _write_station_output(
     json_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
 
-def _hourly_variation(series: pd.Series, window_start: datetime, window_end: datetime) -> pd.DataFrame:
+def _hourly_variation(
+    series: pd.Series,
+    window_start: datetime,
+    window_end: datetime,
+    analysis_days: List[date],
+) -> tuple[pd.DataFrame, float, float, int, int]:
     series = series.sort_index()
     series = series[~series.index.duplicated(keep="last")]
     if series.empty:
-        return pd.DataFrame(columns=["hour", "price"])
+        return pd.DataFrame(columns=["hour", "price"]), 0.0, 0.0, 0, 0
 
     if series.index.tz is None:
         series.index = series.index.tz_localize(TZ)
@@ -159,22 +167,39 @@ def _hourly_variation(series: pd.Series, window_start: datetime, window_end: dat
 
     series = series.loc[(series.index >= start) & (series.index <= end)]
     if series.empty:
-        return pd.DataFrame(columns=["hour", "price"])
+        return pd.DataFrame(columns=["hour", "price"]), 0.0, 0.0, 0, 0
 
     full_range = pd.date_range(start=start, end=end, freq="1min", tz=TZ)
-    filled = series.reindex(full_range).ffill().dropna()
-    if filled.empty:
-        return pd.DataFrame(columns=["hour", "price"])
+    filled = series.reindex(full_range, method="ffill")
+    if filled.dropna().empty:
+        return pd.DataFrame(columns=["hour", "price"]), 0.0, 0.0, 0, 0
 
-    mean_all = float(filled.mean())
-    hourly = filled.resample("1h").mean() - mean_all
-    hourly = hourly.to_frame(name="price")
-    hourly["hour"] = hourly.index.hour
-    grouped = hourly.groupby("hour")["price"].mean().reset_index()
+    minabs = float(filled.min())
+    maxabs = float(filled.max())
+
+    daily_frames = []
+    used_days = 0
+    for day in analysis_days:
+        day_start = TZ.localize(datetime.combine(day, datetime.min.time()))
+        day_end = TZ.localize(datetime.combine(day, datetime.max.time()))
+        day_series = filled.loc[day_start:day_end]
+        if day_series.dropna().empty:
+            continue
+        used_days += 1
+        daily_mean = float(day_series.mean())
+        hourly_mean = day_series.resample("1h").mean()
+        hourly_dev = (hourly_mean - daily_mean).to_frame(name="price")
+        hourly_dev["hour"] = hourly_dev.index.hour
+        daily_frames.append(hourly_dev[["hour", "price"]])
+
+    if not daily_frames:
+        return pd.DataFrame(columns=["hour", "price"]), minabs, maxabs, used_days, int(filled.notna().sum())
+
+    grouped = pd.concat(daily_frames).groupby("hour")["price"].mean().reset_index()
     grouped["price"] = grouped["price"].round(2)
     grouped = grouped.set_index("hour").reindex(range(24), fill_value=0).reset_index()
     grouped = grouped.sort_values("hour")
-    return grouped
+    return grouped, minabs, maxabs, used_days, int(filled.notna().sum())
 
 
 def _station_output_dir(base: Path, station_id: str) -> Path:
@@ -184,17 +209,22 @@ def _station_output_dir(base: Path, station_id: str) -> Path:
 
 def generate(output_root: Path) -> None:
     today = date.today()
+    print("Starting data generation...")
     stations_day = today - timedelta(days=1)
     download_stations(output_root / "data" / "stations.json", stations_day)
 
-    data_start = today - timedelta(days=8)
-    data_end = today - timedelta(days=1)
+    analysis_start = today - timedelta(days=8)
+    analysis_end = today - timedelta(days=1)
+    data_start = analysis_start - timedelta(days=1)
+    data_end = analysis_end
     data = _load_prices(DateRange(data_start, data_end))
+    print(f"Loaded {len(data):,} price rows.")
 
-    window_start = datetime.combine(today - timedelta(days=7), datetime.min.time())
-    window_end = datetime.combine(today - timedelta(days=1), datetime.max.time())
+    window_start = datetime.combine(analysis_start, datetime.min.time())
+    window_end = datetime.combine(analysis_end, datetime.max.time())
+    analysis_days = [analysis_start + timedelta(days=offset) for offset in range((analysis_end - analysis_start).days + 1)]
 
-    for station_id in data["station_uuid"].unique():
+    for station_id in tqdm(data["station_uuid"].unique(), desc="Processing stations", unit="station"):
         station = data[data["station_uuid"] == station_id].copy()
         if station.empty:
             continue
@@ -210,12 +240,17 @@ def generate(output_root: Path) -> None:
             fuel_series = pd.to_numeric(station.set_index("date")[fuel], errors="coerce").dropna()
             if fuel_series.empty:
                 continue
-            minabs = float(fuel_series.min())
-            maxabs = float(fuel_series.max())
-            hourly = _hourly_variation(fuel_series, window_start, window_end)
+            hourly, minabs, maxabs, used_days, filled_minutes = _hourly_variation(
+                fuel_series, window_start, window_end, analysis_days
+            )
             if hourly.empty:
                 continue
             _write_station_output(out_dir, fuel, hourly, minabs=minabs, maxabs=maxabs)
+            if used_days < len(analysis_days):
+                print(
+                    f"{station_id} {fuel}: used {used_days}/{len(analysis_days)} days, "
+                    f"filled minutes {filled_minutes:,}"
+                )
 
 
 def main() -> None:
