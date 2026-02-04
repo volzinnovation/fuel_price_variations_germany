@@ -6,16 +6,14 @@ Dieses Repository beobachtet die Preisveränderungen innerhalb eines Tages für 
 
 Datenquelle: MTS-K via [Tankerkönig](https://www.tankerkoenig.de/).
 
-Die berechneten Preisunterschiede und stündlichen Mittelwerte der Preise für jede Tankstelle werden als HuggingFace Dataset publiziert.
+Die berechneten Preisunterschiede und stündlichen Mittelwerte der Preise für jede Tankstelle werden per GitHub Actions erzeugt und in dieses Repository committed.
 
 ## Datenpipeline (Python)
 
-Die tägliche Aktualisierung läuft via GitHub Actions und lädt die Daten nach HuggingFace hoch.
+Die tägliche Aktualisierung läuft via GitHub Actions und schreibt die Ergebnisse in dieses Repository.
 
 Erforderlich:
-- GitHub Secret `HF_TOKEN` (HuggingFace Write Token)
 - GitHub Secrets `TK_USER` und `TK_PASS` (Zugang zum Tankerkönig Data Repository)
-- Dataset Repo `loffenauer/fuel-prices-germany` (public)
 
 Abbildung der MTS-K Tankstellen ID auf Ordnerstrukur aus
 
