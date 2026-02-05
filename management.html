@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tankzeit | Management</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+      .toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+      }
+      .toolbar .left {
+        display: grid;
+        gap: 6px;
+      }
+      .toolbar h2 {
+        margin: 0;
+        font-size: clamp(18px, 3vw, 26px);
+      }
+      .toolbar .meta {
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+      .fuel-tabs {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .date-nav {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .date-nav input[type="date"] {
+        border: 1px solid #d8d8d8;
+        border-radius: 999px;
+        padding: 9px 12px;
+        font: inherit;
+        background: #fff;
+        box-shadow: 0 10px 22px rgba(10, 10, 10, 0.06);
+      }
+      .chart-wrap {
+        margin-top: 10px;
+      }
+      #plot {
+        width: 100%;
+        height: 440px;
+        display: block;
+      }
+      @media (max-width: 720px) {
+        #plot {
+          height: 340px;
+        }
+      }
+      .note {
+        margin-top: 12px;
+        color: var(--muted);
+        font-size: 0.95rem;
+        line-height: 1.4;
+      }
+      .note code {
+        background: #f3f4f6;
+        padding: 2px 6px;
+        border-radius: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <header>
+        <div class="brand">
+          <h1>Tankzeit</h1>
+          <p>Management View: Verteilung der Preisabweichungen (alle Tankstellen).</p>
+        </div>
+      </header>
+
+      <div id="status" class="status"></div>
+
+      <section class="card">
+        <div class="toolbar">
+          <div class="left">
+            <h2 id="title">Boxplots je Stunde</h2>
+            <div class="meta" id="meta">Lade Zusammenfassung...</div>
+          </div>
+          <div class="date-nav" aria-label="Datum wechseln">
+            <button class="btn" id="prev-day" type="button" title="Vorheriger Tag" aria-label="Vorheriger Tag">←</button>
+            <input id="date-picker" type="date" />
+            <button class="btn" id="next-day" type="button" title="Naechster Tag" aria-label="Naechster Tag">→</button>
+          </div>
+          <div class="fuel-tabs" role="tablist" aria-label="Kraftstoff">
+            <button class="btn primary" data-fuel="diesel" role="tab" aria-selected="true">Diesel</button>
+            <button class="btn" data-fuel="e10" role="tab" aria-selected="false">E10</button>
+            <button class="btn" data-fuel="e5" role="tab" aria-selected="false">E5</button>
+          </div>
+        </div>
+
+        <div class="chart-wrap">
+          <canvas id="plot"></canvas>
+        </div>
+
+        <div class="note">
+          Quelle: Pro Tankstelle werden stuendliche Mittelwerte aus einem 1-Minuten-Raster (Forward Fill) berechnet.
+          Anschliessend: <code>hourly_mean(day) - daily_mean(day)</code>, ueber die letzten 8 Tage gemittelt.
+          Diese View zeigt die Verteilung ueber alle Tankstellen (ca. 15.000) als Boxplots pro Stunde.
+          Tippe/klicke auf eine Stunde, um Kennzahlen zu sehen.
+        </div>
+      </section>
+
+      <footer>
+        <div>
+          Open Data: (c)
+          <a href="https://www.tankerkoenig.de/" target="_blank" rel="noopener">Tankerkönig</a>
+          Code:
+          <a href="https://github.com/volzinnovation/fuel_price_variations_germany" target="_blank" rel="noopener">Open Source</a>
+        </div>
+        <div>
+          (c) 2020-2026
+          <a href="https://www.raphaelvolz.de/" target="_blank" rel="noopener">Prof. Dr. Raphael Volz (<a href="https://www.hs-pforzheim.de/" target="_blank" rel="noopener">Hochschule Pforzheim</a>)</a>
+        </div>
+        <div></div>
+      </footer>
+    </main>
+
+    <script>
+      const MIN_DATE_STR = "2026-02-04";
+
+      const statusEl = document.getElementById("status");
+      const metaEl = document.getElementById("meta");
+      const canvas = document.getElementById("plot");
+      const ctx = canvas.getContext("2d");
+      const datePicker = document.getElementById("date-picker");
+      const prevBtn = document.getElementById("prev-day");
+      const nextBtn = document.getElementById("next-day");
+
+      const state = {
+        summary: null,
+        fuel: "diesel",
+        layout: null,
+        date: null,
+        nav: { prev: false, next: false },
+      };
+
+      function setStatus(message, type = "info") {
+        statusEl.textContent = message;
+        statusEl.className = `status ${type === "error" ? "error" : ""}`;
+        statusEl.style.display = "block";
+      }
+
+      function clearStatus() {
+        statusEl.style.display = "none";
+      }
+
+      function formatValue(v) {
+        if (typeof v !== "number" || Number.isNaN(v)) return "-";
+        return v.toFixed(2);
+      }
+
+      function parseISODate(value) {
+        const [y, m, d] = value.split("-").map((x) => parseInt(x, 10));
+        return new Date(y, m - 1, d);
+      }
+
+      function formatISODate(d) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return `${y}-${m}-${day}`;
+      }
+
+      function dateParts(d) {
+        return {
+          y: String(d.getFullYear()),
+          m: String(d.getMonth() + 1).padStart(2, "0"),
+          d: String(d.getDate()).padStart(2, "0"),
+        };
+      }
+
+      function addDays(d, delta) {
+        const copy = new Date(d.getTime());
+        copy.setDate(copy.getDate() + delta);
+        return copy;
+      }
+
+      function urlForDate(d) {
+        const p = dateParts(d);
+        return `data2/${p.y}/${p.m}/${p.d}/management_boxplots.json`;
+      }
+
+      function displayFolderDate(d) {
+        const p = dateParts(d);
+        return `${p.y}/${p.m}/${p.d}`;
+      }
+
+      async function exists(url) {
+        try {
+          const head = await fetch(url, { method: "HEAD", cache: "no-store" });
+          if (head.ok) return true;
+          if (head.status !== 405) return false;
+        } catch {
+          // ignore and try GET
+        }
+        try {
+          const res = await fetch(url, { cache: "no-store" });
+          return res.ok;
+        } catch {
+          return false;
+        }
+      }
+
+      function resizeCanvas() {
+        const rect = canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+        canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+
+      function computeDomain(stats) {
+        const mins = stats.map((d) => d.min);
+        const maxs = stats.map((d) => d.max);
+        let min = Math.min(...mins);
+        let max = Math.max(...maxs);
+
+        if (!Number.isFinite(min) || !Number.isFinite(max)) {
+          min = -0.05;
+          max = 0.05;
+        }
+        // Center the domain around 0.0 so the baseline is visually stable across days.
+        let maxAbs = Math.max(Math.abs(min), Math.abs(max));
+        if (!Number.isFinite(maxAbs) || maxAbs === 0) maxAbs = 0.01;
+        const pad = maxAbs * 0.1;
+        return { min: -maxAbs - pad, max: maxAbs + pad };
+      }
+
+      function yScale(domain, plot, value) {
+        const t = (domain.max - value) / (domain.max - domain.min);
+        return plot.top + t * plot.height;
+      }
+
+      function draw() {
+        if (!state.summary) return;
+        const stats = state.summary.fuels[state.fuel] || [];
+        if (!stats.length) return;
+
+        resizeCanvas();
+        const w = canvas.getBoundingClientRect().width;
+        const h = canvas.getBoundingClientRect().height;
+
+        const plot = { left: 54, right: 18, top: 18, bottom: 42 };
+        plot.width = w - plot.left - plot.right;
+        plot.height = h - plot.top - plot.bottom;
+        state.layout = { plot, w, h };
+
+        ctx.clearRect(0, 0, w, h);
+
+        const domain = computeDomain(stats);
+
+        // Grid + axis labels
+        ctx.strokeStyle = "rgba(0,0,0,0.08)";
+        ctx.fillStyle = "rgba(0,0,0,0.55)";
+        ctx.lineWidth = 1;
+        ctx.font = "12px Manrope, sans-serif";
+
+        const ticks = 5;
+        for (let i = 0; i < ticks; i++) {
+          const v = domain.min + (i * (domain.max - domain.min)) / (ticks - 1);
+          const y = yScale(domain, plot, v);
+          ctx.beginPath();
+          ctx.moveTo(plot.left, y);
+          ctx.lineTo(plot.left + plot.width, y);
+          ctx.stroke();
+          ctx.fillText(formatValue(v), 8, y + 4);
+        }
+
+        // Zero line
+        if (domain.min < 0 && domain.max > 0) {
+          const y0 = yScale(domain, plot, 0);
+          ctx.strokeStyle = "rgba(15,118,110,0.35)";
+          ctx.beginPath();
+          ctx.moveTo(plot.left, y0);
+          ctx.lineTo(plot.left + plot.width, y0);
+          ctx.stroke();
+          ctx.strokeStyle = "rgba(0,0,0,0.08)";
+        }
+
+        // X labels
+        const step = w < 600 ? 2 : 1;
+        ctx.fillStyle = "rgba(0,0,0,0.6)";
+        for (let hour = 0; hour < 24; hour += step) {
+          const x = plot.left + ((hour + 0.5) * plot.width) / 24;
+          ctx.fillText(String(hour), x - 4, plot.top + plot.height + 26);
+        }
+        ctx.fillText("Stunde", plot.left + plot.width / 2 - 18, plot.top + plot.height + 38);
+        // Y axis label (rotated)
+        ctx.save();
+        ctx.translate(18, plot.top + plot.height / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillText("Abweichung (EUR/l)", 0, 0);
+        ctx.restore();
+
+        // Boxes
+        const boxW = Math.max(6, plot.width / 24 / 1.55);
+        ctx.strokeStyle = "rgba(15,118,110,0.9)";
+        ctx.fillStyle = "rgba(15,118,110,0.18)";
+        ctx.lineWidth = 2;
+
+        for (let i = 0; i < stats.length; i++) {
+          const d = stats[i];
+          const hour = d.hour;
+          const x = plot.left + ((hour + 0.5) * plot.width) / 24;
+
+          const yMin = yScale(domain, plot, d.min);
+          const yMax = yScale(domain, plot, d.max);
+          const yQ1 = yScale(domain, plot, d.q1);
+          const yQ3 = yScale(domain, plot, d.q3);
+          const yMed = yScale(domain, plot, d.median);
+
+          // whisker
+          ctx.beginPath();
+          ctx.moveTo(x, yMax);
+          ctx.lineTo(x, yMin);
+          ctx.stroke();
+
+          // caps
+          ctx.beginPath();
+          ctx.moveTo(x - boxW * 0.4, yMax);
+          ctx.lineTo(x + boxW * 0.4, yMax);
+          ctx.moveTo(x - boxW * 0.4, yMin);
+          ctx.lineTo(x + boxW * 0.4, yMin);
+          ctx.stroke();
+
+          // box
+          const boxTop = Math.min(yQ3, yQ1);
+          const boxH = Math.abs(yQ3 - yQ1);
+          ctx.fillRect(x - boxW / 2, boxTop, boxW, boxH);
+          ctx.strokeRect(x - boxW / 2, boxTop, boxW, boxH);
+
+          // median
+          ctx.beginPath();
+          ctx.moveTo(x - boxW / 2, yMed);
+          ctx.lineTo(x + boxW / 2, yMed);
+          ctx.stroke();
+        }
+      }
+
+      function pickHour(clientX) {
+        if (!state.layout) return null;
+        const { plot } = state.layout;
+        const rect = canvas.getBoundingClientRect();
+        const x = clientX - rect.left;
+        if (x < plot.left || x > plot.left + plot.width) return null;
+        const hour = Math.floor(((x - plot.left) / plot.width) * 24);
+        if (hour < 0 || hour > 23) return null;
+        return hour;
+      }
+
+      canvas.addEventListener("click", (e) => {
+        if (!state.summary) return;
+        const hour = pickHour(e.clientX);
+        if (hour == null) return;
+        const d = state.summary.fuels[state.fuel].find((x) => x.hour === hour);
+        if (!d) return;
+        setStatus(
+          `${state.fuel.toUpperCase()} Stunde ${hour}: min ${formatValue(d.min)}, q1 ${formatValue(d.q1)}, median ${formatValue(d.median)}, q3 ${formatValue(d.q3)}, max ${formatValue(d.max)} (n=${d.count})`,
+        );
+      });
+
+      document.querySelectorAll("[data-fuel]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const fuel = btn.getAttribute("data-fuel");
+          state.fuel = fuel;
+          document.querySelectorAll("[data-fuel]").forEach((b) => {
+            b.classList.remove("primary");
+            b.setAttribute("aria-selected", "false");
+          });
+          btn.classList.add("primary");
+          btn.setAttribute("aria-selected", "true");
+          clearStatus();
+          draw();
+        });
+      });
+
+      function setArrowVisibility() {
+        prevBtn.style.display = state.nav.prev ? "" : "none";
+        nextBtn.style.display = state.nav.next ? "" : "none";
+      }
+
+      async function updateNav() {
+        const minDate = parseISODate(MIN_DATE_STR);
+        const maxDate = addDays(new Date(), -1); // yesterday (viewer local)
+
+        const prevDate = addDays(state.date, -1);
+        const nextDate = addDays(state.date, 1);
+
+        const prevInRange = prevDate >= minDate;
+        const nextInRange = nextDate <= maxDate;
+
+        const [prevOk, nextOk] = await Promise.all([
+          prevInRange ? exists(urlForDate(prevDate)) : Promise.resolve(false),
+          nextInRange ? exists(urlForDate(nextDate)) : Promise.resolve(false),
+        ]);
+
+        state.nav.prev = prevOk;
+        state.nav.next = nextOk;
+        setArrowVisibility();
+      }
+
+      async function loadForDate(d) {
+        state.date = d;
+        datePicker.value = formatISODate(d);
+        metaEl.textContent = `Datenstand: ${displayFolderDate(d)} | Lade Zusammenfassung...`;
+        clearStatus();
+
+        const url = urlForDate(d);
+        try {
+          const response = await fetch(url, { cache: "no-store" });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          state.summary = await response.json();
+          const start = state.summary.analysis_start;
+          const end = state.summary.analysis_end;
+          const range = start && end ? ` | Zeitraum: ${start} - ${end}` : "";
+          metaEl.textContent = `Datenstand: ${displayFolderDate(d)} | erzeugt: ${state.summary.generated_at}${range}`;
+          draw();
+        } catch (e) {
+          setStatus("Management-Daten konnten nicht geladen werden.", "error");
+          metaEl.textContent = `Datenstand: ${displayFolderDate(d)} | Fehler beim Laden.`;
+          state.summary = null;
+        }
+        await updateNav();
+      }
+
+      window.addEventListener("resize", () => {
+        if (state.summary) draw();
+      });
+
+      prevBtn.addEventListener("click", () => {
+        if (!state.nav.prev) return;
+        loadForDate(addDays(state.date, -1));
+      });
+
+      nextBtn.addEventListener("click", () => {
+        if (!state.nav.next) return;
+        loadForDate(addDays(state.date, 1));
+      });
+
+      datePicker.addEventListener("change", () => {
+        if (!datePicker.value) return;
+        loadForDate(parseISODate(datePicker.value));
+      });
+
+      window.addEventListener("keydown", (e) => {
+        const active = document.activeElement;
+        if (active && active.tagName === "INPUT") return;
+        if (e.key === "ArrowLeft") {
+          if (state.nav.prev) loadForDate(addDays(state.date, -1));
+        }
+        if (e.key === "ArrowRight") {
+          if (state.nav.next) loadForDate(addDays(state.date, 1));
+        }
+      });
+
+      // Init date picker bounds and initial date
+      (() => {
+        const minDate = parseISODate(MIN_DATE_STR);
+        const maxDate = addDays(new Date(), -1);
+        datePicker.min = MIN_DATE_STR;
+        datePicker.max = formatISODate(maxDate);
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const qs = urlParams.get("date");
+        let initial = maxDate;
+        if (qs && /^\\d{4}-\\d{2}-\\d{2}$/.test(qs)) {
+          initial = parseISODate(qs);
+        }
+        if (initial < minDate) initial = minDate;
+        if (initial > maxDate) initial = maxDate;
+        loadForDate(initial);
+      })();
+    </script>
+  </body>
+</html>

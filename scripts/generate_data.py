@@ -9,7 +9,7 @@ import os
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Iterable, List
+from typing import Iterable, List, Dict
 
 import certifi
 import pandas as pd
@@ -224,6 +224,13 @@ def generate(output_root: Path) -> None:
     window_end = datetime.combine(analysis_end, datetime.max.time())
     analysis_days = [analysis_start + timedelta(days=offset) for offset in range((analysis_end - analysis_start).days + 1)]
 
+    fuels = ("diesel", "e10", "e5")
+    # Collect per-hour deviations across all stations to build a fast-loading management summary.
+    mgmt_values: Dict[str, Dict[int, List[float]]] = {
+        fuel: {hour: [] for hour in range(24)} for fuel in fuels
+    }
+    mgmt_station_counts: Dict[str, int] = {fuel: 0 for fuel in fuels}
+
     for station_id in tqdm(data["station_uuid"].unique(), desc="Processing stations", unit="station"):
         station = data[data["station_uuid"] == station_id].copy()
         if station.empty:
@@ -234,7 +241,7 @@ def generate(output_root: Path) -> None:
 
         out_dir = _station_output_dir(output_root / "data2", station_id)
 
-        for fuel in ("diesel", "e10", "e5"):
+        for fuel in fuels:
             if fuel not in station.columns:
                 continue
             fuel_series = pd.to_numeric(station.set_index("date")[fuel], errors="coerce").dropna()
@@ -245,12 +252,68 @@ def generate(output_root: Path) -> None:
             )
             if hourly.empty:
                 continue
+
+            mgmt_station_counts[fuel] += 1
+            for row in hourly.itertuples(index=False):
+                mgmt_values[fuel][int(row.hour)].append(float(row.price))
+
             _write_station_output(out_dir, fuel, hourly, minabs=minabs, maxabs=maxabs)
             if used_days < len(analysis_days):
                 print(
                     f"{station_id} {fuel}: used {used_days}/{len(analysis_days)} days, "
                     f"filled minutes {filled_minutes:,}"
                 )
+
+    # Write management summary (boxplot stats per hour) for fast frontend rendering.
+    mgmt_summary = {
+        "snapshot_date": str(analysis_end),
+        "generated_at": datetime.now(TZ).isoformat(timespec="seconds"),
+        "analysis_start": str(analysis_start),
+        "analysis_end": str(analysis_end),
+        "station_counts": mgmt_station_counts,
+        "fuels": {},
+    }
+    for fuel in fuels:
+        fuel_stats = []
+        for hour in range(24):
+            values = mgmt_values[fuel][hour]
+            if values:
+                s = pd.Series(values, dtype="float64")
+                fuel_stats.append(
+                    {
+                        "hour": hour,
+                        "count": int(s.count()),
+                        "min": float(s.min()),
+                        "q1": float(s.quantile(0.25)),
+                        "median": float(s.quantile(0.5)),
+                        "q3": float(s.quantile(0.75)),
+                        "max": float(s.max()),
+                    }
+                )
+            else:
+                fuel_stats.append(
+                    {
+                        "hour": hour,
+                        "count": 0,
+                        "min": 0.0,
+                        "q1": 0.0,
+                        "median": 0.0,
+                        "q3": 0.0,
+                        "max": 0.0,
+                    }
+                )
+        mgmt_summary["fuels"][fuel] = fuel_stats
+
+    mgmt_path = (
+        output_root
+        / "data2"
+        / f"{analysis_end:%Y}"
+        / f"{analysis_end:%m}"
+        / f"{analysis_end:%d}"
+        / "management_boxplots.json"
+    )
+    mgmt_path.parent.mkdir(parents=True, exist_ok=True)
+    mgmt_path.write_text(json.dumps(mgmt_summary, ensure_ascii=False), encoding="utf-8")
 
 
 def main() -> None:
