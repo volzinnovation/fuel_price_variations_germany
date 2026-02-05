@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tankzeit | Chart</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+      .chart-card {
+        padding: 20px;
+      }
+      .chart-title {
+        margin: 0 0 6px;
+        font-size: clamp(22px, 4vw, 34px);
+      }
+      .chart-sub {
+        margin: 0 0 18px;
+        color: var(--muted);
+      }
+      .chart-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 16px;
+      }
+      canvas {
+        width: 100% !important;
+        height: 420px !important;
+      }
+      @media (max-width: 720px) {
+        canvas {
+          height: 320px !important;
+        }
+      }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  </head>
+  <body>
+    <main class="app">
+      <header>
+        <div class="brand">
+          <h1>Tankzeit</h1>
+          <p>Preisverlauf nach Stunde.</p>
+        </div>
+        <div class="actions">
+          <button class="btn" id="back-btn">Zurueck</button>
+        </div>
+      </header>
+
+      <section class="card chart-card">
+        <div class="chart-actions">
+          <a class="btn" id="maps-link" href="#" target="_blank" rel="noopener">Zur Tankstelle</a>
+        </div>
+        <h2 class="chart-title" id="chart-title">Lade Chart...</h2>
+        <p class="chart-sub" id="chart-sub"></p>
+        <canvas id="chart"></canvas>
+      </section>
+
+      <footer>
+        <div>
+          Open Data: (c)
+          <a href="https://www.tankerkoenig.de/" target="_blank" rel="noopener">Tankerkönig</a>
+          Code:
+          <a href="https://github.com/volzinnovation/fuel_price_variations_germany" target="_blank" rel="noopener">Open Source</a>
+        </div>
+        <div>
+          (c) 2020-2026
+          <a href="https://www.raphaelvolz.de/" target="_blank" rel="noopener">Prof. Dr. Raphael Volz (<a href="https://www.hs-pforzheim.de/" target="_blank" rel="noopener">Hochschule Pforzheim</a>)</a>
+        </div>
+        <div></div>
+      </footer>
+    </main>
+
+    <script>
+      const params = new URLSearchParams(window.location.search);
+      const stationId = params.get("id");
+      const fuel = params.get("fuel") || "diesel";
+      const name = params.get("name") || "Tankstelle";
+      const lat = params.get("lat");
+      const lng = params.get("lng");
+      const DATA_BASE = "data2/";
+
+      document.getElementById("back-btn").addEventListener("click", () => history.back());
+
+      const title = `${name} · ${fuel.toUpperCase()}`;
+      document.getElementById("chart-title").textContent = title;
+      document.getElementById("chart-sub").textContent = "Durchschnittliche Abweichung vom Tagesmittel (letzte 8 Tage).";
+
+      if (lat && lng) {
+        const maps = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+        const link = document.getElementById("maps-link");
+        link.href = maps;
+      }
+
+      async function fetchJson(url) {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+        return response.json();
+      }
+
+      async function loadChart() {
+        if (!stationId) return;
+        const statsUrl = `${DATA_BASE}${stationId.split("-").join("/")}/${fuel}.json`;
+        const stats = await fetchJson(statsUrl);
+        const hours = stats.hourly.map((row) => row.hour);
+        const values = stats.hourly.map((row) => row.price);
+
+        const ctx = document.getElementById("chart").getContext("2d");
+        new Chart(ctx, {
+          type: "line",
+          data: {
+            labels: hours,
+            datasets: [
+              {
+                label: "Preisabweichung (€/l)",
+                data: values,
+                borderColor: "#0f766e",
+                backgroundColor: "rgba(15, 118, 110, 0.15)",
+                tension: 0.3,
+                fill: true,
+                pointRadius: 2,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: {
+                title: { display: true, text: "Stunde" },
+              },
+              y: {
+                title: { display: true, text: "Abweichung (€/l)" },
+              },
+            },
+          },
+        });
+      }
+
+      loadChart().catch(() => {
+        document.getElementById("chart-sub").textContent = "Chart konnte nicht geladen werden.";
+      });
+    </script>
+  </body>
+</html>

@@ -190,7 +190,7 @@
             <tr id="${s.id}">
               <td><a href="https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lng}" target="_blank" rel="noopener">${s.name} (${s.brand || ""})</a></td>
               <td>${s[FUEL]}</td>
-              <td id="${s.id}-best">...</td>
+              <td id="${s.id}-best"><a href="chart.html?id=${s.id}&fuel=${FUEL}&name=${encodeURIComponent(s.name)}&lat=${s.lat}&lng=${s.lng}">Chart</a></td>
               <td id="${s.id}-span">...</td>
               <td><button class="fav" data-id="${s.id}">Favorit</button></td>
             </tr>
@@ -215,8 +215,8 @@
             limited.map(async (s) => {
               const statsUrl = `${DATA_BASE}${s.id.split("-").join("/")}/${FUEL}.json`;
               const stats = await fetchJson(statsUrl);
-              document.getElementById(`${s.id}-best`).textContent =
-                stats.text || "-";
+              document.getElementById(`${s.id}-best`).innerHTML =
+                `<a href="chart.html?id=${s.id}&fuel=${FUEL}&name=${encodeURIComponent(s.name)}&lat=${s.lat}&lng=${s.lng}">${stats.text || "Chart"}</a>`;
               document.getElementById(`${s.id}-span`).textContent =
                 `${stats.minabs} - ${stats.maxabs} (± ${Math.round((stats.maxabs - stats.minabs) * 100)} ¢/l)`;
 

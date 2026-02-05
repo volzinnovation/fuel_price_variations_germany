@@ -120,7 +120,13 @@
             const stats = await fetchJson(statsUrl);
             const best = document.getElementById(`${id}-best`);
             const span = document.getElementById(`${id}-span`);
-            if (best) best.textContent = stats.text || "-";
+            if (best) {
+              const station = fav.find((f) => f.id === id) || {};
+              const stationName = encodeURIComponent(station.name || "Tankstelle");
+              const stationLat = station.lat || "";
+              const stationLng = station.lng || "";
+              best.innerHTML = `<a href="chart.html?id=${id}&fuel=e10&name=${stationName}&lat=${stationLat}&lng=${stationLng}">${stats.text || "Chart"}</a>`;
+            }
             if (span) span.textContent = `${stats.minabs} - ${stats.maxabs} (± ${Math.round((stats.maxabs - stats.minabs) * 100)} ¢/l)`;
           }));
 
@@ -148,7 +154,7 @@
             <td><a href="https://www.google.com/maps/search/?api=1&query=${station.lat},${station.lng}" target="_blank" rel="noopener">${station.name}</a></td>
             <td id="${station.id}-e10">...</td>
             <td id="${station.id}-diesel">...</td>
-            <td id="${station.id}-best">...</td>
+            <td id="${station.id}-best"><a href="chart.html?id=${station.id}&fuel=e10&name=${encodeURIComponent(station.name)}&lat=${station.lat}&lng=${station.lng}">Chart</a></td>
             <td id="${station.id}-span">...</td>
             <td><button class="remove" data-id="${station.id}">Entfernen</button></td>
           </tr>
