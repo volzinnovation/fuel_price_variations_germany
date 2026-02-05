@@ -1,3 +1,4 @@
+set.sh
 R_libs/*
 .RData
 .Rhistory
