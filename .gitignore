@@ -10,3 +10,4 @@ data2/.DS_Store
 *.icloud
 data2/
 data/stations.json
+setup.sh
