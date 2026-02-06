@@ -2,84 +2,33 @@
 <html lang="de">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0f766e" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta
+      name="description"
+      content="Management View: Preisabweichungen über alle Tankstellen als Boxplots."
+    />
     <title>Tankzeit | Management</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap" rel="stylesheet" />
+    <link rel="preload" href="styles.css" as="style" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="styles.css" />
-    <style>
-      .toolbar {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        gap: 12px;
-        flex-wrap: wrap;
-        margin-bottom: 14px;
-      }
-      .toolbar .left {
-        display: grid;
-        gap: 6px;
-      }
-      .toolbar h2 {
-        margin: 0;
-        font-size: clamp(18px, 3vw, 26px);
-      }
-      .toolbar .meta {
-        color: var(--muted);
-        font-size: 0.95rem;
-      }
-      .fuel-tabs {
-        display: flex;
-        gap: 10px;
-        flex-wrap: wrap;
-      }
-      .date-nav {
-        display: flex;
-        gap: 10px;
-        align-items: center;
-        flex-wrap: wrap;
-      }
-      .date-nav input[type="date"] {
-        border: 1px solid #d8d8d8;
-        border-radius: 999px;
-        padding: 9px 12px;
-        font: inherit;
-        background: #fff;
-        box-shadow: 0 10px 22px rgba(10, 10, 10, 0.06);
-      }
-      .chart-wrap {
-        margin-top: 10px;
-      }
-      #plot {
-        width: 100%;
-        height: 440px;
-        display: block;
-      }
-      @media (max-width: 720px) {
-        #plot {
-          height: 340px;
-        }
-      }
-      .note {
-        margin-top: 12px;
-        color: var(--muted);
-        font-size: 0.95rem;
-        line-height: 1.4;
-      }
-      .note code {
-        background: #f3f4f6;
-        padding: 2px 6px;
-        border-radius: 8px;
-      }
-    </style>
   </head>
   <body>
     <main class="app">
       <header>
         <div class="brand">
           <h1>Tankzeit</h1>
-          <p>Management View: Verteilung der Preisabweichungen (alle Tankstellen).</p>
+          <p>Preisabweichungen am deutschen Tankstellenmarkt.</p>
         </div>
       </header>
 
@@ -92,14 +41,46 @@
             <div class="meta" id="meta">Lade Zusammenfassung...</div>
           </div>
           <div class="date-nav" aria-label="Datum wechseln">
-            <button class="btn" id="prev-day" type="button" title="Vorheriger Tag" aria-label="Vorheriger Tag">←</button>
+            <button
+              class="btn"
+              id="prev-day"
+              type="button"
+              title="Vorheriger Tag"
+              aria-label="Vorheriger Tag"
+            >
+              ←
+            </button>
             <input id="date-picker" type="date" />
-            <button class="btn" id="next-day" type="button" title="Naechster Tag" aria-label="Naechster Tag">→</button>
+            <button
+              class="btn"
+              id="next-day"
+              type="button"
+              title="Naechster Tag"
+              aria-label="Naechster Tag"
+            >
+              →
+            </button>
           </div>
           <div class="fuel-tabs" role="tablist" aria-label="Kraftstoff">
-            <button class="btn primary" data-fuel="diesel" role="tab" aria-selected="true">Diesel</button>
-            <button class="btn" data-fuel="e10" role="tab" aria-selected="false">E10</button>
-            <button class="btn" data-fuel="e5" role="tab" aria-selected="false">E5</button>
+            <button
+              class="btn primary"
+              data-fuel="diesel"
+              role="tab"
+              aria-selected="true"
+            >
+              Diesel
+            </button>
+            <button
+              class="btn"
+              data-fuel="e10"
+              role="tab"
+              aria-selected="false"
+            >
+              E10
+            </button>
+            <button class="btn" data-fuel="e5" role="tab" aria-selected="false">
+              E5
+            </button>
           </div>
         </div>
 
@@ -108,27 +89,56 @@
         </div>
 
         <div class="note">
-          Quelle: Pro Tankstelle werden stuendliche Mittelwerte aus einem 1-Minuten-Raster (Forward Fill) berechnet.
-          Anschliessend: <code>hourly_mean(day) - daily_mean(day)</code>, ueber die letzten 8 Tage gemittelt.
-          Diese View zeigt die Verteilung ueber alle Tankstellen (ca. 15.000) als Boxplots pro Stunde.
-          Tippe/klicke auf eine Stunde, um Kennzahlen zu sehen.
+          Quelle: Pro Tankstelle werden stündliche Mittelwerte aus einem
+          1-Minuten-Raster (Forward Fill) berechnet. Anschließend:
+          <code>hourly_mean(day) - daily_mean(day)</code>, über die letzten 8
+          Tage gemittelt. Diese View zeigt die Verteilung über alle Tankstellen
+          (~15.000) als Boxplots pro Stunde. Tippe/klicke auf eine Stunde, um
+          Kennzahlen zu sehen.
         </div>
       </section>
-
-      <footer>
-        <div>
-          Open Data: (c)
-          <a href="https://www.tankerkoenig.de/" target="_blank" rel="noopener">Tankerkönig</a>
-          Code:
-          <a href="https://github.com/volzinnovation/fuel_price_variations_germany" target="_blank" rel="noopener">Open Source</a>
-        </div>
-        <div>
-          (c) 2020-2026
-          <a href="https://www.raphaelvolz.de/" target="_blank" rel="noopener">Prof. Dr. Raphael Volz (<a href="https://www.hs-pforzheim.de/" target="_blank" rel="noopener">Hochschule Pforzheim</a>)</a>
-        </div>
-        <div></div>
-      </footer>
     </main>
+
+    <nav class="nav-bar" aria-label="Hauptnavigation">
+      <a href="index.html" class="nav-item">
+        <svg viewBox="0 0 24 24">
+          <path
+            d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1V9.5z"
+          />
+        </svg>
+        <span>Diesel</span>
+      </a>
+      <a href="e10.html" class="nav-item">
+        <svg viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 7v5l3 3" />
+        </svg>
+        <span>E10</span>
+      </a>
+      <a href="favoriten.html" class="nav-item">
+        <svg viewBox="0 0 24 24">
+          <path
+            d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+          />
+        </svg>
+        <span>Favoriten</span>
+      </a>
+      <a href="management.html" class="nav-item active" aria-current="page">
+        <svg viewBox="0 0 24 24">
+          <rect x="3" y="10" width="4" height="11" />
+          <rect x="10" y="5" width="4" height="16" />
+          <rect x="17" y="8" width="4" height="13" />
+        </svg>
+        <span>Statistik</span>
+      </a>
+      <a href="info.html" class="nav-item">
+        <svg viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4M12 8h.01" />
+        </svg>
+        <span>Info</span>
+      </a>
+    </nav>
 
     <script>
       const MIN_DATE_STR = "2026-02-04";
@@ -299,7 +309,11 @@
           const x = plot.left + ((hour + 0.5) * plot.width) / 24;
           ctx.fillText(String(hour), x - 4, plot.top + plot.height + 26);
         }
-        ctx.fillText("Stunde", plot.left + plot.width / 2 - 18, plot.top + plot.height + 38);
+        ctx.fillText(
+          "Stunde",
+          plot.left + plot.width / 2 - 18,
+          plot.top + plot.height + 38,
+        );
 
         // Boxes
         const boxW = Math.max(6, plot.width / 24 / 1.55);
@@ -472,7 +486,7 @@
         const urlParams = new URLSearchParams(window.location.search);
         const qs = urlParams.get("date");
         let initial = maxDate;
-        if (qs && /^\\d{4}-\\d{2}-\\d{2}$/.test(qs)) {
+        if (qs && /^\d{4}-\d{2}-\d{2}$/.test(qs)) {
           initial = parseISODate(qs);
         }
         if (initial < minDate) initial = minDate;

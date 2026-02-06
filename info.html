@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0f766e" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta
+      name="description"
+      content="Informationen über Tankzeit - Open Data Projekt."
+    />
+    <title>Tankzeit | Info</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preload" href="styles.css" as="style" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header>
+        <div class="brand">
+          <h1>Tankzeit</h1>
+          <p>Über dieses Projekt</p>
+        </div>
+      </header>
+
+      <section class="card">
+        <div class="info-section">
+          <h2>Open Data</h2>
+          <p>
+            Preisdaten werden bereitgestellt von
+            <a
+              href="https://www.tankerkoenig.de/"
+              target="_blank"
+              rel="noopener"
+              >Tankerkönig</a
+            >. Vielen Dank für die offene API!
+          </p>
+        </div>
+
+        <div class="info-section">
+          <h2>Quellcode</h2>
+          <p>
+            Dieses Projekt ist Open Source. Der Code ist verfügbar auf
+            <a
+              href="https://github.com/volzinnovation/fuel_price_variations_germany"
+              target="_blank"
+              rel="noopener"
+              >GitHub</a
+            >.
+          </p>
+        </div>
+
+        <div class="info-section">
+          <h2>Autor</h2>
+          <p>
+            <a href="https://www.raphaelvolz.de/" target="_blank" rel="noopener"
+              >Prof. Dr. Raphael Volz</a
+            ><br />
+            <a
+              href="https://www.hs-pforzheim.de/"
+              target="_blank"
+              rel="noopener"
+              >Hochschule Pforzheim</a
+            >
+          </p>
+          <p>© 2020–2026</p>
+        </div>
+
+        <div class="info-section">
+          <h2>Funktionen</h2>
+          <p>
+            <strong>Diesel & E10:</strong> Aktuelle Preise und beste Tankzeiten
+            für Tankstellen in deiner Nähe.<br />
+            <strong>Favoriten:</strong> Speichere deine bevorzugten Tankstellen
+            für schnellen Zugriff.<br />
+            <strong>Statistik:</strong> Analyse der Preisabweichungen über alle
+            Tankstellen hinweg.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <nav class="nav-bar" aria-label="Hauptnavigation">
+      <a href="index.html" class="nav-item">
+        <svg viewBox="0 0 24 24">
+          <path
+            d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1V9.5z"
+          />
+        </svg>
+        <span>Diesel</span>
+      </a>
+      <a href="e10.html" class="nav-item">
+        <svg viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 7v5l3 3" />
+        </svg>
+        <span>E10</span>
+      </a>
+      <a href="favoriten.html" class="nav-item">
+        <svg viewBox="0 0 24 24">
+          <path
+            d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+          />
+        </svg>
+        <span>Favoriten</span>
+      </a>
+      <a href="management.html" class="nav-item">
+        <svg viewBox="0 0 24 24">
+          <rect x="3" y="10" width="4" height="11" />
+          <rect x="10" y="5" width="4" height="16" />
+          <rect x="17" y="8" width="4" height="13" />
+        </svg>
+        <span>Statistik</span>
+      </a>
+      <a href="info.html" class="nav-item active" aria-current="page">
+        <svg viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4M12 8h.01" />
+        </svg>
+        <span>Info</span>
+      </a>
+    </nav>
+  </body>
+</html>
