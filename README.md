@@ -6,7 +6,9 @@ Dieses Repository beobachtet die Preisveränderungen innerhalb eines Tages für 
 
 Datenquelle: MTS-K via [Tankerkönig](https://www.tankerkoenig.de/).
 
-Die berechneten Preisunterschiede und stündlichen Mittelwerte der Preise für jede Tankstelle werden per GitHub Actions erzeugt und in dieses Repository committed.
+![Marktübersicht](img/marketview.png)
+
+Die berechneten Preisunterschiede und stündlichen Mittelwerte der Preise für *jede Tankstelle* werden per GitHub Actions erzeugt und in diesem Repository gespeichert.
 
 ## Datenpipeline (Python)
 
