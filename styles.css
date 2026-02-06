@@ -367,12 +367,21 @@ p {
 }
 
 .nav-item.active {
-  color: var(--accent);
-  background: rgba(15, 118, 110, 0.1);
+  background: rgba(128, 128, 128, 0.08);
+}
+
+.nav-item.active.diesel {
+  color: #2563eb;
+  background: rgba(37, 99, 235, 0.1);
+}
+
+.nav-item.active.e10 {
+  color: #16a34a;
+  background: rgba(22, 163, 74, 0.1);
 }
 
 .nav-item.active svg {
-  stroke: var(--accent);
+  stroke: currentColor;
 }
 
 .nav-item:hover {
