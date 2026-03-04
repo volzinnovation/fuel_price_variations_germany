@@ -188,6 +188,16 @@
         return response.json();
       }
 
+      function adjustedRange(stats, currentPrice) {
+        const values = [stats?.minabs, stats?.maxabs, currentPrice]
+          .map((value) => Number(value))
+          .filter((value) => Number.isFinite(value));
+        if (!values.length) return null;
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        return { min, max };
+      }
+
       async function loadStations(lat, lng) {
         setStatus("Stationen werden geladen...");
         const url = `https://creativecommons.tankerkoenig.de/json/list.php?rad=10&type=all&sort=dist&lat=${lat}&lng=${lng}&apikey=fe8673d1-47be-1156-77e4-040e06cb785c`;
@@ -238,8 +248,13 @@
               const stats = await fetchJson(statsUrl);
               document.getElementById(`${s.id}-best`).innerHTML =
                 `<a href="chart.html?id=${s.id}&fuel=${FUEL}&name=${encodeURIComponent(s.name)}&lat=${s.lat}&lng=${s.lng}">${stats.text || "Chart"}</a>`;
-              document.getElementById(`${s.id}-span`).textContent =
-                `${stats.minabs} - ${stats.maxabs} (± ${Math.round((stats.maxabs - stats.minabs) * 100)} ¢/l)`;
+              const range = adjustedRange(stats, s[FUEL]);
+              if (range) {
+                document.getElementById(`${s.id}-span`).textContent =
+                  `${range.min.toFixed(3)} - ${range.max.toFixed(3)} (± ${Math.round((range.max - range.min) * 100)} ¢/l)`;
+              } else {
+                document.getElementById(`${s.id}-span`).textContent = "-";
+              }
 
               const nowHour = new Date().getHours();
               if (stats.besthours && stats.besthours.includes(nowHour)) {
