@@ -99,6 +99,8 @@
 
     <script>
       const DATA_BASE = "data2/";
+      const TANKERKOENIG_APOLOGY =
+        "Entschuldigung, Tankerkoenig ist derzeit nicht erreichbar. Bitte versuche es spaeter erneut.";
       const statusEl = document.getElementById("status");
       const favoritesEl = document.getElementById("favorites");
       const ids = JSON.parse(localStorage.getItem("ids")) || [];
@@ -125,9 +127,26 @@
         }
       }
 
+      function isTankerkoenigRequest(url) {
+        return url.includes("tankerkoenig.de");
+      }
+
       async function fetchJson(url) {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+        let response;
+        try {
+          response = await fetch(url);
+        } catch (err) {
+          if (isTankerkoenigRequest(url)) {
+            throw new Error(TANKERKOENIG_APOLOGY);
+          }
+          throw err;
+        }
+        if (!response.ok) {
+          if (isTankerkoenigRequest(url)) {
+            throw new Error(TANKERKOENIG_APOLOGY);
+          }
+          throw new Error(`Request failed: ${response.status}`);
+        }
         return response.json();
       }
 
@@ -194,7 +213,11 @@
           });
           clearStatus();
         } catch (err) {
-          setStatus("Fehler beim Laden der Favoriten.", "error");
+          const message =
+            err && err.message === TANKERKOENIG_APOLOGY
+              ? TANKERKOENIG_APOLOGY
+              : "Fehler beim Laden der Favoriten.";
+          setStatus(message, "error");
         }
       }
 
