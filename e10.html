@@ -30,6 +30,18 @@
           <h1>Tankzeit</h1>
           <p>Zur besten Zeit E10 in der Nähe tanken.</p>
         </div>
+        <label class="filter-chip" for="sort-mode">
+          <span class="filter-chip-label">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 7h16M7 12h10M10 17h4" />
+            </svg>
+            Sortierung
+          </span>
+          <select id="sort-mode" aria-label="Stationen sortieren">
+            <option value="distance">Distanz</option>
+            <option value="price">Preis</option>
+          </select>
+        </label>
       </header>
 
       <section class="hero" id="location-hint">
@@ -114,8 +126,19 @@
 
       const statusEl = document.getElementById("status");
       const stationsEl = document.getElementById("stations");
+      const sortModeEl = document.getElementById("sort-mode");
       const ids = JSON.parse(localStorage.getItem("ids")) || [];
       const fav = JSON.parse(localStorage.getItem("fav")) || [];
+      const SORT_STORAGE_KEY = `tankzeit_sort_${FUEL}`;
+      let currentCenter = null;
+
+      sortModeEl.value = localStorage.getItem(SORT_STORAGE_KEY) || "distance";
+      sortModeEl.addEventListener("change", () => {
+        localStorage.setItem(SORT_STORAGE_KEY, sortModeEl.value);
+        if (currentCenter) {
+          loadStations(currentCenter.lat, currentCenter.lng);
+        }
+      });
 
       function setStatus(message, type = "info") {
         statusEl.textContent = message;
@@ -217,13 +240,46 @@
         return { min, max };
       }
 
+      function compareNullableNumbers(left, right) {
+        const hasLeft = Number.isFinite(left);
+        const hasRight = Number.isFinite(right);
+        if (!hasLeft && !hasRight) return 0;
+        if (!hasLeft) return 1;
+        if (!hasRight) return -1;
+        return left - right;
+      }
+
+      function sortStations(stations) {
+        const sortMode = sortModeEl.value;
+        return [...stations].sort((left, right) => {
+          const primary =
+            sortMode === "price"
+              ? compareNullableNumbers(left[FUEL], right[FUEL])
+              : compareNullableNumbers(left.dist, right.dist);
+          if (primary !== 0) return primary;
+
+          const secondary =
+            sortMode === "price"
+              ? compareNullableNumbers(left.dist, right.dist)
+              : compareNullableNumbers(left[FUEL], right[FUEL]);
+          if (secondary !== 0) return secondary;
+
+          return `${left.name} ${left.brand || ""}`.localeCompare(
+            `${right.name} ${right.brand || ""}`,
+            "de",
+            { sensitivity: "base" },
+          );
+        });
+      }
+
       async function loadStations(lat, lng) {
+        currentCenter = { lat, lng };
         setStatus("Stationen werden geladen...");
         const url = `https://creativecommons.tankerkoenig.de/json/list.php?rad=10&type=all&sort=dist&lat=${lat}&lng=${lng}&apikey=fe8673d1-47be-1156-77e4-040e06cb785c`;
         try {
           const prices = await fetchJson(url);
-          const stations = (prices.stations || []).filter(
-            (s) => s.isOpen && s[FUEL] != null,
+          const stations = sortStations(
+            (prices.stations || []).filter((s) => s.isOpen && s[FUEL] != null),
           );
           if (!stations.length) {
             stationsEl.innerHTML =
