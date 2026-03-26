@@ -9,7 +9,7 @@ on:
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  update-data:
+  leader-follower-analysis:
     runs-on: ubuntu-latest
     env:
       TZ: Europe/Berlin
@@ -24,23 +24,16 @@ jobs:
           python-version: "3.11"
       - name: Install dependencies
         run: python -m pip install --upgrade pip && pip install -r requirements.txt
-      - name: Calibrate reaction timing
-        run: python scripts/calibrate_reaction_timing.py --days 14 --max-events-per-fuel 40000
-      - name: Run counterfactual report
-        run: python scripts/generate_noon_reset_counterfactual_report.py --history-source azure --history-days 30
-      - name: Run benchmark suite
-        run: python scripts/generate_noon_reset_benchmark_suite.py --history-source azure --history-days 30
-      - name: Upload noon-reset artifacts
+      - name: Run leader follower analysis
+        run: >-
+          python scripts/analyze_leader_follower_pairs.py
+          --days 30
+          --output-dir output/leader_follower_30d
+      - name: Publish report summary
+        run: cat output/leader_follower_30d/leader_follower_report.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload leader follower artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: noon-reset-benchmark
+          name: leader-follower-30d
           path: |
-            output/pricing_counterfactual/counterfactual_pricing_report.md
-            output/pricing_counterfactual/station_counterfactual_strategies.csv
-            output/pricing_counterfactual/counterfactual_market_ladder.png
-            output/pricing_benchmarks/noon_reset_benchmark_report.md
-            output/pricing_benchmarks/station_model_benchmarks.csv
-            output/pricing_benchmarks/model_summary.csv
-            output/pricing_benchmarks/benchmark_composite_score.png
-            output/reaction_timing_calibration/reaction_timing_summary.csv
-            output/reaction_timing_calibration/reaction_timing_report.md
+            output/leader_follower_30d
