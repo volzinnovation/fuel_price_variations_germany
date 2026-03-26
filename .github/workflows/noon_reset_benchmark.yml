@@ -1,0 +1,69 @@
+name: Noon reset benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      history_days:
+        description: Completed days for station-level history features
+        required: true
+        default: "30"
+      calibration_days:
+        description: Completed days for minute-level reaction calibration
+        required: true
+        default: "14"
+      max_events_per_fuel:
+        description: Max focal markdown events per fuel for reaction calibration
+        required: true
+        default: "40000"
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Europe/Berlin
+      TK_USER: ${{ secrets.TK_USER }}
+      TK_PASS: ${{ secrets.TK_PASS }}
+    steps:
+      - name: Checkout latest version
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+
+      - name: Calibrate reaction timing
+        run: >-
+          python scripts/calibrate_reaction_timing.py
+          --days ${{ inputs.calibration_days }}
+          --max-events-per-fuel ${{ inputs.max_events_per_fuel }}
+
+      - name: Run counterfactual report
+        run: >-
+          python scripts/generate_noon_reset_counterfactual_report.py
+          --history-source azure
+          --history-days ${{ inputs.history_days }}
+
+      - name: Run benchmark suite
+        run: >-
+          python scripts/generate_noon_reset_benchmark_suite.py
+          --history-source azure
+          --history-days ${{ inputs.history_days }}
+
+      - name: Upload benchmark artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: noon-reset-benchmark
+          path: |
+            output/pricing_counterfactual/counterfactual_pricing_report.md
+            output/pricing_counterfactual/station_counterfactual_strategies.csv
+            output/pricing_counterfactual/counterfactual_market_ladder.png
+            output/pricing_benchmarks/noon_reset_benchmark_report.md
+            output/pricing_benchmarks/station_model_benchmarks.csv
+            output/pricing_benchmarks/model_summary.csv
+            output/pricing_benchmarks/benchmark_composite_score.png
+            output/reaction_timing_calibration/reaction_timing_summary.csv
+            output/reaction_timing_calibration/reaction_timing_report.md
