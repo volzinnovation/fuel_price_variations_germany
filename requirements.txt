@@ -3,3 +3,5 @@ pytz>=2024.1
 requests>=2.31.0
 certifi>=2024.2.2
 tqdm>=4.67.0
+matplotlib>=3.8.0
+reportlab>=4.4.0
