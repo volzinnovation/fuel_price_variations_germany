@@ -24,18 +24,13 @@ jobs:
           python-version: "3.11"
       - name: Install dependencies
         run: python -m pip install --upgrade pip && pip install -r requirements.txt
-      - name: Generate data
-        run: python scripts/generate_data.py
-      - name: Configure git
-        run: |
-          git config user.name "GitHub Actions Bot"
-          git config user.email "<>"
-      - name: Commit data changes
-        run: |
-          git add data data2
-          if git diff --cached --quiet; then
-            echo "No changes to commit."
-            exit 0
-          fi
-          git commit -m "Manual data update"
-          git push origin master
+      - name: Generate minutely pricing report
+        run: python scripts/generate_pricing_report.py --time-precision minutely
+      - name: Upload minutely artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pricing-research-minutely
+          path: |
+            output/pricing_research_minutely/minutely_market_quantiles.csv
+            output/pricing_research_minutely/market_markdown_ladder_minutely.png
+            output/pricing_research_minutely/minutely_market_report.md
