@@ -1,0 +1,68 @@
+name: Leader follower analysis
+
+on:
+  workflow_dispatch:
+    inputs:
+      days:
+        description: Completed days of raw price history
+        required: true
+        default: "30"
+      response_window_minutes:
+        description: Max lag after a leader event
+        required: true
+        default: "90"
+      prewindow_exclusion_minutes:
+        description: Ignore followers that already moved shortly before the leader
+        required: true
+        default: "15"
+      min_pair_events:
+        description: Minimum focal events per directed pair
+        required: true
+        default: "10"
+      min_example_responses:
+        description: Minimum matched responses before drawing example charts
+        required: true
+        default: "12"
+      max_example_pairs:
+        description: Maximum example pair charts per direction
+        required: true
+        default: "3"
+
+jobs:
+  analyze-leader-follower:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Europe/Berlin
+      TK_USER: ${{ secrets.TK_USER }}
+      TK_PASS: ${{ secrets.TK_PASS }}
+    steps:
+      - name: Checkout latest version
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+
+      - name: Run leader follower analysis
+        run: >-
+          python scripts/analyze_leader_follower_pairs.py
+          --days ${{ inputs.days }}
+          --output-dir output/leader_follower_30d
+          --response-window-minutes ${{ inputs.response_window_minutes }}
+          --prewindow-exclusion-minutes ${{ inputs.prewindow_exclusion_minutes }}
+          --min-pair-events ${{ inputs.min_pair_events }}
+          --min-example-responses ${{ inputs.min_example_responses }}
+          --max-example-pairs ${{ inputs.max_example_pairs }}
+
+      - name: Publish report summary
+        run: cat output/leader_follower_30d/leader_follower_report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload leader follower artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: leader-follower-30d
+          path: output/leader_follower_30d
