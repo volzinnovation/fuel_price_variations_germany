@@ -25,11 +25,22 @@ jobs:
       - name: Install dependencies
         run: python -m pip install --upgrade pip && pip install -r requirements.txt
       - name: Calibrate reaction timing
-        run: python scripts/calibrate_reaction_timing.py --days 5 --max-events-per-fuel 25000
-      - name: Upload reaction calibration artifacts
+        run: python scripts/calibrate_reaction_timing.py --days 14 --max-events-per-fuel 40000
+      - name: Run counterfactual report
+        run: python scripts/generate_noon_reset_counterfactual_report.py --history-source azure --history-days 30
+      - name: Run benchmark suite
+        run: python scripts/generate_noon_reset_benchmark_suite.py --history-source azure --history-days 30
+      - name: Upload noon-reset artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: reaction-timing-calibration
+          name: noon-reset-benchmark
           path: |
+            output/pricing_counterfactual/counterfactual_pricing_report.md
+            output/pricing_counterfactual/station_counterfactual_strategies.csv
+            output/pricing_counterfactual/counterfactual_market_ladder.png
+            output/pricing_benchmarks/noon_reset_benchmark_report.md
+            output/pricing_benchmarks/station_model_benchmarks.csv
+            output/pricing_benchmarks/model_summary.csv
+            output/pricing_benchmarks/benchmark_composite_score.png
             output/reaction_timing_calibration/reaction_timing_summary.csv
             output/reaction_timing_calibration/reaction_timing_report.md
