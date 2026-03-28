@@ -1,0 +1,35 @@
+name: Minutely market report
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-minutely-report:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Europe/Berlin
+      TK_USER: ${{ secrets.TK_USER }}
+      TK_PASS: ${{ secrets.TK_PASS }}
+    steps:
+      - name: Checkout latest version
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+
+      - name: Generate minutely market report
+        run: python scripts/generate_pricing_report.py --time-precision minutely
+
+      - name: Upload minutely artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pricing-research-minutely
+          path: |
+            output/pricing_research_minutely/minutely_market_quantiles.csv
+            output/pricing_research_minutely/market_markdown_ladder_minutely.png
+            output/pricing_research_minutely/minutely_market_report.md

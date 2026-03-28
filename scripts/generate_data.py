@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import io
 import json
 import os
@@ -120,6 +121,8 @@ def _write_station_output(
     hourly: pd.DataFrame,
     minabs: float,
     maxabs: float,
+    analysis_start: date,
+    analysis_end: date,
 ) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     csv_path = out_dir / f"{fuel}.csv"
@@ -141,6 +144,9 @@ def _write_station_output(
         "minabs": float(minabs),
         "maxabs": float(maxabs),
         "span": span,
+        "analysis_start": str(analysis_start),
+        "analysis_end": str(analysis_end),
+        "analysis_days": (analysis_end - analysis_start).days + 1,
     }
 
     json_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
@@ -207,13 +213,26 @@ def _station_output_dir(base: Path, station_id: str) -> Path:
     return base.joinpath(*parts)
 
 
-def generate(output_root: Path) -> None:
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--analysis-days",
+        type=int,
+        default=8,
+        help="Number of completed days to aggregate into the station-level snapshot.",
+    )
+    return parser.parse_args()
+
+
+def generate(output_root: Path, analysis_days_count: int = 8) -> None:
     today = date.today()
     print("Starting data generation...")
     stations_day = today - timedelta(days=1)
     download_stations(output_root / "data" / "stations.json", stations_day)
 
-    analysis_start = today - timedelta(days=8)
+    if analysis_days_count < 2:
+        raise SystemExit("--analysis-days must be at least 2.")
+    analysis_start = today - timedelta(days=analysis_days_count)
     analysis_end = today - timedelta(days=1)
     data_start = analysis_start - timedelta(days=1)
     data_end = analysis_end
@@ -257,7 +276,15 @@ def generate(output_root: Path) -> None:
             for row in hourly.itertuples(index=False):
                 mgmt_values[fuel][int(row.hour)].append(float(row.price))
 
-            _write_station_output(out_dir, fuel, hourly, minabs=minabs, maxabs=maxabs)
+            _write_station_output(
+                out_dir,
+                fuel,
+                hourly,
+                minabs=minabs,
+                maxabs=maxabs,
+                analysis_start=analysis_start,
+                analysis_end=analysis_end,
+            )
             if used_days < len(analysis_days):
                 print(
                     f"{station_id} {fuel}: used {used_days}/{len(analysis_days)} days, "
@@ -317,8 +344,9 @@ def generate(output_root: Path) -> None:
 
 
 def main() -> None:
+    args = parse_args()
     output_root = Path(__file__).resolve().parents[1]
-    generate(output_root)
+    generate(output_root, analysis_days_count=args.analysis_days)
 
 
 if __name__ == "__main__":
