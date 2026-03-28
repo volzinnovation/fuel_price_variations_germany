@@ -9,3 +9,5 @@ web/.idea/misc.xml
 .DS_Store
 data2/.DS_Store
 *.icloud
+__pycache__/
+output/play-store/

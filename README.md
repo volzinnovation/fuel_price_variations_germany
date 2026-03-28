@@ -44,6 +44,28 @@ Jeweils gleichartiger Aufbau dieser Dateien für alle Tankstellen
 * 2 Spalten: Uhrzeit, Preisdifferenz in Euro
 * 25 Zeilen, Header, dann Stunde, Preisdifferenz
 
+## Website Build
+
+SEO-Landingpages pro Tankstelle sowie `sitemap.xml` werden mit folgendem Skript erzeugt:
+
+```bash
+python scripts/build_site.py
+```
+
+Das Skript aktualisiert:
+
+- `station/*.html`
+- `sitemap.xml`
+- `robots.txt`
+
+## Android Play Store Assets
+
+Metadaten und Basisgrafiken für den bestehenden Google-Play-Draft lassen sich so erzeugen:
+
+```bash
+python scripts/generate_android_play_store_assets.py
+```
+
 # Frequently Asked Questions (FAQ)
 
 ## Wozu? Weshalb? Warum?

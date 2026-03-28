@@ -5,3 +5,4 @@ certifi>=2024.2.2
 tqdm>=4.67.0
 matplotlib>=3.8.0
 reportlab>=4.4.0
+Pillow>=10.4.0
