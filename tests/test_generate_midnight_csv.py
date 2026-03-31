@@ -46,35 +46,33 @@ class MidnightSnapshotTests(unittest.TestCase):
             date(2026, 3, 31),
         )
 
-        self.assertEqual(snapshot["station_uuid"].tolist(), ["station-1", "station-2", "station-3"])
+        self.assertEqual(snapshot["station_uuid"].tolist(), ["station-1", "station-2"])
         self.assertEqual(snapshot.loc[0, "diesel"], 1.59)
         self.assertEqual(snapshot.loc[0, "e5"], 1.69)
         self.assertEqual(snapshot.loc[0, "e10"], 1.64)
         self.assertEqual(snapshot.loc[1, "diesel"], 1.69)
         self.assertEqual(snapshot.loc[1, "e5"], 1.8)
         self.assertEqual(snapshot.loc[1, "e10"], 1.74)
-        self.assertTrue(pd.isna(snapshot.loc[2, "diesel"]))
-        self.assertEqual(snapshot.loc[2, "e5"], 1.9)
-        self.assertEqual(snapshot.loc[2, "e10"], 1.85)
+        self.assertEqual(len(snapshot), 2)
 
     @patch("scripts.generate_midnight_csv._load_price_window")
     @patch("scripts.generate_midnight_csv._load_station_ids")
-    def test_generate_midnight_csv_writes_expected_columns(
+    def test_generate_midnight_csv_drops_rows_with_missing_or_zero_prices(
         self,
         mock_load_station_ids,
         mock_load_price_window,
     ) -> None:
-        mock_load_station_ids.return_value = ["station-2", "station-1"]
+        mock_load_station_ids.return_value = ["station-3", "station-2", "station-1"]
         mock_load_price_window.return_value = pd.DataFrame(
             {
-                "station_uuid": ["station-1", "station-2"],
+                "station_uuid": ["station-1", "station-2", "station-3"],
                 "date": pd.to_datetime(
-                    ["2026-03-30T22:00:00Z", "2026-03-30T22:00:00Z"],
+                    ["2026-03-30T22:00:00Z", "2026-03-30T22:00:00Z", "2026-03-30T22:00:00Z"],
                     utc=True,
                 ),
-                "diesel": [1.599, 1.699],
-                "e5": [1.699, 1.799],
-                "e10": [1.649, 1.749],
+                "diesel": [1.599, 1.699, 0.0],
+                "e5": [1.699, 1.799, 1.899],
+                "e10": [1.649, None, 1.849],
             }
         )
 
@@ -85,7 +83,7 @@ class MidnightSnapshotTests(unittest.TestCase):
 
         self.assertEqual(written[0], "station_uuid,diesel,e5,e10")
         self.assertEqual(written[1], "station-1,1.599,1.699,1.649")
-        self.assertEqual(written[2], "station-2,1.699,1.799,1.749")
+        self.assertEqual(len(written), 2)
 
 
 if __name__ == "__main__":

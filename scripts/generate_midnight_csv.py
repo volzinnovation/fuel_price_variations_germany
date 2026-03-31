@@ -68,6 +68,14 @@ def _latest_fuel_values(prices: pd.DataFrame, fuel: str, cutoff: pd.Timestamp) -
     return subset.groupby("station_uuid", sort=False).tail(1)[["station_uuid", fuel]]
 
 
+def _filter_valid_rows(snapshot: pd.DataFrame) -> pd.DataFrame:
+    filtered = snapshot.copy()
+    for fuel in FUELS:
+        filtered[fuel] = pd.to_numeric(filtered[fuel], errors="coerce")
+    valid = (filtered[list(FUELS)] > 0).all(axis=1)
+    return filtered.loc[valid, ["station_uuid", *FUELS]].reset_index(drop=True)
+
+
 def build_midnight_snapshot(
     prices: pd.DataFrame,
     station_ids: Sequence[str],
@@ -78,7 +86,7 @@ def build_midnight_snapshot(
     snapshot = pd.DataFrame({"station_uuid": sorted({str(station_id) for station_id in station_ids})})
     for fuel in FUELS:
         snapshot = snapshot.merge(_latest_fuel_values(prices, fuel, cutoff), on="station_uuid", how="left")
-    return snapshot[["station_uuid", *FUELS]]
+    return _filter_valid_rows(snapshot[["station_uuid", *FUELS]])
 
 
 def generate_midnight_csv(output_path: Path, target_day: date | None = None) -> Path:
