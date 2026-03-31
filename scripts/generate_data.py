@@ -77,6 +77,11 @@ def download_stations(target_path: Path, target_day: date) -> None:
     target_path.write_text(df.to_json(orient="records", force_ascii=False), encoding="utf-8")
 
 
+def _parse_dates_utc(values: pd.Series) -> pd.Series:
+    # Normalize mixed DST offsets to UTC so pandas 3.x does not fail on spring/fall transitions.
+    return pd.to_datetime(values, errors="coerce", utc=True)
+
+
 def _load_prices(days: DateRange) -> pd.DataFrame:
     frames: List[pd.DataFrame] = []
     for day in tqdm(list(days.iter_days()), desc="Downloading prices", unit="day"):
@@ -91,7 +96,7 @@ def _load_prices(days: DateRange) -> pd.DataFrame:
             "to access the Tankerkönig data repository."
         )
     data = pd.concat(frames, ignore_index=True)
-    data["date"] = pd.to_datetime(data["date"], errors="coerce")
+    data["date"] = _parse_dates_utc(data["date"])
     data = data.dropna(subset=["date", "station_uuid"])
     data = data.sort_values("date")
     return data
@@ -254,7 +259,7 @@ def generate(output_root: Path, analysis_days_count: int = 8) -> None:
         station = data[data["station_uuid"] == station_id].copy()
         if station.empty:
             continue
-        station["date"] = pd.to_datetime(station["date"], errors="coerce")
+        station["date"] = _parse_dates_utc(station["date"])
         station = station.dropna(subset=["date"])
         station = station.sort_values("date")
 
