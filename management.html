@@ -104,9 +104,28 @@
           Quelle: Die Marktansicht zeigt den Median über alle Tankstellen
           (~15.000) als Balkendiagramm. In aktuellen Noon-Reset-Snapshots
           laufen die Balken im Zyklus <code>12 → 12</code> und zeigen die
-          typische Preissenkung ggü. dem Vortag um 12:00. Ältere Snapshots
+          typische Preissenkung seit dem 12:00-Reset. Ältere Snapshots
           bleiben als stündliche Legacy-Ansicht verfügbar. Tippe/klicke auf
           einen Balken, um die Verteilung hinter dem Median zu sehen.
+        </div>
+
+        <div class="chart-secondary">
+          <div class="toolbar">
+            <div class="left">
+              <h2 id="brand-title">Preisverteilung nach Marke um 12:00</h2>
+              <div class="meta" id="brand-meta">Lade Markenverteilung...</div>
+            </div>
+          </div>
+
+          <div class="chart-wrap">
+            <canvas id="brand-plot"></canvas>
+          </div>
+
+          <div class="note">
+            Quelle: Preise gültig am Vortag um <code>12:00</code>, gruppiert
+            nach Gesamtmarkt, Top-Marken und <code>MISC</code>.
+            Tippe/klicke auf eine Zeile, um Quartile und Spannweite zu sehen.
+          </div>
         </div>
       </section>
     </main>
@@ -161,6 +180,10 @@
       const metaEl = document.getElementById("meta");
       const canvas = document.getElementById("plot");
       const ctx = canvas.getContext("2d");
+      const brandTitleEl = document.getElementById("brand-title");
+      const brandMetaEl = document.getElementById("brand-meta");
+      const brandCanvas = document.getElementById("brand-plot");
+      const brandCtx = brandCanvas.getContext("2d");
       const datePicker = document.getElementById("date-picker");
       const prevBtn = document.getElementById("prev-day");
       const nextBtn = document.getElementById("next-day");
@@ -174,6 +197,7 @@
         summary: null,
         fuel: "diesel",
         layout: null,
+        brandLayout: null,
         date: null,
         nav: { prev: false, next: false },
       };
@@ -206,6 +230,10 @@
         if (!bucket) return "";
         if (typeof bucket.label === "string") return bucket.label;
         return String(bucket.hour);
+      }
+
+      function brandRows() {
+        return state.summary?.brand_distributions?.[state.fuel] || [];
       }
 
       function parseISODate(value) {
@@ -260,12 +288,12 @@
         }
       }
 
-      function resizeCanvas() {
-        const rect = canvas.getBoundingClientRect();
+      function resizeCanvas(targetCanvas, targetCtx) {
+        const rect = targetCanvas.getBoundingClientRect();
         const dpr = window.devicePixelRatio || 1;
-        canvas.width = Math.max(1, Math.floor(rect.width * dpr));
-        canvas.height = Math.max(1, Math.floor(rect.height * dpr));
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        targetCanvas.width = Math.max(1, Math.floor(rect.width * dpr));
+        targetCanvas.height = Math.max(1, Math.floor(rect.height * dpr));
+        targetCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
       }
 
       const VALUE_SCALE = 100; // EUR/l -> Cent/l for display
@@ -290,13 +318,19 @@
         return plot.top + t * plot.height;
       }
 
+      function xScale(domain, plot, value) {
+        const t = (value - domain.min) / (domain.max - domain.min);
+        return plot.left + t * plot.width;
+      }
+
       function draw() {
         if (!state.summary) return;
         const stats = state.summary.fuels[state.fuel] || [];
         if (!stats.length) return;
         const viewMode = viewModeForFuel();
+        const isPartialCycle = viewMode === "cycle" && stats.length < 25;
 
-        resizeCanvas();
+        resizeCanvas(canvas, ctx);
         const w = canvas.getBoundingClientRect().width;
         const h = canvas.getBoundingClientRect().height;
 
@@ -306,7 +340,9 @@
         state.layout = { plot, w, h };
         titleEl.textContent =
           viewMode === "cycle"
-            ? "Marktbeobachtung 12 → 12 (Median, Cent/l)"
+            ? isPartialCycle
+              ? "Marktbeobachtung seit 12:00 (Teilzyklus, Median, Cent/l)"
+              : "Marktbeobachtung 12 → 12 (Median, Cent/l)"
             : "Marktbeobachtung pro Stunde (Median, Cent/l)";
 
         ctx.clearRect(0, 0, w, h);
@@ -347,13 +383,17 @@
           ctx.fillText(bucketLabel(stats[index]), x - 6, plot.top + plot.height + 26);
         }
         ctx.fillText(
-          viewMode === "cycle" ? "Stunde im 24h-Zyklus (12 → 12)" : "Stunde",
-          plot.left + plot.width / 2 - (viewMode === "cycle" ? 82 : 18),
+          viewMode === "cycle"
+            ? isPartialCycle
+              ? "Stunde seit 12:00"
+              : "Stunde im 24h-Zyklus (12 → 12)"
+            : "Stunde",
+          plot.left + plot.width / 2 - (viewMode === "cycle" ? (isPartialCycle ? 52 : 82) : 18),
           plot.top + plot.height + 38,
         );
 
         // Bars
-        const barW = Math.max(8, plot.width / 24 / 1.35);
+        const barW = Math.max(8, plot.width / Math.max(stats.length, 1) / 1.35);
         const fuelColor = FUEL_COLORS[state.fuel] || "#0f766e";
         ctx.lineWidth = 1.5;
 
@@ -363,14 +403,113 @@
           const yMed = yScale(domain, plot, d.median * VALUE_SCALE);
           const barTop = Math.min(y0, yMed);
           const barHeight = Math.max(1, Math.abs(yMed - y0));
-          const positive = d.median >= 0;
-          ctx.fillStyle = positive
-            ? "rgba(234, 88, 12, 0.22)"
-            : `${fuelColor}33`;
+          const positive = viewMode === "cycle" ? false : d.median >= 0;
+          ctx.fillStyle = positive ? "rgba(234, 88, 12, 0.22)" : `${fuelColor}33`;
           ctx.strokeStyle = positive ? "#ea580c" : fuelColor;
           ctx.fillRect(x - barW / 2, barTop, barW, barHeight);
           ctx.strokeRect(x - barW / 2, barTop, barW, barHeight);
         }
+      }
+
+      function computeBrandDomain(rows) {
+        const values = rows.flatMap((row) => [row.min * VALUE_SCALE, row.max * VALUE_SCALE]);
+        let min = Math.min(...values);
+        let max = Math.max(...values);
+        if (!Number.isFinite(min) || !Number.isFinite(max)) {
+          min = 0;
+          max = 10;
+        }
+        const pad = Math.max(1, (max - min) * 0.08);
+        return { min: min - pad, max: max + pad };
+      }
+
+      function drawBrandChart() {
+        const rows = brandRows();
+        if (!rows.length) {
+          brandTitleEl.textContent = "Preisverteilung nach Marke um 12:00";
+          brandMetaEl.textContent = "Keine Markenverteilung fuer dieses Datum vorhanden.";
+          brandCtx.clearRect(0, 0, brandCanvas.width, brandCanvas.height);
+          state.brandLayout = null;
+          return;
+        }
+
+        const snapshotLabel = state.summary?.brand_snapshot_label || "Vortag 12:00";
+        const snapshotDate = state.summary?.brand_snapshot_date || state.summary?.snapshot_date || "-";
+        brandTitleEl.textContent = "Preisverteilung nach Marke um 12:00";
+        brandMetaEl.textContent = `${snapshotLabel}: ${snapshotDate}`;
+
+        brandCanvas.style.height = `${Math.max(280, rows.length * 42 + 90)}px`;
+        resizeCanvas(brandCanvas, brandCtx);
+        const w = brandCanvas.getBoundingClientRect().width;
+        const h = brandCanvas.getBoundingClientRect().height;
+        const plot = { left: 110, right: 18, top: 18, bottom: 38 };
+        plot.width = w - plot.left - plot.right;
+        plot.height = h - plot.top - plot.bottom;
+        state.brandLayout = { plot, w, h, rows };
+
+        brandCtx.clearRect(0, 0, w, h);
+        const domain = computeBrandDomain(rows);
+        brandCtx.strokeStyle = "rgba(0,0,0,0.08)";
+        brandCtx.fillStyle = "rgba(0,0,0,0.55)";
+        brandCtx.lineWidth = 1;
+        brandCtx.font = "12px Manrope, sans-serif";
+
+        const tickCount = 5;
+        for (let i = 0; i < tickCount; i++) {
+          const value = domain.min + (i * (domain.max - domain.min)) / (tickCount - 1);
+          const x = xScale(domain, plot, value);
+          brandCtx.beginPath();
+          brandCtx.moveTo(x, plot.top);
+          brandCtx.lineTo(x, plot.top + plot.height);
+          brandCtx.stroke();
+          brandCtx.fillText(formatValue(value), x - 12, plot.top + plot.height + 24);
+        }
+
+        brandCtx.fillText(
+          "Preis (Cent/l)",
+          plot.left + plot.width / 2 - 28,
+          plot.top + plot.height + 36,
+        );
+
+        const rowHeight = plot.height / rows.length;
+        const fuelColor = FUEL_COLORS[state.fuel] || "#0f766e";
+
+        rows.forEach((row, index) => {
+          const y = plot.top + (index + 0.5) * rowHeight;
+          const rowTop = plot.top + index * rowHeight;
+          const isOverall = row.brand === "Gesamtmarkt";
+          brandCtx.strokeStyle = "rgba(0,0,0,0.06)";
+          brandCtx.beginPath();
+          brandCtx.moveTo(plot.left, rowTop);
+          brandCtx.lineTo(plot.left + plot.width, rowTop);
+          brandCtx.stroke();
+
+          brandCtx.fillStyle = "rgba(0,0,0,0.72)";
+          brandCtx.fillText(row.brand, 12, y + 4);
+
+          const minX = xScale(domain, plot, row.min * VALUE_SCALE);
+          const q1X = xScale(domain, plot, row.q1 * VALUE_SCALE);
+          const medianX = xScale(domain, plot, row.median * VALUE_SCALE);
+          const q3X = xScale(domain, plot, row.q3 * VALUE_SCALE);
+          const maxX = xScale(domain, plot, row.max * VALUE_SCALE);
+
+          brandCtx.strokeStyle = isOverall ? "#111827" : fuelColor;
+          brandCtx.lineWidth = isOverall ? 2.4 : 2;
+          brandCtx.beginPath();
+          brandCtx.moveTo(minX, y);
+          brandCtx.lineTo(maxX, y);
+          brandCtx.stroke();
+
+          const boxHeight = Math.min(22, rowHeight * 0.52);
+          brandCtx.fillStyle = isOverall ? "rgba(17, 24, 39, 0.14)" : `${fuelColor}33`;
+          brandCtx.fillRect(q1X, y - boxHeight / 2, Math.max(1, q3X - q1X), boxHeight);
+          brandCtx.strokeRect(q1X, y - boxHeight / 2, Math.max(1, q3X - q1X), boxHeight);
+
+          brandCtx.beginPath();
+          brandCtx.moveTo(medianX, y - boxHeight / 2 - 3);
+          brandCtx.lineTo(medianX, y + boxHeight / 2 + 3);
+          brandCtx.stroke();
+        });
       }
 
       function pickHour(clientX) {
@@ -383,6 +522,17 @@
         const bucket = Math.floor(((x - plot.left) / plot.width) * stats.length);
         if (bucket < 0 || bucket >= stats.length) return null;
         return bucket;
+      }
+
+      function pickBrand(clientY) {
+        if (!state.brandLayout) return null;
+        const { plot, rows } = state.brandLayout;
+        const rect = brandCanvas.getBoundingClientRect();
+        const y = clientY - rect.top;
+        if (y < plot.top || y > plot.top + plot.height) return null;
+        const index = Math.floor(((y - plot.top) / plot.height) * rows.length);
+        if (index < 0 || index >= rows.length) return null;
+        return index;
       }
 
       canvas.addEventListener("click", (e) => {
@@ -402,6 +552,17 @@
         );
       });
 
+      brandCanvas.addEventListener("click", (e) => {
+        const index = pickBrand(e.clientY);
+        if (index == null) return;
+        const rows = brandRows();
+        const row = rows[index];
+        if (!row) return;
+        setStatus(
+          `${state.fuel.toUpperCase()} ${row.brand}: Median ${formatValue(row.median * VALUE_SCALE)} ct/l, q1 ${formatValue(row.q1 * VALUE_SCALE)}, q3 ${formatValue(row.q3 * VALUE_SCALE)}, min ${formatValue(row.min * VALUE_SCALE)}, max ${formatValue(row.max * VALUE_SCALE)} (n=${row.count})`,
+        );
+      });
+
       document.querySelectorAll("[data-fuel]").forEach((btn) => {
         btn.addEventListener("click", () => {
           const fuel = btn.getAttribute("data-fuel");
@@ -414,6 +575,7 @@
           btn.setAttribute("aria-selected", "true");
           clearStatus();
           draw();
+          drawBrandChart();
         });
       });
 
@@ -458,16 +620,23 @@
           const range = start && end ? ` | Zeitraum: ${start} - ${end}` : "";
           metaEl.textContent = `Datenstand: ${displayFolderDate(d)} | erzeugt: ${state.summary.generated_at}${range}`;
           draw();
+          drawBrandChart();
         } catch (e) {
           setStatus("Management-Daten konnten nicht geladen werden.", "error");
           metaEl.textContent = `Datenstand: ${displayFolderDate(d)} | Fehler beim Laden.`;
           state.summary = null;
+          state.brandLayout = null;
+          brandMetaEl.textContent = "Markenverteilung konnte nicht geladen werden.";
+          brandCtx.clearRect(0, 0, brandCanvas.width, brandCanvas.height);
         }
         await updateNav();
       }
 
       window.addEventListener("resize", () => {
-        if (state.summary) draw();
+        if (state.summary) {
+          draw();
+          drawBrandChart();
+        }
       });
 
       prevBtn.addEventListener("click", () => {

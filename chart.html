@@ -127,11 +127,15 @@
             : null;
         const summary = TankzeitStats.summaryFromStats(stats);
         if (!cycleSummary || !cycleSummary.days) {
-          return "24h-Preissenkung ggü. Vortag 12:00 im Zyklus 12 → 12.";
+          return "Preissenkung seit dem 12:00-Reset.";
         }
         const parts = [];
         parts.push(`${cycleSummary.days} Zyklen`);
-        parts.push("Preissenkung ggü. Vortag 12:00");
+        parts.push(
+          cycleSummary.partial
+            ? `Teilzyklus bis ${cycleSummary.last_label || "jetzt"}`
+            : "Preissenkung seit 12:00",
+        );
         const decreases = TankzeitStats.formatCount(
           summary?.post_noon_decreases_avg ??
             summary?.post_noon_decreases_median,
@@ -156,7 +160,7 @@
             labels,
             datasets: [
               {
-                label: "Preissenkung ggü. Vortag 12:00 (ct/l)",
+                label: "Preissenkung seit 12:00 (ct/l)",
                 data: markdownValues,
                 borderColor: "#0f766e",
                 backgroundColor: "rgba(15, 118, 110, 0.14)",
@@ -177,7 +181,13 @@
             },
             scales: {
               x: {
-                title: { display: true, text: "Stunde im 24h-Zyklus (12 → 12)" },
+                title: {
+                  display: true,
+                  text:
+                    cycle.length < 25
+                      ? "Stunde seit 12:00"
+                      : "Stunde im 24h-Zyklus (12 → 12)",
+                },
               },
               y: {
                 beginAtZero: true,
@@ -194,7 +204,9 @@
                     const value = Number(
                       row.markdown_median ?? row.markdown_avg ?? 0,
                     );
-                    return `Typische Preissenkung: ${(value * 100).toFixed(1)} ct/l`;
+                    return `Typische Preissenkung seit 12:00: ${(
+                      value * 100
+                    ).toFixed(1)} ct/l`;
                   },
                   afterBody(items) {
                     const row = cycle[items[0].dataIndex];
@@ -286,7 +298,7 @@
 
         document.getElementById("chart-sub").textContent = Array.isArray(stats.daily)
           && stats.daily.length
-          ? "Noch kein kompletter 24h-Zyklus 12 → 11 verfuegbar. Zeige Uebergangsansicht im Altformat."
+          ? "Noch kein Noon-Reset-Profil verfuegbar. Zeige Uebergangsansicht im Altformat."
           : "Fallback: historische Abweichung vom Tagesmittel (altes Datenformat).";
         renderLegacyHourlyChart(stats);
       }

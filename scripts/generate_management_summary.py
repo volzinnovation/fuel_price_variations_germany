@@ -67,6 +67,7 @@ def main() -> None:
         "generated_at": datetime.now(TZ).isoformat(timespec="seconds"),
         "station_counts": {},
         "view_modes": {},
+        "bucket_counts": {},
         "fuels": {},
     }
 
@@ -80,7 +81,12 @@ def main() -> None:
             else station_counts_hourly[fuel]
         )
         values_by_bucket = mgmt_cycle_values[fuel] if use_cycle else mgmt_hourly_values[fuel]
-        bucket_count = 25 if use_cycle else 24
+        if use_cycle:
+            populated_buckets = [hour for hour, values in values_by_bucket.items() if values]
+            bucket_count = (max(populated_buckets) + 1) if populated_buckets else 25
+        else:
+            bucket_count = 24
+        summary["bucket_counts"][fuel] = bucket_count
         for hour in range(bucket_count):
             values = values_by_bucket[hour]
             if values:

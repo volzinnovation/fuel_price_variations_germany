@@ -56,7 +56,7 @@ def _read_csv_from_url(url: str, label: str | None = None, show: bool = True) ->
     return pd.read_csv(io.StringIO(text))
 
 
-def download_stations(target_path: Path, target_day: date) -> None:
+def download_stations(target_path: Path, target_day: date) -> pd.DataFrame:
     candidates = [target_day - timedelta(days=offset) for offset in range(0, 4)]
     df = None
     for day in candidates:
@@ -76,6 +76,7 @@ def download_stations(target_path: Path, target_day: date) -> None:
             df = df.drop(columns=[col])
     target_path.parent.mkdir(parents=True, exist_ok=True)
     target_path.write_text(df.to_json(orient="records", force_ascii=False), encoding="utf-8")
+    return df
 
 
 def _parse_dates_utc(values: pd.Series) -> pd.Series:
@@ -93,6 +94,12 @@ def _normalize_station_series(series: pd.Series) -> pd.Series:
     else:
         series.index = series.index.tz_convert(TZ)
     return series
+
+
+def _local_dt(day: date, hour: int = 0, minute: int = 0) -> datetime:
+    return TZ.localize(
+        datetime.combine(day, datetime.min.time()) + timedelta(hours=hour, minutes=minute)
+    )
 
 
 def _filled_minute_series(
@@ -173,6 +180,53 @@ def _duration_text(minutes: float | int | None) -> str | None:
     return f"{mins} min"
 
 
+def _noon_cycle_windows(analysis_days: List[date]) -> List[dict[str, object]]:
+    legal_days = sorted(day for day in analysis_days if day >= LAW_RESET_DATE)
+    if not legal_days:
+        return []
+
+    analysis_day_set = set(analysis_days)
+    full_cycle_days = [day for day in legal_days if day + timedelta(days=1) in analysis_day_set]
+    if full_cycle_days:
+        windows = []
+        for start_day in full_cycle_days:
+            prior_reference_time = (
+                _local_dt(start_day, 0, 0)
+                if start_day == LAW_RESET_DATE
+                else _local_dt(start_day - timedelta(days=1), 12, 0)
+            )
+            windows.append(
+                {
+                    "date": str(start_day),
+                    "start_day": start_day,
+                    "kind": "full",
+                    "anchor_time": _local_dt(start_day, 12, 0),
+                    "metric_end_time": _local_dt(start_day + timedelta(days=1), 12, 0),
+                    "profile_end_time": _local_dt(start_day + timedelta(days=1), 12, 0),
+                    "prior_reference_time": prior_reference_time,
+                    "prior_reference_label": "00:00" if start_day == LAW_RESET_DATE else "Vortag 12:00",
+                }
+            )
+        return windows
+
+    if LAW_RESET_DATE not in analysis_day_set:
+        return []
+
+    partial_end_day = LAW_RESET_DATE + timedelta(days=1)
+    return [
+        {
+            "date": str(LAW_RESET_DATE),
+            "start_day": LAW_RESET_DATE,
+            "kind": "partial",
+            "anchor_time": _local_dt(LAW_RESET_DATE, 12, 0),
+            "metric_end_time": _local_dt(partial_end_day, 0, 0) - timedelta(minutes=1),
+            "profile_end_time": _local_dt(partial_end_day, 0, 0),
+            "prior_reference_time": _local_dt(LAW_RESET_DATE, 0, 0),
+            "prior_reference_label": "00:00",
+        }
+    ]
+
+
 def _daily_metric_summary(
     daily_rows: List[dict[str, object]],
     analysis_days: List[date],
@@ -189,6 +243,8 @@ def _daily_metric_summary(
 
     summary["analysis_start"] = str(daily_rows[0]["date"])
     summary["analysis_end"] = str(daily_rows[-1]["date"])
+    summary["partial_cycles"] = sum(1 for row in daily_rows if row.get("window_kind") == "partial")
+    summary["full_cycles"] = sum(1 for row in daily_rows if row.get("window_kind") == "full")
 
     def numeric_series(key: str) -> pd.Series:
         values = []
@@ -213,8 +269,9 @@ def _daily_metric_summary(
         summary[f"{key}_avg"] = round(float(values.mean()), 1)
         summary[f"{key}_median"] = int(round(float(values.median())))
 
-    assign_float_metrics("midnight_price")
     assign_float_metrics("noon_price")
+    assign_float_metrics("prior_reference_price")
+    assign_float_metrics("max_price_delta_vs_prior")
     assign_float_metrics("min_price")
     assign_float_metrics("daily_range")
     assign_int_metrics("post_noon_decreases")
@@ -242,46 +299,46 @@ def _daily_noon_reset_metrics(
     series: pd.Series,
     analysis_days: List[date],
 ) -> tuple[List[dict[str, object]], dict[str, object]]:
-    legal_days = [day for day in analysis_days if day >= LAW_RESET_DATE]
-    if not legal_days:
+    windows = _noon_cycle_windows(analysis_days)
+    if not windows:
         return [], _daily_metric_summary([], analysis_days)
 
-    window_start = datetime.combine(legal_days[0], datetime.min.time())
-    window_end = datetime.combine(legal_days[-1], datetime.min.time()) + timedelta(
-        days=1, minutes=-1
-    )
-    filled = _filled_minute_series(series, window_start, window_end)
+    window_start = min(window["prior_reference_time"] for window in windows)
+    window_end = max(window["metric_end_time"] for window in windows)
+    filled = _filled_minute_series(series, window_start.replace(tzinfo=None), window_end.replace(tzinfo=None))
     normalized = _normalize_station_series(series)
     if filled.empty or filled.dropna().empty or normalized.empty:
         return [], _daily_metric_summary([], analysis_days)
 
     daily_rows: List[dict[str, object]] = []
-    for day in legal_days:
-        day_start = TZ.localize(datetime.combine(day, datetime.min.time()))
-        day_end = day_start + timedelta(days=1, minutes=-1)
-        noon = day_start + timedelta(hours=12)
+    for window in windows:
+        anchor_time = window["anchor_time"]
+        metric_end_time = window["metric_end_time"]
+        prior_reference_time = window["prior_reference_time"]
 
-        day_series = filled.loc[day_start:day_end]
-        if day_series.empty:
+        observed_series = filled.loc[anchor_time:metric_end_time]
+        if observed_series.empty:
             continue
-        midnight_price = day_series.iloc[0]
-        noon_price = filled.loc[noon] if noon in filled.index else float("nan")
-        if pd.isna(midnight_price) or pd.isna(noon_price):
-            continue
-
-        day_series = day_series.dropna()
-        if day_series.empty:
+        observed_series = observed_series.dropna()
+        if observed_series.empty:
             continue
 
-        min_price = float(day_series.min())
-        min_points = day_series[day_series == min_price]
+        noon_price = filled.get(anchor_time)
+        prior_reference_price = filled.get(prior_reference_time)
+        if pd.isna(noon_price) or pd.isna(prior_reference_price):
+            continue
+
+        min_price = float(observed_series.min())
+        min_points = observed_series[observed_series == min_price]
         if min_points.empty:
             continue
         first_min = min_points.index[0]
 
         post_noon_decreases = 0
         previous_value = float(noon_price)
-        post_noon_events = normalized.loc[(normalized.index > noon) & (normalized.index <= day_end)]
+        post_noon_events = normalized.loc[
+            (normalized.index > anchor_time) & (normalized.index <= metric_end_time)
+        ]
         for value in post_noon_events.tolist():
             current_value = float(value)
             if current_value < previous_value - 1e-9:
@@ -292,9 +349,15 @@ def _daily_noon_reset_metrics(
         min_time_minutes = first_min.hour * 60 + first_min.minute
         daily_rows.append(
             {
-                "date": str(day),
-                "midnight_price": round(float(midnight_price), 3),
+                "date": str(window["date"]),
+                "window_kind": window["kind"],
+                "window_start_timestamp": anchor_time.isoformat(timespec="minutes"),
+                "window_end_timestamp": metric_end_time.isoformat(timespec="minutes"),
                 "noon_price": round(float(noon_price), 3),
+                "max_price": round(float(noon_price), 3),
+                "prior_reference_price": round(float(prior_reference_price), 3),
+                "prior_reference_label": str(window["prior_reference_label"]),
+                "max_price_delta_vs_prior": round(float(noon_price - prior_reference_price), 3),
                 "post_noon_decreases": post_noon_decreases,
                 "min_price": round(min_price, 3),
                 "min_timestamp": first_min.isoformat(timespec="minutes"),
@@ -302,7 +365,7 @@ def _daily_noon_reset_metrics(
                 "min_time_text": _clock_text(min_time_minutes),
                 "min_duration_minutes": min_duration_minutes,
                 "min_duration_text": _duration_text(min_duration_minutes),
-                "daily_range": round(float(day_series.max() - min_price), 3),
+                "daily_range": round(float(noon_price - min_price), 3),
             }
         )
 
@@ -313,39 +376,38 @@ def _noon_to_noon_markdown_profile(
     series: pd.Series,
     analysis_days: List[date],
 ) -> tuple[List[dict[str, object]], dict[str, object]]:
-    legal_days = [day for day in analysis_days if day >= LAW_RESET_DATE]
     summary: dict[str, object] = {
         "days": 0,
         "cycle_start": None,
         "cycle_end": None,
+        "partial": False,
+        "last_label": None,
     }
-    if len(legal_days) < 2:
+    windows = _noon_cycle_windows(analysis_days)
+    if not windows:
         return [], summary
 
-    window_start = datetime.combine(legal_days[0], datetime.min.time()) + timedelta(
-        hours=12
-    )
-    window_end = datetime.combine(legal_days[-1], datetime.min.time()) + timedelta(
-        hours=12
-    )
-    filled = _filled_minute_series(series, window_start, window_end)
+    window_start = min(window["anchor_time"] for window in windows)
+    window_end = max(window["profile_end_time"] for window in windows)
+    filled = _filled_minute_series(series, window_start.replace(tzinfo=None), window_end.replace(tzinfo=None))
     if filled.empty or filled.dropna().empty:
         return [], summary
 
-    markdown_by_hour: Dict[int, List[float]] = {hour: [] for hour in range(25)}
-    used_days: List[date] = []
+    markdown_by_hour: Dict[int, List[float]] = {}
+    used_windows: List[dict[str, object]] = []
+    max_offset = -1
 
-    for start_day in legal_days[:-1]:
-        cycle_start = TZ.localize(datetime.combine(start_day, datetime.min.time())) + timedelta(
-            hours=12
-        )
+    for window in windows:
+        cycle_start = window["anchor_time"]
+        cycle_end = window["profile_end_time"]
         anchor_price = filled.get(cycle_start)
         if pd.isna(anchor_price):
             continue
 
         cycle_values: List[float] = []
         valid_cycle = True
-        for offset in range(25):
+        total_hours = int((cycle_end - cycle_start).total_seconds() // 3600)
+        for offset in range(total_hours + 1):
             ts = cycle_start + timedelta(hours=offset)
             price = filled.get(ts)
             if pd.isna(price):
@@ -357,16 +419,17 @@ def _noon_to_noon_markdown_profile(
         if not valid_cycle:
             continue
 
-        used_days.append(start_day)
+        used_windows.append(window)
+        max_offset = max(max_offset, total_hours)
         for offset, markdown in enumerate(cycle_values):
-            markdown_by_hour[offset].append(markdown)
+            markdown_by_hour.setdefault(offset, []).append(markdown)
 
-    if not used_days:
+    if not used_windows:
         return [], summary
 
     hourly_rows = []
-    for offset in range(25):
-        values = pd.Series(markdown_by_hour[offset], dtype="float64")
+    for offset in range(max_offset + 1):
+        values = pd.Series(markdown_by_hour.get(offset, []), dtype="float64")
         if values.empty:
             continue
         clock_hour = (12 + offset) % 24
@@ -384,11 +447,91 @@ def _noon_to_noon_markdown_profile(
         )
 
     summary = {
-        "days": len(used_days),
-        "cycle_start": str(used_days[0]),
-        "cycle_end": str(used_days[-1] + timedelta(days=1)),
+        "days": len(used_windows),
+        "cycle_start": str(used_windows[0]["start_day"]),
+        "cycle_end": str(used_windows[-1]["profile_end_time"].date()),
+        "partial": any(window["kind"] == "partial" for window in used_windows),
+        "last_label": hourly_rows[-1]["label"] if hourly_rows else None,
     }
     return hourly_rows, summary
+
+
+def _latest_price_snapshot(
+    prices: pd.DataFrame,
+    cutoff: pd.Timestamp,
+    fuels: tuple[str, ...],
+) -> pd.DataFrame:
+    available_fuels = [fuel for fuel in fuels if fuel in prices.columns]
+    subset = prices.loc[prices["date"] <= cutoff, ["station_uuid", "date", *available_fuels]].copy()
+    if subset.empty:
+        return pd.DataFrame(columns=["station_uuid", "date", *fuels])
+    for fuel in available_fuels:
+        subset[fuel] = pd.to_numeric(subset[fuel], errors="coerce")
+    latest = subset.sort_values(["station_uuid", "date"]).groupby("station_uuid", sort=False).tail(1)
+    for fuel in fuels:
+        if fuel not in latest.columns:
+            latest[fuel] = pd.NA
+    return latest[["station_uuid", "date", *fuels]].reset_index(drop=True)
+
+
+def _station_brand_table(stations: pd.DataFrame) -> pd.DataFrame:
+    id_column = "uuid" if "uuid" in stations.columns else "station_uuid"
+    brands = stations[[id_column, "brand"]].copy()
+    brands = brands.rename(columns={id_column: "station_uuid"})
+    brands["brand"] = (
+        brands["brand"].fillna("").astype(str).str.strip().str.upper().replace({"": "UNBEKANNT"})
+    )
+    return brands
+
+
+def _brand_distribution_row(label: str, values: pd.Series) -> dict[str, object]:
+    series = pd.Series(values, dtype="float64").dropna()
+    return {
+        "brand": label,
+        "count": int(series.count()),
+        "min": round(float(series.min()), 3),
+        "q1": round(float(series.quantile(0.25)), 3),
+        "median": round(float(series.quantile(0.5)), 3),
+        "avg": round(float(series.mean()), 3),
+        "q3": round(float(series.quantile(0.75)), 3),
+        "max": round(float(series.max()), 3),
+    }
+
+
+def _brand_distribution_summary(
+    snapshot: pd.DataFrame,
+    stations: pd.DataFrame,
+    fuel: str,
+    top_n_brands: int = 9,
+) -> List[dict[str, object]]:
+    if snapshot.empty or fuel not in snapshot.columns:
+        return []
+
+    joined = snapshot[["station_uuid", fuel]].copy()
+    joined[fuel] = pd.to_numeric(joined[fuel], errors="coerce")
+    joined = joined.dropna(subset=[fuel])
+    joined = joined.loc[joined[fuel] > 0]
+    if joined.empty:
+        return []
+
+    joined = joined.merge(stations, on="station_uuid", how="left")
+    joined["brand"] = joined["brand"].fillna("UNBEKANNT")
+
+    counts = joined["brand"].value_counts()
+    focus_brands = counts.head(top_n_brands).index.tolist()
+    joined["brand_group"] = joined["brand"].where(joined["brand"].isin(focus_brands), "MISC")
+
+    rows = [_brand_distribution_row("Gesamtmarkt", joined[fuel])]
+    for brand in focus_brands:
+        brand_values = joined.loc[joined["brand_group"] == brand, fuel]
+        if brand_values.empty:
+            continue
+        rows.append(_brand_distribution_row(brand, brand_values))
+
+    misc_values = joined.loc[joined["brand_group"] == "MISC", fuel]
+    if not misc_values.empty and counts.size > len(focus_brands):
+        rows.append(_brand_distribution_row("MISC", misc_values))
+    return rows
 
 
 def _write_station_output(
@@ -495,7 +638,7 @@ def generate(output_root: Path, analysis_days_count: int = 8) -> None:
     today = date.today()
     print("Starting data generation...")
     stations_day = today - timedelta(days=1)
-    download_stations(output_root / "data" / "stations.json", stations_day)
+    stations_frame = download_stations(output_root / "data" / "stations.json", stations_day)
 
     if analysis_days_count < 2:
         raise SystemExit("--analysis-days must be at least 2.")
@@ -579,6 +722,18 @@ def generate(output_root: Path, analysis_days_count: int = 8) -> None:
                 )
 
     # Write management summary (boxplot stats per hour) for fast frontend rendering.
+    station_brands = _station_brand_table(stations_frame)
+    brand_snapshot_time = _local_dt(analysis_end, 12, 0)
+    brand_snapshot = _latest_price_snapshot(
+        data,
+        pd.Timestamp(brand_snapshot_time.astimezone(pytz.UTC)),
+        fuels,
+    )
+    brand_distributions = {
+        fuel: _brand_distribution_summary(brand_snapshot, station_brands, fuel)
+        for fuel in fuels
+    }
+
     mgmt_summary = {
         "snapshot_date": str(analysis_end),
         "generated_at": datetime.now(TZ).isoformat(timespec="seconds"),
@@ -586,7 +741,12 @@ def generate(output_root: Path, analysis_days_count: int = 8) -> None:
         "analysis_end": str(analysis_end),
         "station_counts": {},
         "view_modes": {},
+        "bucket_counts": {},
         "fuels": {},
+        "brand_snapshot_label": "Vortag 12:00",
+        "brand_snapshot_date": str(analysis_end),
+        "brand_snapshot_timestamp": brand_snapshot_time.isoformat(timespec="minutes"),
+        "brand_distributions": brand_distributions,
     }
     for fuel in fuels:
         fuel_stats = []
@@ -597,8 +757,13 @@ def generate(output_root: Path, analysis_days_count: int = 8) -> None:
             if use_cycle
             else mgmt_hourly_station_counts[fuel]
         )
-        bucket_count = 25 if use_cycle else 24
         values_by_bucket = mgmt_cycle_values[fuel] if use_cycle else mgmt_hourly_values[fuel]
+        if use_cycle:
+            populated_buckets = [hour for hour, values in values_by_bucket.items() if values]
+            bucket_count = (max(populated_buckets) + 1) if populated_buckets else 25
+        else:
+            bucket_count = 24
+        mgmt_summary["bucket_counts"][fuel] = bucket_count
         for hour in range(bucket_count):
             values = values_by_bucket[hour]
             if values:
