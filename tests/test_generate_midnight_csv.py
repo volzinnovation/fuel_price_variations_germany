@@ -60,8 +60,8 @@ class MidnightSnapshotTests(unittest.TestCase):
                     utc=True,
                 ),
                 "diesel": [1.60, 1.59, 1.58, 1.70, 1.69, 1.68, None],
-                "e5": [1.70, 1.69, 1.68, 1.80, None, 1.78, 1.90],
-                "e10": [1.65, 1.64, 1.63, None, 1.74, 1.73, 1.85],
+                "e5": [1.70, 1.69, 1.68, 1.80, 1.79, 1.78, 1.90],
+                "e10": [1.65, 1.64, 1.63, 1.74, 1.73, 1.72, 1.85],
             }
         )
 
@@ -75,9 +75,11 @@ class MidnightSnapshotTests(unittest.TestCase):
         self.assertEqual(snapshot.loc[0, "diesel"], 1.59)
         self.assertEqual(snapshot.loc[0, "e5"], 1.69)
         self.assertEqual(snapshot.loc[0, "e10"], 1.64)
+        self.assertEqual(snapshot.loc[0, "last_update"], "2026-03-31T00:00:00+02:00")
         self.assertEqual(snapshot.loc[1, "diesel"], 1.69)
-        self.assertEqual(snapshot.loc[1, "e5"], 1.8)
-        self.assertEqual(snapshot.loc[1, "e10"], 1.74)
+        self.assertEqual(snapshot.loc[1, "e5"], 1.79)
+        self.assertEqual(snapshot.loc[1, "e10"], 1.73)
+        self.assertEqual(snapshot.loc[1, "last_update"], "2026-03-31T00:00:00+02:00")
         self.assertEqual(len(snapshot), 2)
 
     @patch("scripts.generate_midnight_csv._load_previous_day_prices")
@@ -106,8 +108,8 @@ class MidnightSnapshotTests(unittest.TestCase):
             generate_midnight_csv(output_path, target_day=date(2026, 3, 31))
             written = output_path.read_text(encoding="utf-8").strip().splitlines()
 
-        self.assertEqual(written[0], "station_uuid,diesel,e5,e10")
-        self.assertEqual(written[1], "station-1,1.599,1.699,1.649")
+        self.assertEqual(written[0], "station_uuid,diesel,e5,e10,last_update")
+        self.assertEqual(written[1], "station-1,1.599,1.699,1.649,2026-03-31T00:00:00+02:00")
         self.assertEqual(len(written), 2)
 
 

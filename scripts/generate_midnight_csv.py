@@ -18,6 +18,7 @@ except ImportError:  # pragma: no cover
 
 
 FUELS: tuple[str, ...] = ("diesel", "e5", "e10")
+OUTPUT_COLUMNS: tuple[str, ...] = ("station_uuid", "diesel", "e5", "e10", "last_update")
 
 
 def _parse_target_date(value: str) -> date:
@@ -56,15 +57,19 @@ def _load_previous_day_prices(target_day: date) -> pd.DataFrame:
     return prices
 
 
-def _latest_fuel_values(prices: pd.DataFrame, fuel: str, cutoff: pd.Timestamp) -> pd.DataFrame:
-    if fuel not in prices.columns:
-        return pd.DataFrame(columns=["station_uuid", fuel])
-    subset = prices.loc[prices["date"] <= cutoff, ["station_uuid", "date", fuel]].copy()
-    subset[fuel] = pd.to_numeric(subset[fuel], errors="coerce")
-    subset = subset.dropna(subset=[fuel]).sort_values(["station_uuid", "date"])
+def _latest_station_rows(prices: pd.DataFrame, cutoff: pd.Timestamp) -> pd.DataFrame:
+    available = [column for column in FUELS if column in prices.columns]
+    subset = prices.loc[prices["date"] <= cutoff, ["station_uuid", "date", *available]].copy()
     if subset.empty:
-        return pd.DataFrame(columns=["station_uuid", fuel])
-    return subset.groupby("station_uuid", sort=False).tail(1)[["station_uuid", fuel]]
+        return pd.DataFrame(columns=list(OUTPUT_COLUMNS))
+    for fuel in available:
+        subset[fuel] = pd.to_numeric(subset[fuel], errors="coerce")
+    subset = subset.sort_values(["station_uuid", "date"]).groupby("station_uuid", sort=False).tail(1)
+    for fuel in FUELS:
+        if fuel not in subset.columns:
+            subset[fuel] = pd.NA
+    subset["last_update"] = subset["date"].map(lambda ts: ts.tz_convert(TZ).isoformat())
+    return subset[list(OUTPUT_COLUMNS)]
 
 
 def _filter_valid_rows(snapshot: pd.DataFrame) -> pd.DataFrame:
@@ -72,7 +77,7 @@ def _filter_valid_rows(snapshot: pd.DataFrame) -> pd.DataFrame:
     for fuel in FUELS:
         filtered[fuel] = pd.to_numeric(filtered[fuel], errors="coerce")
     valid = (filtered[list(FUELS)] > 0).all(axis=1)
-    return filtered.loc[valid, ["station_uuid", *FUELS]].reset_index(drop=True)
+    return filtered.loc[valid, list(OUTPUT_COLUMNS)].reset_index(drop=True)
 
 
 def build_midnight_snapshot(
@@ -83,9 +88,8 @@ def build_midnight_snapshot(
     midnight_local = TZ.localize(datetime.combine(target_day, datetime.min.time()))
     cutoff = pd.Timestamp(midnight_local.astimezone(pytz.UTC))
     snapshot = pd.DataFrame({"station_uuid": sorted({str(station_id) for station_id in station_ids})})
-    for fuel in FUELS:
-        snapshot = snapshot.merge(_latest_fuel_values(prices, fuel, cutoff), on="station_uuid", how="left")
-    return _filter_valid_rows(snapshot[["station_uuid", *FUELS]])
+    snapshot = snapshot.merge(_latest_station_rows(prices, cutoff), on="station_uuid", how="left")
+    return _filter_valid_rows(snapshot[list(OUTPUT_COLUMNS)])
 
 
 def generate_midnight_csv(output_path: Path, target_day: date | None = None) -> Path:
