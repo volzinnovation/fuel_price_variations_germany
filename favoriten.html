@@ -7,6 +7,7 @@
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
     <meta name="theme-color" content="#0f766e" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta
@@ -19,7 +20,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preload" href="styles.css" as="style" />
     <link
-      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&amp;display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="styles.css" />
@@ -108,6 +109,27 @@
       const ids = JSON.parse(localStorage.getItem("ids")) || [];
       const fav = JSON.parse(localStorage.getItem("fav")) || [];
 
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
+      }
+
+      function hrefForHtml(url) {
+        return String(url).replaceAll("&", "&amp;");
+      }
+
+      function mapsUrl(lat, lng) {
+        return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+      }
+
+      function chartUrl(stationId, stationName, lat, lng) {
+        return `chart.html?id=${stationId}&fuel=e10&name=${encodeURIComponent(stationName)}&lat=${lat}&lng=${lng}`;
+      }
+
       function setStatus(message, type = "info") {
         statusEl.textContent = message;
         statusEl.className = `status ${type === "error" ? "error" : ""}`;
@@ -173,12 +195,11 @@
               const minimum = document.getElementById(`${id}-minimum`);
               if (profile) {
                 const station = fav.find((f) => f.id === id) || {};
-                const stationName = encodeURIComponent(
-                  station.name || "Tankstelle",
+                const stationName = station.name || "Tankstelle";
+                const detailsHref = hrefForHtml(
+                  chartUrl(id, stationName, station.lat || "", station.lng || ""),
                 );
-                const stationLat = station.lat || "";
-                const stationLng = station.lng || "";
-                profile.innerHTML = `<a href="chart.html?id=${id}&fuel=e10&name=${stationName}&lat=${stationLat}&lng=${stationLng}">${TankzeitStats.profileText(stats, "Details")}</a>`;
+                profile.innerHTML = `<a href="${detailsHref}">${escapeHtml(TankzeitStats.profileText(stats, "Details"))}</a>`;
               }
               if (minimum) {
                 minimum.textContent = TankzeitStats.minimumText(
@@ -216,16 +237,22 @@
         }
         favoritesEl.innerHTML = fav
           .map(
-            (station) => `
+            (station) => {
+              const mapsHref = hrefForHtml(mapsUrl(station.lat, station.lng));
+              const detailsHref = hrefForHtml(
+                chartUrl(station.id, station.name, station.lat, station.lng),
+              );
+              return `
           <tr>
-            <td data-label="Name"><a href="https://www.google.com/maps/search/?api=1&query=${station.lat},${station.lng}" target="_blank" rel="noopener">${station.name}</a></td>
+            <td data-label="Name"><a href="${mapsHref}" target="_blank" rel="noopener">${escapeHtml(station.name)}</a></td>
             <td data-label="E10" id="${station.id}-e10">...</td>
             <td data-label="Diesel" id="${station.id}-diesel">...</td>
-            <td data-label="E10 Mittag / Senkungen" id="${station.id}-profile"><a href="chart.html?id=${station.id}&fuel=e10&name=${encodeURIComponent(station.name)}&lat=${station.lat}&lng=${station.lng}">Details</a></td>
+            <td data-label="E10 Mittag / Senkungen" id="${station.id}-profile"><a href="${detailsHref}">Details</a></td>
             <td data-label="E10 Tagesminimum" id="${station.id}-minimum">-</td>
             <td><button class="remove" data-id="${station.id}">🗑️</button></td>
           </tr>
-        `,
+        `;
+            },
           )
           .join("");
 

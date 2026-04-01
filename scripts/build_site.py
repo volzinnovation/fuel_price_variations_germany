@@ -46,6 +46,10 @@ def absolute_url(path: str) -> str:
     return f"{SITE_ORIGIN}/{clean}"
 
 
+def station_page_path(station_id: str) -> str:
+    return f"station/{station_id}.html"
+
+
 def slugify(value: str) -> str:
     normalized = unicodedata.normalize("NFKD", value)
     ascii_value = normalized.encode("ascii", "ignore").decode("ascii").lower()
@@ -53,7 +57,7 @@ def slugify(value: str) -> str:
     return slug or "tankstelle"
 
 
-def station_page_path(name: str, station_id: str) -> str:
+def legacy_station_page_path(name: str, station_id: str) -> str:
     return f"station/{slugify(name)}-{station_id}.html"
 
 
@@ -223,6 +227,34 @@ def fuel_chart_url(station_id: str, fuel: str, name: str, latitude: object, long
     )
 
 
+def attribute_url(url: str) -> str:
+    return html.escape(url, quote=True)
+
+
+def build_legacy_alias_page(canonical_url: str) -> str:
+    canonical_href = attribute_url(canonical_url)
+    return f"""<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="refresh" content="0; url={canonical_href}" />
+    <link rel="canonical" href="{canonical_href}" />
+    <meta name="robots" content="noindex,follow" />
+    <title>Weiterleitung | tankzeit.de</title>
+    <script>
+      location.replace({json.dumps(canonical_url)});
+    </script>
+  </head>
+  <body>
+    <p>
+      Diese Seite ist umgezogen.
+      <a href="{canonical_href}">Zur aktuellen URL</a>
+    </p>
+  </body>
+</html>
+"""
+
+
 def build_fuel_cards(
     station_id: str,
     name: str,
@@ -233,6 +265,9 @@ def build_fuel_cards(
     cards: list[str] = []
     for fuel in FUELS:
         stats = stats_by_fuel.get(fuel)
+        chart_url = attribute_url(
+            fuel_chart_url(station_id, fuel, name, latitude, longitude)
+        )
         if fuel_summary(stats):
             cards.append(
                 "<article class=\"station-fuel-card\">"
@@ -240,7 +275,7 @@ def build_fuel_cards(
                 f"<p><strong>Mittagsmaximum:</strong> {format_text(fuel_profile_text(stats))}</p>"
                 f"<p><strong>Tagesminimum:</strong> {format_text(fuel_minimum_text(stats))}</p>"
                 f"<p><strong>Historische Spanne:</strong> {format_text(fuel_range_text(stats))}</p>"
-                f"<a class=\"link-btn secondary-link\" href=\"{fuel_chart_url(station_id, fuel, name, latitude, longitude)}\">Chart öffnen</a>"
+                f"<a class=\"link-btn secondary-link\" href=\"{chart_url}\">Chart öffnen</a>"
                 "</article>"
             )
             continue
@@ -249,7 +284,7 @@ def build_fuel_cards(
             f"<h3>{FUEL_LABELS[fuel]}</h3>"
             f"<p><strong>Beste Zeit:</strong> {format_text(fuel_best_text(stats))}</p>"
             f"<p><strong>Historische Spanne:</strong> {format_text(fuel_range_text(stats))}</p>"
-            f"<a class=\"link-btn secondary-link\" href=\"{fuel_chart_url(station_id, fuel, name, latitude, longitude)}\">Chart öffnen</a>"
+            f"<a class=\"link-btn secondary-link\" href=\"{chart_url}\">Chart öffnen</a>"
             "</article>"
         )
     return "".join(cards)
@@ -271,15 +306,26 @@ def build_station_page(station: dict[str, object]) -> tuple[str, str]:
     city = str(station.get("city") or "").strip()
     latitude = float(station.get("latitude") or 0)
     longitude = float(station.get("longitude") or 0)
-    canonical_path = station_page_path(name, station_id)
+    canonical_path = station_page_path(station_id)
     canonical_url = absolute_url(canonical_path)
     google_maps_url = f"https://www.google.com/maps/dir/?api=1&destination={latitude},{longitude}"
+    canonical_href = attribute_url(canonical_url)
+    google_maps_href = attribute_url(google_maps_url)
     stats_by_fuel = load_station_stats(station_id)
     has_noon_reset_stats = any(fuel_summary(stats_by_fuel.get(fuel)) for fuel in FUELS)
     description = build_station_description(name, city, street, stats_by_fuel)
     brand_line = f"{brand} · " if brand else ""
     address_html = station_address(station)
     city_title = city or postcode or "Deutschland"
+    diesel_chart_url = attribute_url(
+        fuel_chart_url(station_id, "diesel", name, latitude, longitude)
+    )
+    e10_chart_url = attribute_url(
+        fuel_chart_url(station_id, "e10", name, latitude, longitude)
+    )
+    e5_chart_url = attribute_url(
+        fuel_chart_url(station_id, "e5", name, latitude, longitude)
+    )
     structured_data = {
         "@context": "https://schema.org",
         "@type": "GasStation",
@@ -306,13 +352,17 @@ def build_station_page(station: dict[str, object]) -> tuple[str, str]:
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <title>{format_text(name)} in {format_text(city_title)} | Tagesprofile für Diesel, E10 und E5 | tankzeit.de</title>
     <meta name="description" content="{format_text(description)}" />
-    <link rel="canonical" href="{canonical_url}" />
+    <link rel="canonical" href="{canonical_href}" />
     <meta property="og:type" content="website" />
+    <meta property="og:locale" content="de_DE" />
+    <meta property="og:site_name" content="tankzeit.de" />
     <meta property="og:title" content="{format_text(name)} in {format_text(city_title)} | tankzeit.de" />
     <meta property="og:description" content="{format_text(description)}" />
-    <meta property="og:url" content="{canonical_url}" />
+    <meta property="og:url" content="{canonical_href}" />
+    <meta name="twitter:card" content="summary" />
     <meta name="theme-color" content="#0f766e" />
     <link rel="stylesheet" href="/styles.css" />
     <script type="application/ld+json">{json.dumps(structured_data, ensure_ascii=False)}</script>
@@ -334,10 +384,10 @@ def build_station_page(station: dict[str, object]) -> tuple[str, str]:
           {"Tankzeit zeigt für diese Tankstelle das typische 12:00-Maximum, die Senkungen nach 12 Uhr und das Tagesminimum aus den veröffentlichten Tankerkönig-Daten seit dem Mittagsreset vom 1. April 2026." if has_noon_reset_stats else "Tankzeit zeigt für diese Tankstelle historische Tagesprofile aus den veröffentlichten Tankerkönig-Daten. So findest du schneller die typischen Zeitfenster mit günstigeren Preisen."}
         </p>
         <div class="station-actions">
-          <a class="link-btn" href="{fuel_chart_url(station_id, 'diesel', name, latitude, longitude)}">Diesel-Chart</a>
-          <a class="link-btn secondary-link" href="{fuel_chart_url(station_id, 'e10', name, latitude, longitude)}">E10-Chart</a>
-          <a class="link-btn secondary-link" href="{fuel_chart_url(station_id, 'e5', name, latitude, longitude)}">E5-Chart</a>
-          <a class="link-btn secondary-link" href="{google_maps_url}" target="_blank" rel="noopener noreferrer">Navigation</a>
+          <a class="link-btn" href="{diesel_chart_url}">Diesel-Chart</a>
+          <a class="link-btn secondary-link" href="{e10_chart_url}">E10-Chart</a>
+          <a class="link-btn secondary-link" href="{e5_chart_url}">E5-Chart</a>
+          <a class="link-btn secondary-link" href="{google_maps_href}" target="_blank" rel="noopener noreferrer">Navigation</a>
         </div>
       </section>
 
@@ -385,6 +435,13 @@ def write_station_pages() -> list[str]:
         target = ROOT / page_path
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(page_html, encoding="utf-8")
+        legacy_path = legacy_station_page_path(name, station_id)
+        if legacy_path != page_path:
+            legacy_target = ROOT / legacy_path
+            legacy_target.write_text(
+                build_legacy_alias_page(absolute_url(page_path)),
+                encoding="utf-8",
+            )
         page_paths.append(page_path)
     return page_paths
 

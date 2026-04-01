@@ -7,6 +7,7 @@
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
     <meta name="theme-color" content="#0f766e" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta
@@ -14,12 +15,22 @@
       content="Finde die besten Tankzeiten für E10 in Deutschland. Preisvergleich, historische Schwankungsanalyse und Direktlinks pro Tankstelle."
     />
     <link rel="canonical" href="https://tankzeit.de/e10.html" />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="de_DE" />
+    <meta property="og:site_name" content="tankzeit.de" />
+    <meta property="og:title" content="Tankzeit | E10 in der Nähe" />
+    <meta
+      property="og:description"
+      content="Finde die besten Tankzeiten für E10 in Deutschland. Preisvergleich, historische Schwankungsanalyse und Direktlinks pro Tankstelle."
+    />
+    <meta property="og:url" content="https://tankzeit.de/e10.html" />
+    <meta name="twitter:card" content="summary" />
     <title>Tankzeit | E10 in der Nähe</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preload" href="styles.css" as="style" />
     <link
-      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&amp;display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="styles.css" />
@@ -142,6 +153,27 @@
         }
       });
 
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
+      }
+
+      function hrefForHtml(url) {
+        return String(url).replaceAll("&", "&amp;");
+      }
+
+      function mapsUrl(lat, lng) {
+        return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+      }
+
+      function chartUrl(stationId, stationName, lat, lng) {
+        return `chart.html?id=${stationId}&fuel=${FUEL}&name=${encodeURIComponent(stationName)}&lat=${lat}&lng=${lng}`;
+      }
+
       function setStatus(message, type = "info") {
         statusEl.textContent = message;
         statusEl.className = `status ${type === "error" ? "error" : ""}`;
@@ -165,10 +197,12 @@
         const wrapper = document.createElement("div");
         wrapper.className = "manual";
         wrapper.innerHTML = `
+          <button class="btn" id="retry-location-btn" type="button">Standort erneut laden</button>
           <input id="manual-lat" type="number" step="0.0001" placeholder="Breitengrad" />
           <input id="manual-lng" type="number" step="0.0001" placeholder="Laengengrad" />
-          <button class="btn" id="manual-btn">Manuell suchen</button>
+          <button class="btn" id="manual-btn" type="button">Manuell suchen</button>
         `;
+        document.getElementById("retry-location-btn").onclick = requestLocation;
         statusEl.appendChild(wrapper);
         document.getElementById("manual-btn").onclick = () => {
           const lat = parseFloat(document.getElementById("manual-lat").value);
@@ -182,12 +216,16 @@
       function geoError(err) {
         let message = "Standort konnte nicht ermittelt werden.";
         if (err && err.code === 1)
-          message = "Standortzugriff wurde verweigert.";
+          message =
+            "Standortzugriff wurde verweigert. Bitte Browser-Freigabe aktivieren.";
         if (err && err.code === 2)
-          message = "Standort ist aktuell nicht verfuegbar.";
-        if (err && err.code === 3) message = "Standortabfrage ist abgelaufen.";
+          message =
+            "Standort ist aktuell nicht verfuegbar. Das ist oft nur voruebergehend, wenn GPS, WLAN oder Browser-Standortdienste noch nicht bereit sind.";
+        if (err && err.code === 3)
+          message =
+            "Standortabfrage ist abgelaufen. Bitte erneut versuchen.";
         setStatus(
-          `${message} Bitte Browser-Zugriff pruefen oder manuell eingeben.`,
+          `${message} Du kannst es erneut versuchen oder die Koordinaten manuell eingeben.`,
           "error",
         );
         manualLocationForm();
@@ -283,11 +321,15 @@
           stationsEl.innerHTML = limited
             .map((s) => {
               const isSaved = ids.includes(s.id);
+              const mapsHref = hrefForHtml(mapsUrl(s.lat, s.lng));
+              const detailsHref = hrefForHtml(
+                chartUrl(s.id, s.name, s.lat, s.lng),
+              );
               return `
             <tr id="${s.id}">
-              <td data-label="Name"><a href="https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lng}" target="_blank" rel="noopener">${s.name} (${s.brand || ""})</a></td>
+              <td data-label="Name"><a href="${mapsHref}" target="_blank" rel="noopener">${escapeHtml(s.name)} (${escapeHtml(s.brand || "")})</a></td>
               <td data-label="Preis">${s[FUEL]} €/l</td>
-              <td data-label="Typ. Mittag / Senkungen" id="${s.id}-profile"><a href="chart.html?id=${s.id}&fuel=${FUEL}&name=${encodeURIComponent(s.name)}&lat=${s.lat}&lng=${s.lng}">Details</a></td>
+              <td data-label="Typ. Mittag / Senkungen" id="${s.id}-profile"><a href="${detailsHref}">Details</a></td>
               <td data-label="Typ. Tagesminimum" id="${s.id}-minimum">-</td>
               <td><button class="fav" data-id="${s.id}" ${isSaved ? "disabled" : ""}>${isSaved ? "❤️" : "🤍"}</button></td>
             </tr>
@@ -313,8 +355,11 @@
             limited.map(async (s) => {
               const statsUrl = `${DATA_BASE}${s.id.split("-").join("/")}/${FUEL}.json`;
               const stats = await fetchJson(statsUrl);
+              const detailsHref = hrefForHtml(
+                chartUrl(s.id, s.name, s.lat, s.lng),
+              );
               document.getElementById(`${s.id}-profile`).innerHTML =
-                `<a href="chart.html?id=${s.id}&fuel=${FUEL}&name=${encodeURIComponent(s.name)}&lat=${s.lat}&lng=${s.lng}">${TankzeitStats.profileText(stats, "Details")}</a>`;
+                `<a href="${detailsHref}">${escapeHtml(TankzeitStats.profileText(stats, "Details"))}</a>`;
               document.getElementById(`${s.id}-minimum`).textContent =
                 TankzeitStats.minimumText(stats, stats.text || "-");
 
