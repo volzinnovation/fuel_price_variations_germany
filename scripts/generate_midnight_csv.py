@@ -41,17 +41,16 @@ def _load_station_ids(target_day: date) -> list[str]:
     raise RuntimeError("Failed to download stations CSV for midnight snapshot export.")
 
 
-def _load_price_window(target_day: date) -> pd.DataFrame:
-    frames = []
-    for day in (target_day - timedelta(days=1), target_day):
-        url = f"{TANKER_BASE}/{_data_path('prices', day)}"
-        try:
-            frames.append(_read_csv_from_url(url, label=f"prices {day:%Y-%m-%d}", show=False))
-        except Exception:
-            continue
-    if not frames:
-        raise RuntimeError("Failed to download price CSVs for midnight snapshot export.")
-    prices = pd.concat(frames, ignore_index=True)
+def _load_previous_day_prices(target_day: date) -> pd.DataFrame:
+    source_day = target_day - timedelta(days=1)
+    url = f"{TANKER_BASE}/{_data_path('prices', source_day)}"
+    try:
+        prices = _read_csv_from_url(url, label=f"prices {source_day:%Y-%m-%d}", show=False)
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed to download previous-day price CSV for midnight snapshot export: "
+            f"{source_day:%Y-%m-%d}."
+        ) from exc
     prices["date"] = _parse_dates_utc(prices["date"])
     prices = prices.dropna(subset=["date", "station_uuid"]).sort_values(["station_uuid", "date"])
     return prices
@@ -92,7 +91,7 @@ def build_midnight_snapshot(
 def generate_midnight_csv(output_path: Path, target_day: date | None = None) -> Path:
     snapshot_day = target_day or date.today()
     station_ids = _load_station_ids(snapshot_day)
-    prices = _load_price_window(snapshot_day)
+    prices = _load_previous_day_prices(snapshot_day)
     snapshot = build_midnight_snapshot(prices, station_ids, snapshot_day)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     snapshot.to_csv(output_path, index=False, float_format="%.3f")

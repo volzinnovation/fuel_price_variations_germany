@@ -6,10 +6,35 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from scripts.generate_midnight_csv import build_midnight_snapshot, generate_midnight_csv
+from scripts.generate_midnight_csv import (
+    TANKER_BASE,
+    _data_path,
+    _load_previous_day_prices,
+    build_midnight_snapshot,
+    generate_midnight_csv,
+)
 
 
 class MidnightSnapshotTests(unittest.TestCase):
+    @patch("scripts.generate_midnight_csv._read_csv_from_url")
+    def test_load_previous_day_prices_requests_only_yesterdays_file(self, mock_read_csv) -> None:
+        mock_read_csv.return_value = pd.DataFrame(
+            {
+                "station_uuid": ["station-1"],
+                "date": ["2026-03-31T21:59:00Z"],
+                "diesel": [1.59],
+            }
+        )
+
+        prices = _load_previous_day_prices(date(2026, 4, 1))
+
+        mock_read_csv.assert_called_once_with(
+            f"{TANKER_BASE}/{_data_path('prices', date(2026, 3, 31))}",
+            label="prices 2026-03-31",
+            show=False,
+        )
+        self.assertEqual(prices["station_uuid"].tolist(), ["station-1"])
+
     def test_build_midnight_snapshot_uses_last_price_valid_at_midnight(self) -> None:
         prices = pd.DataFrame(
             {
@@ -55,15 +80,15 @@ class MidnightSnapshotTests(unittest.TestCase):
         self.assertEqual(snapshot.loc[1, "e10"], 1.74)
         self.assertEqual(len(snapshot), 2)
 
-    @patch("scripts.generate_midnight_csv._load_price_window")
+    @patch("scripts.generate_midnight_csv._load_previous_day_prices")
     @patch("scripts.generate_midnight_csv._load_station_ids")
     def test_generate_midnight_csv_drops_rows_with_missing_or_zero_prices(
         self,
         mock_load_station_ids,
-        mock_load_price_window,
+        mock_load_previous_day_prices,
     ) -> None:
         mock_load_station_ids.return_value = ["station-3", "station-2", "station-1"]
-        mock_load_price_window.return_value = pd.DataFrame(
+        mock_load_previous_day_prices.return_value = pd.DataFrame(
             {
                 "station_uuid": ["station-1", "station-2", "station-3"],
                 "date": pd.to_datetime(
