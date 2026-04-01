@@ -28,23 +28,36 @@ def main() -> None:
         raise SystemExit("data2/ not found. Run generate_data.py first.")
 
     fuels = ("diesel", "e10", "e5")
-    mgmt_values: Dict[str, Dict[int, List[float]]] = {
+    mgmt_hourly_values: Dict[str, Dict[int, List[float]]] = {
         fuel: {hour: [] for hour in range(24)} for fuel in fuels
     }
-    station_counts: Dict[str, int] = {fuel: 0 for fuel in fuels}
+    mgmt_cycle_values: Dict[str, Dict[int, List[float]]] = {
+        fuel: {hour: [] for hour in range(25)} for fuel in fuels
+    }
+    station_counts_hourly: Dict[str, int] = {fuel: 0 for fuel in fuels}
+    station_counts_cycle: Dict[str, int] = {fuel: 0 for fuel in fuels}
 
     for fuel in fuels:
         files = list(data2.rglob(f"{fuel}.json"))
-        station_counts[fuel] = len(files)
         for path in tqdm(files, desc=f"Reading {fuel}", unit="file"):
             try:
                 payload = json.loads(path.read_text(encoding="utf-8"))
+                cycle_hourly = payload.get("cycle_hourly") or []
+                if cycle_hourly:
+                    station_counts_cycle[fuel] += 1
+                    for row in cycle_hourly:
+                        hour = int(row.get("cycle_hour"))
+                        price = float(row.get("markdown_median"))
+                        if 0 <= hour <= 24:
+                            mgmt_cycle_values[fuel][hour].append(price)
+                    continue
                 hourly = payload.get("hourly") or []
+                station_counts_hourly[fuel] += 1
                 for row in hourly:
                     hour = int(row.get("hour"))
                     price = float(row.get("price"))
                     if 0 <= hour <= 23:
-                        mgmt_values[fuel][hour].append(price)
+                        mgmt_hourly_values[fuel][hour].append(price)
             except Exception:
                 continue
 
@@ -52,39 +65,50 @@ def main() -> None:
     summary = {
         "snapshot_date": str(snapshot_date),
         "generated_at": datetime.now(TZ).isoformat(timespec="seconds"),
-        "station_counts": station_counts,
+        "station_counts": {},
+        "view_modes": {},
         "fuels": {},
     }
 
     for fuel in fuels:
         fuel_stats = []
-        for hour in range(24):
-            values = mgmt_values[fuel][hour]
+        use_cycle = station_counts_cycle[fuel] > 0
+        summary["view_modes"][fuel] = "cycle" if use_cycle else "hourly"
+        summary["station_counts"][fuel] = (
+            station_counts_cycle[fuel]
+            if use_cycle
+            else station_counts_hourly[fuel]
+        )
+        values_by_bucket = mgmt_cycle_values[fuel] if use_cycle else mgmt_hourly_values[fuel]
+        bucket_count = 25 if use_cycle else 24
+        for hour in range(bucket_count):
+            values = values_by_bucket[hour]
             if values:
                 s = pd.Series(values, dtype="float64")
-                fuel_stats.append(
-                    {
-                        "hour": hour,
-                        "count": int(s.count()),
-                        "min": float(s.min()),
-                        "q1": float(s.quantile(0.25)),
-                        "median": float(s.quantile(0.5)),
-                        "q3": float(s.quantile(0.75)),
-                        "max": float(s.max()),
-                    }
-                )
+                row = {
+                    "hour": hour,
+                    "count": int(s.count()),
+                    "min": float(s.min()),
+                    "q1": float(s.quantile(0.25)),
+                    "median": float(s.quantile(0.5)),
+                    "q3": float(s.quantile(0.75)),
+                    "max": float(s.max()),
+                }
             else:
-                fuel_stats.append(
-                    {
-                        "hour": hour,
-                        "count": 0,
-                        "min": 0.0,
-                        "q1": 0.0,
-                        "median": 0.0,
-                        "q3": 0.0,
-                        "max": 0.0,
-                    }
-                )
+                row = {
+                    "hour": hour,
+                    "count": 0,
+                    "min": 0.0,
+                    "q1": 0.0,
+                    "median": 0.0,
+                    "q3": 0.0,
+                    "max": 0.0,
+                }
+            if use_cycle:
+                row["cycle_hour"] = hour
+                row["clock_hour"] = (12 + hour) % 24
+                row["label"] = f"{((12 + hour) % 24):02d}"
+            fuel_stats.append(row)
         summary["fuels"][fuel] = fuel_stats
 
     out = (

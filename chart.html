@@ -33,7 +33,7 @@
       <header>
         <div class="brand">
           <h1>Tankzeit</h1>
-          <p>Preisverlauf nach Stunde.</p>
+          <p>Preissenkung von 12 bis 12 Uhr.</p>
         </div>
       </header>
 
@@ -91,6 +91,7 @@
       </a>
     </nav>
 
+    <script src="app-stats.js"></script>
     <script>
       const params = new URLSearchParams(window.location.search);
       const stationId = params.get("id");
@@ -99,11 +100,12 @@
       const lat = params.get("lat");
       const lng = params.get("lng");
       const DATA_BASE = "data2/";
+      let chartInstance = null;
 
       const title = `${name} · ${fuel.toUpperCase()}`;
       document.getElementById("chart-title").textContent = title;
       document.getElementById("chart-sub").textContent =
-        "Durchschnittliche Abweichung vom Tagesmittel (letzte 8 Tage).";
+        "Lade Tagesprofil unter dem Mittagsreset-Regime...";
 
       if (lat && lng) {
         const maps = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
@@ -117,33 +119,111 @@
         return response.json();
       }
 
-      async function loadChart() {
-        if (!stationId) return;
+      function buildCycleSubtitle(stats) {
+        const cycleSummary =
+          stats && typeof stats.cycle_summary === "object"
+            ? stats.cycle_summary
+            : null;
+        const summary = TankzeitStats.summaryFromStats(stats);
+        if (!cycleSummary || !cycleSummary.days) {
+          return "24h-Preissenkung ggü. Vortag 12:00 im Zyklus 12 → 12.";
+        }
+        const parts = [];
+        parts.push(`${cycleSummary.days} Zyklen`);
+        parts.push("Preissenkung ggü. Vortag 12:00");
+        const decreases = TankzeitStats.formatCount(
+          summary?.post_noon_decreases_avg ??
+            summary?.post_noon_decreases_median,
+        );
+        if (decreases) parts.push(`${decreases} Senkungen nach 12 Uhr`);
+        const minimum = TankzeitStats.minimumText(stats, "");
+        if (minimum) parts.push(`Minimum meist ${minimum}`);
+        return parts.join(" · ");
+      }
 
-        // Wait for Chart.js to be available (deferred loading)
-        const waitForChart = () =>
-          new Promise((resolve) => {
-            if (typeof Chart !== "undefined") {
-              resolve();
-            } else {
-              const check = setInterval(() => {
-                if (typeof Chart !== "undefined") {
-                  clearInterval(check);
-                  resolve();
-                }
-              }, 50);
-            }
-          });
+      function renderCycleChart(stats) {
+        const cycle = Array.isArray(stats.cycle_hourly) ? stats.cycle_hourly : [];
+        const labels = cycle.map((row) => row.label || "");
+        const markdownValues = cycle.map((row) =>
+          Number(row.markdown_median ?? row.markdown_avg ?? 0) * 100,
+        );
+        const ctx = document.getElementById("chart").getContext("2d");
+        if (chartInstance) chartInstance.destroy();
+        chartInstance = new Chart(ctx, {
+          type: "line",
+          data: {
+            labels,
+            datasets: [
+              {
+                label: "Preissenkung ggü. Vortag 12:00 (ct/l)",
+                data: markdownValues,
+                borderColor: "#0f766e",
+                backgroundColor: "rgba(15, 118, 110, 0.14)",
+                stepped: "before",
+                tension: 0,
+                fill: true,
+                pointRadius: 2,
+                pointHoverRadius: 4,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+              mode: "index",
+              intersect: false,
+            },
+            scales: {
+              x: {
+                title: { display: true, text: "Stunde im 24h-Zyklus (12 → 12)" },
+              },
+              y: {
+                beginAtZero: true,
+                reverse: true,
+                title: { display: true, text: "Preissenkung (ct/l)" },
+              },
+            },
+            plugins: {
+              tooltip: {
+                callbacks: {
+                  label(context) {
+                    const row = cycle[context.dataIndex];
+                    if (!row) return "";
+                    const value = Number(
+                      row.markdown_median ?? row.markdown_avg ?? 0,
+                    );
+                    return `Typische Preissenkung: ${(value * 100).toFixed(1)} ct/l`;
+                  },
+                  afterBody(items) {
+                    const row = cycle[items[0].dataIndex];
+                    if (!row) return [];
+                    const parts = [];
+                    if (row.count) {
+                      parts.push(`Zyklen: ${row.count}`);
+                    }
+                    if (Number.isFinite(Number(row.markdown_min))) {
+                      parts.push(
+                        `Spanne ${(
+                          Number(row.markdown_min) * 100
+                        ).toFixed(1)} bis ${(Number(row.markdown_max) * 100).toFixed(1)} ct/l`,
+                      );
+                    }
+                    return parts;
+                  },
+                },
+              },
+            },
+          },
+        });
+      }
 
-        await waitForChart();
-
-        const statsUrl = `${DATA_BASE}${stationId.split("-").join("/")}/${fuel}.json`;
-        const stats = await fetchJson(statsUrl);
+      function renderLegacyHourlyChart(stats) {
         const hours = stats.hourly.map((row) => row.hour);
         const values = stats.hourly.map((row) => row.price);
-
         const ctx = document.getElementById("chart").getContext("2d");
-        new Chart(ctx, {
+        if (chartInstance) chartInstance.destroy();
+        chartInstance = new Chart(ctx, {
           type: "line",
           data: {
             labels: hours,
@@ -172,6 +252,42 @@
             },
           },
         });
+      }
+
+      async function loadChart() {
+        if (!stationId) return;
+
+        // Wait for Chart.js to be available (deferred loading)
+        const waitForChart = () =>
+          new Promise((resolve) => {
+            if (typeof Chart !== "undefined") {
+              resolve();
+            } else {
+              const check = setInterval(() => {
+                if (typeof Chart !== "undefined") {
+                  clearInterval(check);
+                  resolve();
+                }
+              }, 50);
+            }
+          });
+
+        await waitForChart();
+
+        const statsUrl = `${DATA_BASE}${stationId.split("-").join("/")}/${fuel}.json`;
+        const stats = await fetchJson(statsUrl);
+        if (Array.isArray(stats.cycle_hourly) && stats.cycle_hourly.length) {
+          document.getElementById("chart-sub").textContent =
+            buildCycleSubtitle(stats);
+          renderCycleChart(stats);
+          return;
+        }
+
+        document.getElementById("chart-sub").textContent = Array.isArray(stats.daily)
+          && stats.daily.length
+          ? "Noch kein kompletter 24h-Zyklus 12 → 11 verfuegbar. Zeige Uebergangsansicht im Altformat."
+          : "Fallback: historische Abweichung vom Tagesmittel (altes Datenformat).";
+        renderLegacyHourlyChart(stats);
       }
 
       loadChart().catch(() => {

@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta
       name="description"
-      content="Management View: Preisabweichungen über alle Tankstellen als Boxplots."
+      content="Management View: Marktbeobachtung über alle Tankstellen als Stunden-Balkendiagramm."
     />
     <link rel="canonical" href="https://tankzeit.de/management.html" />
     <title>Tankzeit | Management</title>
@@ -38,7 +38,7 @@
       <section class="card">
         <div class="toolbar">
           <div class="left">
-            <h2 id="title">Preisabweichungen pro Stunde (EUR Cent /l)</h2>
+            <h2 id="title">Marktbeobachtung pro Stunde (Median, Cent/l)</h2>
             <div class="meta" id="meta">Lade Zusammenfassung...</div>
           </div>
           <div class="date-nav" aria-label="Datum wechseln">
@@ -90,12 +90,12 @@
         </div>
 
         <div class="note">
-          Quelle: Pro Tankstelle werden stündliche Mittelwerte aus einem
-          1-Minuten-Raster (Forward Fill) berechnet. Anschließend:
-          <code>hourly_mean(day) - daily_mean(day)</code>, über die letzten 8
-          Tage gemittelt. Diese View zeigt die Verteilung über alle Tankstellen
-          (~15.000) als Boxplots pro Stunde. Tippe/klicke auf eine Stunde, um
-          Kennzahlen zu sehen.
+          Quelle: Die Marktansicht zeigt den Median über alle Tankstellen
+          (~15.000) als Balkendiagramm. In aktuellen Noon-Reset-Snapshots
+          laufen die Balken im Zyklus <code>12 → 12</code> und zeigen die
+          typische Preissenkung ggü. dem Vortag um 12:00. Ältere Snapshots
+          bleiben als stündliche Legacy-Ansicht verfügbar. Tippe/klicke auf
+          einen Balken, um die Verteilung hinter dem Median zu sehen.
         </div>
       </section>
     </main>
@@ -146,12 +146,18 @@
       const MIN_DATE_STR = "2026-02-04";
 
       const statusEl = document.getElementById("status");
+      const titleEl = document.getElementById("title");
       const metaEl = document.getElementById("meta");
       const canvas = document.getElementById("plot");
       const ctx = canvas.getContext("2d");
       const datePicker = document.getElementById("date-picker");
       const prevBtn = document.getElementById("prev-day");
       const nextBtn = document.getElementById("next-day");
+      const FUEL_COLORS = {
+        diesel: "#0f766e",
+        e10: "#ea580c",
+        e5: "#7c2d12",
+      };
 
       const state = {
         summary: null,
@@ -174,6 +180,21 @@
       function formatValue(v) {
         if (typeof v !== "number" || Number.isNaN(v)) return "-";
         return v.toFixed(1);
+      }
+
+      function viewModeForFuel() {
+        const modes = state.summary?.view_modes;
+        if (modes && typeof modes[state.fuel] === "string") {
+          return modes[state.fuel];
+        }
+        const first = state.summary?.fuels?.[state.fuel]?.[0];
+        return first && typeof first.label === "string" ? "cycle" : "hourly";
+      }
+
+      function bucketLabel(bucket) {
+        if (!bucket) return "";
+        if (typeof bucket.label === "string") return bucket.label;
+        return String(bucket.hour);
       }
 
       function parseISODate(value) {
@@ -239,19 +260,17 @@
       const VALUE_SCALE = 100; // EUR/l -> Cent/l for display
 
       function computeDomain(stats) {
-        const mins = stats.map((d) => d.min * VALUE_SCALE);
-        const maxs = stats.map((d) => d.max * VALUE_SCALE);
-        let min = Math.min(...mins);
-        let max = Math.max(...maxs);
+        const medians = stats.map((d) => d.median * VALUE_SCALE);
+        let min = Math.min(...medians, 0);
+        let max = Math.max(...medians, 0);
 
         if (!Number.isFinite(min) || !Number.isFinite(max)) {
           min = -0.05;
           max = 0.05;
         }
-        // Center the domain around 0.0 so the baseline is visually stable across days.
         let maxAbs = Math.max(Math.abs(min), Math.abs(max));
         if (!Number.isFinite(maxAbs) || maxAbs === 0) maxAbs = 0.01;
-        const pad = maxAbs * 0.1;
+        const pad = maxAbs * 0.18;
         return { min: -maxAbs - pad, max: maxAbs + pad };
       }
 
@@ -264,6 +283,7 @@
         if (!state.summary) return;
         const stats = state.summary.fuels[state.fuel] || [];
         if (!stats.length) return;
+        const viewMode = viewModeForFuel();
 
         resizeCanvas();
         const w = canvas.getBoundingClientRect().width;
@@ -273,6 +293,10 @@
         plot.width = w - plot.left - plot.right;
         plot.height = h - plot.top - plot.bottom;
         state.layout = { plot, w, h };
+        titleEl.textContent =
+          viewMode === "cycle"
+            ? "Marktbeobachtung 12 → 12 (Median, Cent/l)"
+            : "Marktbeobachtung pro Stunde (Median, Cent/l)";
 
         ctx.clearRect(0, 0, w, h);
 
@@ -295,7 +319,7 @@
           ctx.fillText(formatValue(v), 8, y + 4);
         }
 
-        // Zero line (drawn behind boxes; 0 is in Cent/l domain too)
+        // Zero line
         const y0 = yScale(domain, plot, 0);
         ctx.strokeStyle = "rgba(15,118,110,0.35)";
         ctx.beginPath();
@@ -307,58 +331,34 @@
         // X labels
         const step = w < 600 ? 2 : 1;
         ctx.fillStyle = "rgba(0,0,0,0.6)";
-        for (let hour = 0; hour < 24; hour += step) {
-          const x = plot.left + ((hour + 0.5) * plot.width) / 24;
-          ctx.fillText(String(hour), x - 4, plot.top + plot.height + 26);
+        for (let index = 0; index < stats.length; index += step) {
+          const x = plot.left + ((index + 0.5) * plot.width) / stats.length;
+          ctx.fillText(bucketLabel(stats[index]), x - 6, plot.top + plot.height + 26);
         }
         ctx.fillText(
-          "Stunde",
-          plot.left + plot.width / 2 - 18,
+          viewMode === "cycle" ? "Stunde im 24h-Zyklus (12 → 12)" : "Stunde",
+          plot.left + plot.width / 2 - (viewMode === "cycle" ? 82 : 18),
           plot.top + plot.height + 38,
         );
 
-        // Boxes
-        const boxW = Math.max(6, plot.width / 24 / 1.55);
-        ctx.strokeStyle = "rgba(15,118,110,0.9)";
-        ctx.fillStyle = "rgba(15,118,110,0.18)";
-        ctx.lineWidth = 2;
+        // Bars
+        const barW = Math.max(8, plot.width / 24 / 1.35);
+        const fuelColor = FUEL_COLORS[state.fuel] || "#0f766e";
+        ctx.lineWidth = 1.5;
 
         for (let i = 0; i < stats.length; i++) {
           const d = stats[i];
-          const hour = d.hour;
-          const x = plot.left + ((hour + 0.5) * plot.width) / 24;
-
-          const yMin = yScale(domain, plot, d.min * VALUE_SCALE);
-          const yMax = yScale(domain, plot, d.max * VALUE_SCALE);
-          const yQ1 = yScale(domain, plot, d.q1 * VALUE_SCALE);
-          const yQ3 = yScale(domain, plot, d.q3 * VALUE_SCALE);
+          const x = plot.left + ((i + 0.5) * plot.width) / stats.length;
           const yMed = yScale(domain, plot, d.median * VALUE_SCALE);
-
-          // whisker
-          ctx.beginPath();
-          ctx.moveTo(x, yMax);
-          ctx.lineTo(x, yMin);
-          ctx.stroke();
-
-          // caps
-          ctx.beginPath();
-          ctx.moveTo(x - boxW * 0.4, yMax);
-          ctx.lineTo(x + boxW * 0.4, yMax);
-          ctx.moveTo(x - boxW * 0.4, yMin);
-          ctx.lineTo(x + boxW * 0.4, yMin);
-          ctx.stroke();
-
-          // box
-          const boxTop = Math.min(yQ3, yQ1);
-          const boxH = Math.abs(yQ3 - yQ1);
-          ctx.fillRect(x - boxW / 2, boxTop, boxW, boxH);
-          ctx.strokeRect(x - boxW / 2, boxTop, boxW, boxH);
-
-          // median
-          ctx.beginPath();
-          ctx.moveTo(x - boxW / 2, yMed);
-          ctx.lineTo(x + boxW / 2, yMed);
-          ctx.stroke();
+          const barTop = Math.min(y0, yMed);
+          const barHeight = Math.max(1, Math.abs(yMed - y0));
+          const positive = d.median >= 0;
+          ctx.fillStyle = positive
+            ? "rgba(234, 88, 12, 0.22)"
+            : `${fuelColor}33`;
+          ctx.strokeStyle = positive ? "#ea580c" : fuelColor;
+          ctx.fillRect(x - barW / 2, barTop, barW, barHeight);
+          ctx.strokeRect(x - barW / 2, barTop, barW, barHeight);
         }
       }
 
@@ -368,19 +368,26 @@
         const rect = canvas.getBoundingClientRect();
         const x = clientX - rect.left;
         if (x < plot.left || x > plot.left + plot.width) return null;
-        const hour = Math.floor(((x - plot.left) / plot.width) * 24);
-        if (hour < 0 || hour > 23) return null;
-        return hour;
+        const stats = state.summary?.fuels?.[state.fuel] || [];
+        const bucket = Math.floor(((x - plot.left) / plot.width) * stats.length);
+        if (bucket < 0 || bucket >= stats.length) return null;
+        return bucket;
       }
 
       canvas.addEventListener("click", (e) => {
         if (!state.summary) return;
-        const hour = pickHour(e.clientX);
-        if (hour == null) return;
-        const d = state.summary.fuels[state.fuel].find((x) => x.hour === hour);
+        const bucketIndex = pickHour(e.clientX);
+        if (bucketIndex == null) return;
+        const stats = state.summary.fuels[state.fuel] || [];
+        const d = stats[bucketIndex];
         if (!d) return;
+        const viewMode = viewModeForFuel();
+        const label =
+          viewMode === "cycle"
+            ? `Zyklus ${bucketLabel(d)}`
+            : `Stunde ${d.hour}`;
         setStatus(
-          `${state.fuel.toUpperCase()} Stunde ${hour}: min ${formatValue(d.min * VALUE_SCALE)}, q1 ${formatValue(d.q1 * VALUE_SCALE)}, median ${formatValue(d.median * VALUE_SCALE)}, q3 ${formatValue(d.q3 * VALUE_SCALE)}, max ${formatValue(d.max * VALUE_SCALE)} (n=${d.count})`,
+          `${state.fuel.toUpperCase()} ${label}: Median ${formatValue(d.median * VALUE_SCALE)} ct/l, q1 ${formatValue(d.q1 * VALUE_SCALE)}, q3 ${formatValue(d.q3 * VALUE_SCALE)}, min ${formatValue(d.min * VALUE_SCALE)}, max ${formatValue(d.max * VALUE_SCALE)} (n=${d.count})`,
         );
       });
 

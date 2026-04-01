@@ -63,8 +63,8 @@
             <tr>
               <th>Name</th>
               <th>Preis €/l</th>
-              <th>Beste Zeiten</th>
-              <th>Schwankung</th>
+              <th>Typ. Mittag / Senkungen</th>
+              <th>Typ. Tagesminimum</th>
               <th></th>
             </tr>
           </thead>
@@ -119,6 +119,7 @@
       </a>
     </nav>
 
+    <script src="app-stats.js"></script>
     <script>
       const DATA_BASE = "data2/";
       const FUEL = "e10";
@@ -231,16 +232,6 @@
         return response.json();
       }
 
-      function adjustedRange(stats, currentPrice) {
-        const values = [stats?.minabs, stats?.maxabs, currentPrice]
-          .map((value) => Number(value))
-          .filter((value) => Number.isFinite(value));
-        if (!values.length) return null;
-        const min = Math.min(...values);
-        const max = Math.max(...values);
-        return { min, max };
-      }
-
       function compareNullableNumbers(left, right) {
         const hasLeft = Number.isFinite(left);
         const hasRight = Number.isFinite(right);
@@ -296,8 +287,8 @@
             <tr id="${s.id}">
               <td data-label="Name"><a href="https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lng}" target="_blank" rel="noopener">${s.name} (${s.brand || ""})</a></td>
               <td data-label="Preis">${s[FUEL]} €/l</td>
-              <td data-label="Beste Zeit" id="${s.id}-best"><a href="chart.html?id=${s.id}&fuel=${FUEL}&name=${encodeURIComponent(s.name)}&lat=${s.lat}&lng=${s.lng}">Chart</a></td>
-              <td data-label="Schwankung" id="${s.id}-span">...</td>
+              <td data-label="Typ. Mittag / Senkungen" id="${s.id}-profile"><a href="chart.html?id=${s.id}&fuel=${FUEL}&name=${encodeURIComponent(s.name)}&lat=${s.lat}&lng=${s.lng}">Details</a></td>
+              <td data-label="Typ. Tagesminimum" id="${s.id}-minimum">-</td>
               <td><button class="fav" data-id="${s.id}" ${isSaved ? "disabled" : ""}>${isSaved ? "❤️" : "🤍"}</button></td>
             </tr>
           `;
@@ -322,18 +313,12 @@
             limited.map(async (s) => {
               const statsUrl = `${DATA_BASE}${s.id.split("-").join("/")}/${FUEL}.json`;
               const stats = await fetchJson(statsUrl);
-              document.getElementById(`${s.id}-best`).innerHTML =
-                `<a href="chart.html?id=${s.id}&fuel=${FUEL}&name=${encodeURIComponent(s.name)}&lat=${s.lat}&lng=${s.lng}">${stats.text || "Chart"}</a>`;
-              const range = adjustedRange(stats, s[FUEL]);
-              if (range) {
-                document.getElementById(`${s.id}-span`).textContent =
-                  `${range.min.toFixed(3)} - ${range.max.toFixed(3)} (± ${Math.round((range.max - range.min) * 100)} ¢/l)`;
-              } else {
-                document.getElementById(`${s.id}-span`).textContent = "-";
-              }
+              document.getElementById(`${s.id}-profile`).innerHTML =
+                `<a href="chart.html?id=${s.id}&fuel=${FUEL}&name=${encodeURIComponent(s.name)}&lat=${s.lat}&lng=${s.lng}">${TankzeitStats.profileText(stats, "Details")}</a>`;
+              document.getElementById(`${s.id}-minimum`).textContent =
+                TankzeitStats.minimumText(stats, stats.text || "-");
 
-              const nowHour = new Date().getHours();
-              if (stats.besthours && stats.besthours.includes(nowHour)) {
+              if (TankzeitStats.isNowInTypicalMinimumWindow(stats)) {
                 const row = document.getElementById(s.id);
                 row.classList.add("row-highlight");
               }

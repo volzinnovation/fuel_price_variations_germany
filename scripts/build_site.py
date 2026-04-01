@@ -116,6 +116,73 @@ def fuel_best_text(stats: dict[str, object] | None) -> str:
     return text or "Keine Bestzeit hinterlegt."
 
 
+def _first_number(*values: object) -> float | None:
+    for value in values:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _format_count(*values: object) -> str | None:
+    number = _first_number(*values)
+    if number is None:
+        return None
+    if abs(number - round(number)) < 0.05:
+        return str(int(round(number)))
+    return f"{number:.1f}"
+
+
+def fuel_summary(stats: dict[str, object] | None) -> dict[str, object] | None:
+    if not stats:
+        return None
+    summary = stats.get("summary")
+    return summary if isinstance(summary, dict) else None
+
+
+def fuel_profile_text(stats: dict[str, object] | None) -> str:
+    summary = fuel_summary(stats)
+    if not summary:
+        return "Kein Tagesprofil hinterlegt."
+    noon_price = _first_number(
+        summary.get("noon_price_median"),
+        summary.get("noon_price_avg"),
+    )
+    decreases = _format_count(
+        summary.get("post_noon_decreases_avg"),
+        summary.get("post_noon_decreases_median"),
+    )
+    parts: list[str] = []
+    if noon_price is not None:
+        parts.append(f"12:00 {noon_price:.3f} €/l")
+    if decreases is not None:
+        parts.append(f"{decreases} Senkungen nach 12 Uhr")
+    return " · ".join(parts) if parts else "Kein Tagesprofil hinterlegt."
+
+
+def fuel_minimum_text(stats: dict[str, object] | None) -> str:
+    summary = fuel_summary(stats)
+    if not summary:
+        return "Kein Tagesminimum hinterlegt."
+    time_text = str(summary.get("min_time_text") or "").strip()
+    duration_text = str(summary.get("min_duration_text") or "").strip()
+    if time_text and duration_text:
+        return f"{time_text} Uhr für {duration_text}"
+    if time_text:
+        return f"{time_text} Uhr"
+    if duration_text:
+        return duration_text
+    return "Kein Tagesminimum hinterlegt."
+
+
+def fuel_chip_text(stats: dict[str, object] | None) -> str:
+    summary = fuel_summary(stats)
+    if summary and summary.get("min_time_text"):
+        return f"Minimum meist {fuel_minimum_text(stats)}"
+    return fuel_best_text(stats)
+
+
 def build_station_description(
     name: str,
     city: str,
@@ -127,10 +194,19 @@ def build_station_description(
         stats = stats_by_fuel.get(fuel)
         if not stats:
             continue
-        best = fuel_best_text(stats)
         fuel_label = FUEL_LABELS[fuel]
-        snippets.append(f"{fuel_label}: beste Tankzeit {best}")
-    best_summary = "; ".join(snippets[:3]) if snippets else "mit historischen Tagesprofilen"
+        summary = fuel_summary(stats)
+        if summary:
+            profile = fuel_profile_text(stats)
+            minimum = fuel_minimum_text(stats)
+            snippets.append(
+                f"{fuel_label}: {profile}, Tagesminimum meist {minimum}"
+            )
+        else:
+            snippets.append(f"{fuel_label}: beste Tankzeit {fuel_best_text(stats)}")
+    best_summary = (
+        "; ".join(snippets[:3]) if snippets else "mit historischen Tagesprofilen"
+    )
     place = ", ".join(part for part in (street, city) if part)
     if place:
         return f"{name} in {place}. {best_summary}. Direktlinks für Diesel, E10 und E5 auf tankzeit.de."
@@ -157,6 +233,17 @@ def build_fuel_cards(
     cards: list[str] = []
     for fuel in FUELS:
         stats = stats_by_fuel.get(fuel)
+        if fuel_summary(stats):
+            cards.append(
+                "<article class=\"station-fuel-card\">"
+                f"<h3>{FUEL_LABELS[fuel]}</h3>"
+                f"<p><strong>Mittagsmaximum:</strong> {format_text(fuel_profile_text(stats))}</p>"
+                f"<p><strong>Tagesminimum:</strong> {format_text(fuel_minimum_text(stats))}</p>"
+                f"<p><strong>Historische Spanne:</strong> {format_text(fuel_range_text(stats))}</p>"
+                f"<a class=\"link-btn secondary-link\" href=\"{fuel_chart_url(station_id, fuel, name, latitude, longitude)}\">Chart öffnen</a>"
+                "</article>"
+            )
+            continue
         cards.append(
             "<article class=\"station-fuel-card\">"
             f"<h3>{FUEL_LABELS[fuel]}</h3>"
@@ -188,6 +275,7 @@ def build_station_page(station: dict[str, object]) -> tuple[str, str]:
     canonical_url = absolute_url(canonical_path)
     google_maps_url = f"https://www.google.com/maps/dir/?api=1&destination={latitude},{longitude}"
     stats_by_fuel = load_station_stats(station_id)
+    has_noon_reset_stats = any(fuel_summary(stats_by_fuel.get(fuel)) for fuel in FUELS)
     description = build_station_description(name, city, street, stats_by_fuel)
     brand_line = f"{brand} · " if brand else ""
     address_html = station_address(station)
@@ -218,7 +306,7 @@ def build_station_page(station: dict[str, object]) -> tuple[str, str]:
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>{format_text(name)} in {format_text(city_title)} | Beste Tankzeiten für Diesel, E10 und E5 | tankzeit.de</title>
+    <title>{format_text(name)} in {format_text(city_title)} | Tagesprofile für Diesel, E10 und E5 | tankzeit.de</title>
     <meta name="description" content="{format_text(description)}" />
     <link rel="canonical" href="{canonical_url}" />
     <meta property="og:type" content="website" />
@@ -238,13 +326,12 @@ def build_station_page(station: dict[str, object]) -> tuple[str, str]:
         <h1>{format_text(name)}</h1>
         <p class="station-summary">{brand_line}{address_html}</p>
         <div class="station-chip-row">
-          <span class="station-chip">Diesel: {format_text(fuel_best_text(stats_by_fuel.get("diesel")))}</span>
-          <span class="station-chip">E10: {format_text(fuel_best_text(stats_by_fuel.get("e10")))}</span>
-          <span class="station-chip">E5: {format_text(fuel_best_text(stats_by_fuel.get("e5")))}</span>
+          <span class="station-chip">Diesel: {format_text(fuel_chip_text(stats_by_fuel.get("diesel")))}</span>
+          <span class="station-chip">E10: {format_text(fuel_chip_text(stats_by_fuel.get("e10")))}</span>
+          <span class="station-chip">E5: {format_text(fuel_chip_text(stats_by_fuel.get("e5")))}</span>
         </div>
         <p class="station-summary">
-          Tankzeit zeigt für diese Tankstelle historische Tagesprofile aus den veröffentlichten Tankerkönig-Daten.
-          So findest du schneller die typischen Zeitfenster mit günstigeren Preisen.
+          {"Tankzeit zeigt für diese Tankstelle das typische 12:00-Maximum, die Senkungen nach 12 Uhr und das Tagesminimum aus den veröffentlichten Tankerkönig-Daten seit dem Mittagsreset vom 1. April 2026." if has_noon_reset_stats else "Tankzeit zeigt für diese Tankstelle historische Tagesprofile aus den veröffentlichten Tankerkönig-Daten. So findest du schneller die typischen Zeitfenster mit günstigeren Preisen."}
         </p>
         <div class="station-actions">
           <a class="link-btn" href="{fuel_chart_url(station_id, 'diesel', name, latitude, longitude)}">Diesel-Chart</a>
