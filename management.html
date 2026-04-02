@@ -12,7 +12,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta
       name="description"
-      content="Management View: Marktbeobachtung über alle Tankstellen als Stunden-Balkendiagramm."
+      content="Management View: Mittagspreise nach Marke und untertägige Preissenkungen am Tankstellenmarkt."
     />
     <link rel="canonical" href="https://tankzeit.de/management.html" />
     <meta property="og:type" content="website" />
@@ -21,7 +21,7 @@
     <meta property="og:title" content="Tankzeit | Management" />
     <meta
       property="og:description"
-      content="Management View: Marktbeobachtung über alle Tankstellen als Stunden-Balkendiagramm."
+      content="Management View: Mittagspreise nach Marke und untertägige Preissenkungen am Tankstellenmarkt."
     />
     <meta property="og:url" content="https://tankzeit.de/management.html" />
     <meta name="twitter:card" content="summary" />
@@ -46,86 +46,104 @@
 
       <div id="status" class="status"></div>
 
-      <section class="card">
+      <section class="card management-controls">
         <div class="toolbar">
           <div class="left">
-            <h2 id="title">Marktbeobachtung pro Stunde (Median, Cent/l)</h2>
-            <div class="meta" id="meta">Lade Zusammenfassung...</div>
+            <h2>Datum & Kraftstoff</h2>
           </div>
-          <div class="date-nav" aria-label="Datum wechseln">
-            <button
-              class="btn"
-              id="prev-day"
-              type="button"
-              title="Vorheriger Tag"
-              aria-label="Vorheriger Tag"
-            >
-              ←
-            </button>
-            <input id="date-picker" type="date" />
-            <button
-              class="btn"
-              id="next-day"
-              type="button"
-              title="Naechster Tag"
-              aria-label="Naechster Tag"
-            >
-              →
-            </button>
+          <div class="control-grid">
+            <div class="control-group">
+              <div class="control-label">Datum</div>
+              <div class="date-nav" aria-label="Datum wechseln">
+                <button
+                  class="btn"
+                  id="prev-day"
+                  type="button"
+                  title="Vorheriger Tag"
+                  aria-label="Vorheriger Tag"
+                >
+                  ←
+                </button>
+                <input id="date-picker" type="date" />
+                <button
+                  class="btn"
+                  id="next-day"
+                  type="button"
+                  title="Naechster Tag"
+                  aria-label="Naechster Tag"
+                >
+                  →
+                </button>
+              </div>
+            </div>
+            <div class="control-group">
+              <div class="control-label">Kraftstoff</div>
+              <div class="fuel-tabs" role="tablist" aria-label="Kraftstoff">
+                <button
+                  class="btn primary"
+                  data-fuel="diesel"
+                  role="tab"
+                  aria-selected="true"
+                >
+                  Diesel
+                </button>
+                <button
+                  class="btn"
+                  data-fuel="e10"
+                  role="tab"
+                  aria-selected="false"
+                >
+                  E10
+                </button>
+                <button
+                  class="btn"
+                  data-fuel="e5"
+                  role="tab"
+                  aria-selected="false"
+                >
+                  E5
+                </button>
+              </div>
+            </div>
           </div>
-          <div class="fuel-tabs" role="tablist" aria-label="Kraftstoff">
-            <button
-              class="btn primary"
-              data-fuel="diesel"
-              role="tab"
-              aria-selected="true"
-            >
-              Diesel
-            </button>
-            <button
-              class="btn"
-              data-fuel="e10"
-              role="tab"
-              aria-selected="false"
-            >
-              E10
-            </button>
-            <button class="btn" data-fuel="e5" role="tab" aria-selected="false">
-              E5
-            </button>
+        </div>
+      </section>
+
+      <section class="card management-chart-card">
+        <div class="toolbar">
+          <div class="left">
+            <h2 id="brand-title">Mittagspreis nach Marke</h2>
+          </div>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="brand-plot"></canvas>
+        </div>
+      </section>
+
+      <section class="card management-chart-card">
+        <div class="toolbar">
+          <div class="left">
+            <h2 id="title">Untertägige Preissenkungen</h2>
           </div>
         </div>
 
         <div class="chart-wrap">
           <canvas id="plot"></canvas>
         </div>
+      </section>
 
-        <div class="note">
-          Quelle: Die Marktansicht zeigt den Median über alle Tankstellen
-          (~15.000) als Balkendiagramm. In aktuellen Noon-Reset-Snapshots
-          laufen die Balken im Zyklus <code>12 → 12</code> und zeigen die
-          typische Preissenkung seit dem 12:00-Reset. Ältere Snapshots
-          bleiben als stündliche Legacy-Ansicht verfügbar. Tippe/klicke auf
-          einen Balken, um die Verteilung hinter dem Median zu sehen.
-        </div>
-
-        <div class="chart-secondary">
-          <div class="toolbar">
-            <div class="left">
-              <h2 id="brand-title">Preisverteilung nach Marke um 12:00</h2>
-              <div class="meta" id="brand-meta">Lade Markenverteilung...</div>
-            </div>
-          </div>
-
-          <div class="chart-wrap">
-            <canvas id="brand-plot"></canvas>
-          </div>
-
-          <div class="note">
-            Quelle: Preise gültig am Vortag um <code>12:00</code>, gruppiert
-            nach Gesamtmarkt, Top-Marken und <code>MISC</code>.
-            Tippe/klicke auf eine Zeile, um Quartile und Spannweite zu sehen.
-          </div>
+      <section class="card management-footer">
+        <div class="footer-notes">
+          <p class="footer-note">
+            <strong>Mittagspreis nach Marke:</strong> Zeigt die Preise am
+            ausgewählten Tag um <code>12:00</code>. Schwarz steht für den
+            Gesamtmarkt. Antippen zeigt die genauen Werte.
+          </p>
+          <p class="footer-note">
+            <strong>Untertägige Preissenkungen:</strong> Zeigt, wie sich die
+            Preise nach <code>12:00</code> im Tagesverlauf verändern. Antippen
+            zeigt die genauen Werte.
+          </p>
         </div>
       </section>
     </main>
@@ -177,11 +195,9 @@
 
       const statusEl = document.getElementById("status");
       const titleEl = document.getElementById("title");
-      const metaEl = document.getElementById("meta");
       const canvas = document.getElementById("plot");
       const ctx = canvas.getContext("2d");
       const brandTitleEl = document.getElementById("brand-title");
-      const brandMetaEl = document.getElementById("brand-meta");
       const brandCanvas = document.getElementById("brand-plot");
       const brandCtx = brandCanvas.getContext("2d");
       const datePicker = document.getElementById("date-picker");
@@ -267,11 +283,6 @@
         return `data2/${p.y}/${p.m}/${p.d}/management_boxplots.json`;
       }
 
-      function displayFolderDate(d) {
-        const p = dateParts(d);
-        return `${p.y}/${p.m}/${p.d}`;
-      }
-
       async function exists(url) {
         try {
           const head = await fetch(url, { method: "HEAD", cache: "no-store" });
@@ -338,12 +349,7 @@
         plot.width = w - plot.left - plot.right;
         plot.height = h - plot.top - plot.bottom;
         state.layout = { plot, w, h };
-        titleEl.textContent =
-          viewMode === "cycle"
-            ? isPartialCycle
-              ? "Marktbeobachtung seit 12:00 (Teilzyklus, Median, Cent/l)"
-              : "Marktbeobachtung 12 → 12 (Median, Cent/l)"
-            : "Marktbeobachtung pro Stunde (Median, Cent/l)";
+        titleEl.textContent = "Untertägige Preissenkungen";
 
         ctx.clearRect(0, 0, w, h);
 
@@ -426,17 +432,13 @@
       function drawBrandChart() {
         const rows = brandRows();
         if (!rows.length) {
-          brandTitleEl.textContent = "Preisverteilung nach Marke um 12:00";
-          brandMetaEl.textContent = "Keine Markenverteilung fuer dieses Datum vorhanden.";
+          brandTitleEl.textContent = "Mittagspreis nach Marke";
           brandCtx.clearRect(0, 0, brandCanvas.width, brandCanvas.height);
           state.brandLayout = null;
           return;
         }
 
-        const snapshotLabel = state.summary?.brand_snapshot_label || "Vortag 12:00";
-        const snapshotDate = state.summary?.brand_snapshot_date || state.summary?.snapshot_date || "-";
-        brandTitleEl.textContent = "Preisverteilung nach Marke um 12:00";
-        brandMetaEl.textContent = `${snapshotLabel}: ${snapshotDate}`;
+        brandTitleEl.textContent = "Mittagspreis nach Marke";
 
         brandCanvas.style.height = `${Math.max(280, rows.length * 42 + 90)}px`;
         resizeCanvas(brandCanvas, brandCtx);
@@ -607,7 +609,6 @@
       async function loadForDate(d) {
         state.date = d;
         datePicker.value = formatISODate(d);
-        metaEl.textContent = `Datenstand: ${displayFolderDate(d)} | Lade Zusammenfassung...`;
         clearStatus();
 
         const url = urlForDate(d);
@@ -615,18 +616,12 @@
           const response = await fetch(url, { cache: "no-store" });
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           state.summary = await response.json();
-          const start = state.summary.analysis_start;
-          const end = state.summary.analysis_end;
-          const range = start && end ? ` | Zeitraum: ${start} - ${end}` : "";
-          metaEl.textContent = `Datenstand: ${displayFolderDate(d)} | erzeugt: ${state.summary.generated_at}${range}`;
           draw();
           drawBrandChart();
         } catch (e) {
           setStatus("Management-Daten konnten nicht geladen werden.", "error");
-          metaEl.textContent = `Datenstand: ${displayFolderDate(d)} | Fehler beim Laden.`;
           state.summary = null;
           state.brandLayout = null;
-          brandMetaEl.textContent = "Markenverteilung konnte nicht geladen werden.";
           brandCtx.clearRect(0, 0, brandCanvas.width, brandCanvas.height);
         }
         await updateNav();
