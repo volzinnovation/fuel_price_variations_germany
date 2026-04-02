@@ -140,7 +140,7 @@
       const DATA_BASE = "data2/";
       const FUEL = "diesel";
       const TANKERKOENIG_APOLOGY =
-        "Entschuldigung, Tankerkoenig ist derzeit nicht erreichbar. Bitte versuche es spaeter erneut.";
+        "Entschuldigung, Tankerkönig ist derzeit nicht erreichbar. Bitte versuche es später erneut.";
 
       const statusEl = document.getElementById("status");
       const stationsEl = document.getElementById("stations");
@@ -204,7 +204,7 @@
         wrapper.innerHTML = `
           <button class="btn" id="retry-location-btn" type="button">Standort erneut laden</button>
           <input id="manual-lat" type="number" step="0.0001" placeholder="Breitengrad" />
-          <input id="manual-lng" type="number" step="0.0001" placeholder="Laengengrad" />
+          <input id="manual-lng" type="number" step="0.0001" placeholder="Längengrad" />
           <button class="btn" id="manual-btn" type="button">Manuell suchen</button>
         `;
         document.getElementById("retry-location-btn").onclick = requestLocation;
@@ -225,7 +225,7 @@
             "Standortzugriff wurde verweigert. Bitte Browser-Freigabe aktivieren.";
         if (err && err.code === 2)
           message =
-            "Standort ist aktuell nicht verfuegbar. Das ist oft nur voruebergehend, wenn GPS, WLAN oder Browser-Standortdienste noch nicht bereit sind.";
+            "Standort ist aktuell nicht verfügbar. Das ist oft nur vorübergehend, wenn GPS, WLAN oder Browser-Standortdienste noch nicht bereit sind.";
         if (err && err.code === 3)
           message =
             "Standortabfrage ist abgelaufen. Bitte erneut versuchen.";
@@ -383,7 +383,7 @@
           const message =
             err && err.message === TANKERKOENIG_APOLOGY
               ? TANKERKOENIG_APOLOGY
-              : "Fehler beim Laden der Daten. Bitte spaeter erneut versuchen.";
+              : "Fehler beim Laden der Daten. Bitte später erneut versuchen.";
           stationsEl.innerHTML = `<tr><td colspan='5'>${message}</td></tr>`;
           setStatus(message, "error");
         }

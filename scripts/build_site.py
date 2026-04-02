@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 import html
 import json
 import re
@@ -33,10 +34,142 @@ ROOT_URLS = [
     "privacy.html",
     "imprint.html",
 ]
+TOKEN_RE = re.compile(r"[A-Za-zÄÖÜäöüß]+")
+EXACT_TOKEN_FALLBACKS = {
+    "aeuussere": "äußere",
+    "niederoefflingen": "niederöfflingen",
+    "oeffingen": "öffingen",
+}
+TOKEN_FRAGMENT_FALLBACKS = (
+    ("aecker", "äcker"),
+    ("allgaeu", "allgäu"),
+    ("boenn", "bönn"),
+    ("braeu", "bräu"),
+    ("broel", "bröl"),
+    ("brueck", "brück"),
+    ("buec", "büc"),
+    ("caec", "cäc"),
+    ("duehr", "dühr"),
+    ("flaem", "fläm"),
+    ("flueg", "flüg"),
+    ("froschae", "fröschä"),
+    ("gueter", "güter"),
+    ("guetz", "gütz"),
+    ("haeuer", "häuer"),
+    ("haeus", "häus"),
+    ("hoeld", "höld"),
+    ("huett", "hütt"),
+    ("koelsch", "kölsch"),
+    ("koenig", "könig"),
+    ("koes", "kös"),
+    ("koeth", "köth"),
+    ("koest", "köst"),
+    ("kuepp", "küpp"),
+    ("maeb", "mäb"),
+    ("moench", "mönch"),
+    ("muehl", "mühl"),
+    ("muenst", "münst"),
+    ("muer", "mür"),
+    ("nuett", "nütt"),
+    ("poess", "pöß"),
+    ("roem", "röm"),
+    ("roett", "rött"),
+    ("schoef", "schöf"),
+    ("schuett", "schütt"),
+    ("strohgaeu", "strohgäu"),
+    ("ueber", "über"),
+    ("ueck", "ück"),
+    ("voehl", "vöhl"),
+)
 
 
 def format_text(value: object) -> str:
     return html.escape(str(value or "").strip())
+
+
+def normalize_german_token(token: str) -> str:
+    return (
+        token.replace("Ä", "Ae")
+        .replace("Ö", "Oe")
+        .replace("Ü", "Ue")
+        .replace("ä", "ae")
+        .replace("ö", "oe")
+        .replace("ü", "ue")
+        .replace("ß", "ss")
+        .lower()
+    )
+
+
+def has_german_diacritic(token: str) -> bool:
+    return any(char in token for char in "ÄÖÜäöüß")
+
+
+def apply_token_case(preferred: str, pattern: str) -> str:
+    lower = preferred.lower()
+    if pattern.isupper():
+        return lower.replace("ß", "ẞ").upper()
+    if pattern.islower():
+        return lower
+    if len(pattern) > 1 and pattern[:1].isupper() and pattern[1:].islower():
+        return lower[:1].upper() + lower[1:]
+    return preferred
+
+
+def build_display_token_corrections(
+    stations: list[dict[str, object]],
+) -> dict[str, str]:
+    groups: dict[str, Counter[str]] = {}
+    for station in stations:
+        for field in ("name", "brand", "street", "city"):
+            value = str(station.get(field) or "").strip()
+            for token in TOKEN_RE.findall(value):
+                normalized = normalize_german_token(token)
+                groups.setdefault(normalized, Counter())[token] += 1
+
+    corrections: dict[str, str] = {}
+    for counter in groups.values():
+        umlauted = Counter(
+            {
+                token: count
+                for token, count in counter.items()
+                if has_german_diacritic(token)
+            }
+        )
+        ascii_variants = [token for token in counter if token.isascii()]
+        if not umlauted or not ascii_variants:
+            continue
+        preferred = max(umlauted.items(), key=lambda item: (item[1], len(item[0])))[0]
+        for token in ascii_variants:
+            corrections[token] = apply_token_case(preferred, token)
+    return corrections
+
+
+def restore_german_spelling(value: object, corrections: dict[str, str]) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+
+    def replace_token(match: re.Match[str]) -> str:
+        token = match.group(0)
+        if token in corrections:
+            return corrections[token]
+        lowered = token.lower()
+        if lowered in EXACT_TOKEN_FALLBACKS:
+            return apply_token_case(EXACT_TOKEN_FALLBACKS[lowered], token)
+        transliterated = lowered
+        for source, target in TOKEN_FRAGMENT_FALLBACKS:
+            transliterated = transliterated.replace(source, target)
+        if transliterated != lowered:
+            return apply_token_case(transliterated, token)
+        if lowered.endswith("strasse"):
+            stem = lowered[:-7]
+            return apply_token_case(f"{stem}straße", token)
+        return token
+
+    return TOKEN_RE.sub(
+        replace_token,
+        text,
+    )
 
 
 def absolute_url(path: str) -> str:
@@ -290,20 +423,26 @@ def build_fuel_cards(
     return "".join(cards)
 
 
-def build_station_page(station: dict[str, object]) -> tuple[str, str]:
+def build_station_page(
+    station: dict[str, object],
+    corrections: dict[str, str],
+) -> tuple[str, str]:
     station_id = str(station.get("uuid") or "").strip()
-    name = str(station.get("name") or "Tankstelle").strip()
-    brand = str(station.get("brand") or "").strip()
-    street = " ".join(
-        part
-        for part in (
-            str(station.get("street") or "").strip(),
-            str(station.get("house_number") or "").strip(),
-        )
-        if part
-    ).strip()
+    name = restore_german_spelling(station.get("name") or "Tankstelle", corrections)
+    brand = restore_german_spelling(station.get("brand") or "", corrections)
+    street = restore_german_spelling(
+        " ".join(
+            part
+            for part in (
+                str(station.get("street") or "").strip(),
+                str(station.get("house_number") or "").strip(),
+            )
+            if part
+        ).strip(),
+        corrections,
+    )
     postcode = str(station.get("post_code") or "").strip()
-    city = str(station.get("city") or "").strip()
+    city = restore_german_spelling(station.get("city") or "", corrections)
     latitude = float(station.get("latitude") or 0)
     longitude = float(station.get("longitude") or 0)
     canonical_path = station_page_path(station_id)
@@ -315,7 +454,10 @@ def build_station_page(station: dict[str, object]) -> tuple[str, str]:
     has_noon_reset_stats = any(fuel_summary(stats_by_fuel.get(fuel)) for fuel in FUELS)
     description = build_station_description(name, city, street, stats_by_fuel)
     brand_line = f"{brand} · " if brand else ""
-    address_html = station_address(station)
+    city_line = " ".join(part for part in (postcode, city) if part).strip()
+    address_html = "<br />".join(
+        part for part in (format_text(street), format_text(city_line)) if part
+    )
     city_title = city or postcode or "Deutschland"
     diesel_chart_url = attribute_url(
         fuel_chart_url(station_id, "diesel", name, latitude, longitude)
@@ -419,6 +561,9 @@ def build_station_page(station: dict[str, object]) -> tuple[str, str]:
 
 def write_station_pages() -> list[str]:
     stations = json.loads(STATIONS_PATH.read_text(encoding="utf-8"))
+    corrections = build_display_token_corrections(
+        [station for station in stations if isinstance(station, dict)]
+    )
     if STATION_DIR.exists():
         shutil.rmtree(STATION_DIR)
     STATION_DIR.mkdir(parents=True, exist_ok=True)
@@ -431,7 +576,7 @@ def write_station_pages() -> list[str]:
         name = str(station.get("name") or "").strip()
         if not station_id or not name or not has_valid_coordinates(station):
             continue
-        page_path, page_html = build_station_page(station)
+        page_path, page_html = build_station_page(station, corrections)
         target = ROOT / page_path
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(page_html, encoding="utf-8")

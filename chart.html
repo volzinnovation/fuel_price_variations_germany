@@ -34,7 +34,7 @@
       <header>
         <div class="brand">
           <h1>Tankzeit</h1>
-          <p>Preissenkung von 12 bis 12 Uhr.</p>
+          <p>Preisprofil relativ zur Referenz.</p>
         </div>
       </header>
 
@@ -106,7 +106,7 @@
       const title = `${name} · ${fuel.toUpperCase()}`;
       document.getElementById("chart-title").textContent = title;
       document.getElementById("chart-sub").textContent =
-        "Lade Tagesprofil unter dem Mittagsreset-Regime...";
+        "Lade Referenzprofil...";
 
       if (lat && lng) {
         const maps = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
@@ -120,38 +120,49 @@
         return response.json();
       }
 
-      function buildCycleSubtitle(stats) {
-        const cycleSummary =
-          stats && typeof stats.cycle_summary === "object"
-            ? stats.cycle_summary
-            : null;
+      function buildReferenceSubtitle(stats) {
         const summary = TankzeitStats.summaryFromStats(stats);
-        if (!cycleSummary || !cycleSummary.days) {
-          return "Preissenkung seit dem 12:00-Reset.";
+        if (!summary) {
+          return "Vor 12:00 gegen Vortag 12:00, ab 12:00 gegen den aktuellen Mittagspreis.";
         }
         const parts = [];
-        parts.push(`${cycleSummary.days} Zyklen`);
-        parts.push(
-          cycleSummary.partial
-            ? `Teilzyklus bis ${cycleSummary.last_label || "jetzt"}`
-            : "Preissenkung seit 12:00",
+        const dayCount = TankzeitStats.toNumber(
+          summary.analysis_days ?? summary.days,
         );
-        const decreases = TankzeitStats.formatCount(
-          summary?.post_noon_decreases_avg ??
-            summary?.post_noon_decreases_median,
-        );
-        if (decreases) parts.push(`${decreases} Senkungen nach 12 Uhr`);
+        if (dayCount !== null) {
+          parts.push(`${TankzeitStats.formatCount(dayCount)} Tage`);
+        }
+        parts.push("vor 12:00 gegen Vortag 12:00");
+        parts.push("ab 12:00 gegen aktuellen Mittagspreis");
+        if (
+          typeof summary.analysis_start === "string" &&
+          typeof summary.law_effective_date === "string" &&
+          summary.analysis_start <= summary.law_effective_date
+        ) {
+          parts.push("am 1. April bis 12:00 gegen 00:00");
+        }
         const minimum = TankzeitStats.minimumText(stats, "");
         if (minimum) parts.push(`Minimum meist ${minimum}`);
         return parts.join(" · ");
       }
 
-      function renderCycleChart(stats) {
-        const cycle = Array.isArray(stats.cycle_hourly) ? stats.cycle_hourly : [];
-        const labels = cycle.map((row) => row.label || "");
-        const markdownValues = cycle.map((row) =>
-          Number(row.markdown_median ?? row.markdown_avg ?? 0) * 100,
-        );
+      function formatSignedDelta(valueInEuros) {
+        const cents = Number(valueInEuros) * 100;
+        if (!Number.isFinite(cents)) return "-";
+        if (Math.abs(cents) < 0.05) return "auf Referenzniveau";
+        return `${Math.abs(cents).toFixed(1)} ct/l ${
+          cents > 0 ? "teurer" : "günstiger"
+        }`;
+      }
+
+      function renderReferenceChart(stats) {
+        const hourly = Array.isArray(stats.hourly) ? stats.hourly : [];
+        const labels = hourly.map((row) => `${String(row.hour).padStart(2, "0")}:00`);
+        const values = hourly.map((row) => Number(row.price ?? 0) * 100);
+        const finiteValues = values.filter((value) => Number.isFinite(value));
+        const minValue = finiteValues.length ? Math.min(0, ...finiteValues) : -1;
+        const maxValue = finiteValues.length ? Math.max(0, ...finiteValues) : 1;
+        const padding = Math.max(0.5, (maxValue - minValue) * 0.12 || 0.5);
         const ctx = document.getElementById("chart").getContext("2d");
         if (chartInstance) chartInstance.destroy();
         chartInstance = new Chart(ctx, {
@@ -160,13 +171,12 @@
             labels,
             datasets: [
               {
-                label: "Preissenkung seit 12:00 (ct/l)",
-                data: markdownValues,
+                label: "Preisänderung zur Referenz (ct/l)",
+                data: values,
                 borderColor: "#0f766e",
                 backgroundColor: "rgba(15, 118, 110, 0.14)",
-                stepped: "before",
-                tension: 0,
-                fill: true,
+                tension: 0.2,
+                fill: "origin",
                 pointRadius: 2,
                 pointHoverRadius: 4,
               },
@@ -183,46 +193,30 @@
               x: {
                 title: {
                   display: true,
-                  text:
-                    cycle.length < 25
-                      ? "Stunde seit 12:00"
-                      : "Stunde im 24h-Zyklus (12 → 12)",
+                  text: "Stunde",
                 },
               },
               y: {
-                beginAtZero: true,
-                reverse: true,
-                title: { display: true, text: "Preissenkung (ct/l)" },
+                suggestedMin: minValue - padding,
+                suggestedMax: maxValue + padding,
+                title: { display: true, text: "Preisänderung zur Referenz (ct/l)" },
               },
             },
             plugins: {
               tooltip: {
                 callbacks: {
                   label(context) {
-                    const row = cycle[context.dataIndex];
+                    const row = hourly[context.dataIndex];
                     if (!row) return "";
-                    const value = Number(
-                      row.markdown_median ?? row.markdown_avg ?? 0,
-                    );
-                    return `Typische Preissenkung seit 12:00: ${(
-                      value * 100
-                    ).toFixed(1)} ct/l`;
+                    return formatSignedDelta(row.price ?? 0);
                   },
                   afterBody(items) {
-                    const row = cycle[items[0].dataIndex];
+                    const row = hourly[items[0].dataIndex];
                     if (!row) return [];
-                    const parts = [];
-                    if (row.count) {
-                      parts.push(`Zyklen: ${row.count}`);
+                    if (row.hour < 12) {
+                      return ["Referenz: Vortag 12:00, am 1. April 00:00"];
                     }
-                    if (Number.isFinite(Number(row.markdown_min))) {
-                      parts.push(
-                        `Spanne ${(
-                          Number(row.markdown_min) * 100
-                        ).toFixed(1)} bis ${(Number(row.markdown_max) * 100).toFixed(1)} ct/l`,
-                      );
-                    }
-                    return parts;
+                    return ["Referenz: 12:00 desselben Tages"];
                   },
                 },
               },
@@ -289,17 +283,15 @@
 
         const statsUrl = `${DATA_BASE}${stationId.split("-").join("/")}/${fuel}.json`;
         const stats = await fetchJson(statsUrl);
-        if (Array.isArray(stats.cycle_hourly) && stats.cycle_hourly.length) {
+        if (TankzeitStats.summaryFromStats(stats) && Array.isArray(stats.hourly) && stats.hourly.length) {
           document.getElementById("chart-sub").textContent =
-            buildCycleSubtitle(stats);
-          renderCycleChart(stats);
+            buildReferenceSubtitle(stats);
+          renderReferenceChart(stats);
           return;
         }
 
-        document.getElementById("chart-sub").textContent = Array.isArray(stats.daily)
-          && stats.daily.length
-          ? "Noch kein Noon-Reset-Profil verfuegbar. Zeige Uebergangsansicht im Altformat."
-          : "Fallback: historische Abweichung vom Tagesmittel (altes Datenformat).";
+        document.getElementById("chart-sub").textContent =
+          "Fallback: historische Abweichung vom Tagesmittel (altes Datenformat).";
         renderLegacyHourlyChart(stats);
       }
 
