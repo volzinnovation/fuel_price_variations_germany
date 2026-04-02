@@ -1,0 +1,61 @@
+name: Noon price backfill
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_date:
+        description: First local noon snapshot day
+        required: true
+        default: "2026-03-01"
+      end_date:
+        description: Last local noon snapshot day
+        required: true
+        default: "2026-03-30"
+      lookback_days:
+        description: Prior days to scan for carry-forward prices
+        required: true
+        default: "3"
+
+permissions:
+  contents: write
+
+jobs:
+  export-noon-price-backfill:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Europe/Berlin
+      TK_USER: ${{ secrets.TK_USER }}
+      TK_PASS: ${{ secrets.TK_PASS }}
+    steps:
+      - name: Checkout latest version
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+
+      - name: Generate noon price backfill
+        run: >-
+          python scripts/generate_noon_price_backfill.py
+          --start-date ${{ inputs.start_date }}
+          --end-date ${{ inputs.end_date }}
+          --lookback-days ${{ inputs.lookback_days }}
+
+      - name: Configure git
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "<>"
+
+      - name: Commit noon snapshots
+        run: |
+          git add data/noon.csv data2
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git commit -m "Backfill noon snapshots ${{ inputs.start_date }} to ${{ inputs.end_date }}"
+          git push origin master
