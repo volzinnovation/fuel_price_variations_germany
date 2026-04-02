@@ -9,6 +9,10 @@ on:
   - cron: '5 0 * * *'  # every day at 5 am
   workflow_dispatch:
 
+concurrency:
+  group: master-data-writer
+  cancel-in-progress: false
+
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   update-data:
@@ -20,6 +24,8 @@ jobs:
     steps:
       - name: Checkout latest version
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -44,4 +50,6 @@ jobs:
             exit 0
           fi
           git commit -m "Daily data update"
+          git fetch origin master
+          git rebase origin/master
           git push origin master
