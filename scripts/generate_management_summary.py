@@ -31,27 +31,16 @@ def main() -> None:
     mgmt_hourly_values: Dict[str, Dict[int, List[float]]] = {
         fuel: {hour: [] for hour in range(24)} for fuel in fuels
     }
-    mgmt_cycle_values: Dict[str, Dict[int, List[float]]] = {
-        fuel: {hour: [] for hour in range(25)} for fuel in fuels
-    }
     station_counts_hourly: Dict[str, int] = {fuel: 0 for fuel in fuels}
-    station_counts_cycle: Dict[str, int] = {fuel: 0 for fuel in fuels}
 
     for fuel in fuels:
         files = list(data2.rglob(f"{fuel}.json"))
         for path in tqdm(files, desc=f"Reading {fuel}", unit="file"):
             try:
                 payload = json.loads(path.read_text(encoding="utf-8"))
-                cycle_hourly = payload.get("cycle_hourly") or []
-                if cycle_hourly:
-                    station_counts_cycle[fuel] += 1
-                    for row in cycle_hourly:
-                        hour = int(row.get("cycle_hour"))
-                        price = float(row.get("markdown_median"))
-                        if 0 <= hour <= 24:
-                            mgmt_cycle_values[fuel][hour].append(price)
-                    continue
                 hourly = payload.get("hourly") or []
+                if not hourly:
+                    continue
                 station_counts_hourly[fuel] += 1
                 for row in hourly:
                     hour = int(row.get("hour"))
@@ -73,19 +62,10 @@ def main() -> None:
 
     for fuel in fuels:
         fuel_stats = []
-        use_cycle = station_counts_cycle[fuel] > 0
-        summary["view_modes"][fuel] = "cycle" if use_cycle else "hourly"
-        summary["station_counts"][fuel] = (
-            station_counts_cycle[fuel]
-            if use_cycle
-            else station_counts_hourly[fuel]
-        )
-        values_by_bucket = mgmt_cycle_values[fuel] if use_cycle else mgmt_hourly_values[fuel]
-        if use_cycle:
-            populated_buckets = [hour for hour, values in values_by_bucket.items() if values]
-            bucket_count = (max(populated_buckets) + 1) if populated_buckets else 25
-        else:
-            bucket_count = 24
+        summary["view_modes"][fuel] = "hourly"
+        summary["station_counts"][fuel] = station_counts_hourly[fuel]
+        values_by_bucket = mgmt_hourly_values[fuel]
+        bucket_count = 24
         summary["bucket_counts"][fuel] = bucket_count
         for hour in range(bucket_count):
             values = values_by_bucket[hour]
@@ -110,10 +90,6 @@ def main() -> None:
                     "q3": 0.0,
                     "max": 0.0,
                 }
-            if use_cycle:
-                row["cycle_hour"] = hour
-                row["clock_hour"] = (12 + hour) % 24
-                row["label"] = f"{((12 + hour) % 24):02d}"
             fuel_stats.append(row)
         summary["fuels"][fuel] = fuel_stats
 

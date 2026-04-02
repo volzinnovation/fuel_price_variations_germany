@@ -11,6 +11,7 @@ from scripts.generate_data import (
     DateRange,
     _brand_distribution_summary,
     _daily_noon_reset_metrics,
+    _hourly_variation,
     _load_prices,
     _noon_to_noon_markdown_profile,
     generate,
@@ -158,6 +159,37 @@ class DailyNoonResetMetricTests(unittest.TestCase):
         self.assertEqual(cycle_hourly[-1]["label"], "00")
         self.assertEqual(cycle_hourly[-1]["markdown_median"], 0.06)
 
+    def test_hourly_variation_uses_noon_reference_before_and_after_noon(self) -> None:
+        series = pd.Series(
+            [2.00, 1.95, 2.10, 2.05],
+            index=pd.DatetimeIndex(
+                [
+                    "2026-03-31 12:00",
+                    "2026-04-01 00:00",
+                    "2026-04-01 12:00",
+                    "2026-04-01 13:00",
+                ],
+                tz="Europe/Berlin",
+            ),
+        )
+
+        hourly, best_hourly, _, _, used_days, _ = _hourly_variation(
+            series,
+            window_start=pd.Timestamp("2026-03-31 00:00").to_pydatetime(),
+            window_end=pd.Timestamp("2026-04-01 23:59").to_pydatetime(),
+            analysis_days=[date(2026, 3, 31), date(2026, 4, 1)],
+            noon_reference_prices={
+                date(2026, 3, 31): 2.00,
+                date(2026, 4, 1): 2.10,
+            },
+        )
+
+        self.assertEqual(used_days, 1)
+        self.assertEqual(hourly.loc[hourly["hour"] == 0, "price"].item(), -0.05)
+        self.assertEqual(hourly.loc[hourly["hour"] == 12, "price"].item(), 0.0)
+        self.assertEqual(hourly.loc[hourly["hour"] == 13, "price"].item(), -0.05)
+        self.assertEqual(best_hourly.loc[best_hourly["hour"] == 0, "price"].item(), 1.95)
+
 
 class BrandDistributionSummaryTests(unittest.TestCase):
     def test_brand_distribution_groups_top_brands_and_misc(self) -> None:
@@ -237,6 +269,8 @@ class BrandDistributionSummaryTests(unittest.TestCase):
             summary = json.loads(summary_path.read_text(encoding="utf-8"))
 
         self.assertEqual(summary["snapshot_date"], "2026-04-02")
+        self.assertEqual(summary["view_modes"]["diesel"], "hourly")
+        self.assertEqual(summary["bucket_counts"]["diesel"], 24)
         self.assertEqual(summary["brand_snapshot_label"], "Vortag 12:00")
         self.assertEqual(summary["brand_snapshot_date"], "2026-04-02")
         self.assertTrue(summary["brand_snapshot_timestamp"].startswith("2026-04-02T12:00"))

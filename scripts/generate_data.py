@@ -122,6 +122,8 @@ def _filled_minute_series(
     full_range = pd.date_range(start=start, end=end, freq="1min", tz=TZ)
     reindex_index = base.index.union(full_range)
     return base.reindex(reindex_index).sort_index().ffill().reindex(full_range)
+
+
 def _load_prices(days: DateRange) -> pd.DataFrame:
     frames: List[pd.DataFrame] = []
     for day in tqdm(list(days.iter_days()), desc="Downloading prices", unit="day"):
@@ -178,6 +180,10 @@ def _duration_text(minutes: float | int | None) -> str | None:
     if hours:
         return f"{hours}h"
     return f"{mins} min"
+
+
+def _station_id_column(stations: pd.DataFrame) -> str:
+    return "uuid" if "uuid" in stations.columns else "station_uuid"
 
 
 def _noon_cycle_windows(analysis_days: List[date]) -> List[dict[str, object]]:
@@ -474,8 +480,85 @@ def _latest_price_snapshot(
     return latest[["station_uuid", "date", *fuels]].reset_index(drop=True)
 
 
+def _dated_noon_snapshot_path(output_root: Path, target_day: date) -> Path:
+    return (
+        output_root
+        / "data2"
+        / f"{target_day:%Y}"
+        / f"{target_day:%m}"
+        / f"{target_day:%d}"
+        / "noon.csv"
+    )
+
+
+def _load_noon_snapshot(path: Path) -> pd.DataFrame:
+    return pd.read_csv(path, dtype={"station_uuid": "string"})
+
+
+def _raw_noon_snapshot(
+    prices: pd.DataFrame,
+    station_ids: List[str],
+    target_day: date,
+    fuels: tuple[str, ...],
+) -> pd.DataFrame:
+    noon_cutoff = pd.Timestamp(_local_dt(target_day, 12, 0).astimezone(pytz.UTC))
+    latest = _latest_price_snapshot(prices, noon_cutoff, fuels).drop(columns=["date"], errors="ignore")
+    snapshot = pd.DataFrame({"station_uuid": station_ids})
+    return snapshot.merge(latest, on="station_uuid", how="left")
+
+
+def _load_noon_reference_prices(
+    output_root: Path,
+    prices: pd.DataFrame,
+    stations: pd.DataFrame,
+    fuels: tuple[str, ...],
+    analysis_days: List[date],
+) -> Dict[date, Dict[str, Dict[str, float]]]:
+    legal_days = sorted(day for day in analysis_days if day >= LAW_RESET_DATE)
+    if not legal_days:
+        return {}
+
+    reference_days = sorted(
+        {reference_day for day in legal_days for reference_day in (day - timedelta(days=1), day)}
+    )
+    station_ids = (
+        stations[_station_id_column(stations)].dropna().astype(str).sort_values().unique().tolist()
+    )
+    references: Dict[date, Dict[str, Dict[str, float]]] = {}
+
+    for target_day in reference_days:
+        snapshot_path = _dated_noon_snapshot_path(output_root, target_day)
+        snapshot = (
+            _load_noon_snapshot(snapshot_path)
+            if snapshot_path.exists()
+            else _raw_noon_snapshot(prices, station_ids, target_day, fuels)
+        )
+        if "station_uuid" not in snapshot.columns:
+            references[target_day] = {fuel: {} for fuel in fuels}
+            continue
+
+        snapshot["station_uuid"] = snapshot["station_uuid"].astype(str)
+        day_references: Dict[str, Dict[str, float]] = {}
+        for fuel in fuels:
+            if fuel not in snapshot.columns:
+                day_references[fuel] = {}
+                continue
+            values = pd.to_numeric(snapshot[fuel], errors="coerce")
+            valid = values > 0
+            day_references[fuel] = {
+                station_id: float(price)
+                for station_id, price in zip(
+                    snapshot.loc[valid, "station_uuid"].tolist(),
+                    values.loc[valid].tolist(),
+                )
+            }
+        references[target_day] = day_references
+
+    return references
+
+
 def _station_brand_table(stations: pd.DataFrame) -> pd.DataFrame:
-    id_column = "uuid" if "uuid" in stations.columns else "station_uuid"
+    id_column = _station_id_column(stations)
     brands = stations[[id_column, "brand"]].copy()
     brands = brands.rename(columns={id_column: "station_uuid"})
     brands["brand"] = (
@@ -538,6 +621,7 @@ def _write_station_output(
     out_dir: Path,
     fuel: str,
     hourly: pd.DataFrame,
+    best_hourly: pd.DataFrame,
     minabs: float,
     maxabs: float,
     daily_rows: List[dict[str, object]],
@@ -556,7 +640,9 @@ def _write_station_output(
     min_val = float(hourly["price"].min())
     max_val = float(hourly["price"].max())
     span = float(max_val - min_val)
-    best = hourly[hourly["price"] == min_val]["hour"].astype(int).tolist()
+    best_source = best_hourly if not best_hourly.empty else hourly
+    best_price = float(best_source["price"].min())
+    best = best_source[best_source["price"] == best_price]["hour"].astype(int).tolist()
 
     payload = {
         "hourly": hourly.to_dict(orient="records"),
@@ -580,7 +666,7 @@ def _write_station_output(
     json_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
 
-def _hourly_variation(
+def _legacy_hourly_variation(
     series: pd.Series,
     window_start: datetime,
     window_end: datetime,
@@ -618,6 +704,119 @@ def _hourly_variation(
     return grouped, minabs, maxabs, used_days, int(filled.notna().sum())
 
 
+def _noon_reference_hourly_variation(
+    series: pd.Series,
+    analysis_days: List[date],
+    noon_reference_prices: Dict[date, float],
+) -> tuple[pd.DataFrame, pd.DataFrame, float, float, int, int]:
+    legal_days = sorted(day for day in analysis_days if day >= LAW_RESET_DATE)
+    if not legal_days:
+        return (
+            pd.DataFrame(columns=["hour", "price"]),
+            pd.DataFrame(columns=["hour", "price"]),
+            0.0,
+            0.0,
+            0,
+            0,
+        )
+
+    window_start = datetime.combine(min(legal_days), datetime.min.time())
+    window_end = datetime.combine(max(legal_days), datetime.max.time())
+    filled = _filled_minute_series(series, window_start, window_end)
+    if filled.empty or filled.dropna().empty:
+        return (
+            pd.DataFrame(columns=["hour", "price"]),
+            pd.DataFrame(columns=["hour", "price"]),
+            0.0,
+            0.0,
+            0,
+            0,
+        )
+
+    minabs = float(filled.min())
+    maxabs = float(filled.max())
+    delta_frames: List[pd.DataFrame] = []
+    absolute_frames: List[pd.DataFrame] = []
+    used_days = 0
+
+    for day in legal_days:
+        day_start = TZ.localize(datetime.combine(day, datetime.min.time()))
+        day_end = TZ.localize(datetime.combine(day, datetime.max.time()))
+        day_series = filled.loc[day_start:day_end]
+        if day_series.dropna().empty:
+            continue
+
+        hourly_mean = day_series.resample("1h").mean().dropna()
+        if hourly_mean.empty:
+            continue
+
+        absolute_frame = hourly_mean.to_frame(name="price")
+        absolute_frame["hour"] = absolute_frame.index.hour
+        absolute_frames.append(absolute_frame[["hour", "price"]])
+
+        delta_rows: List[dict[str, float | int]] = []
+        for timestamp, price in hourly_mean.items():
+            reference_day = day - timedelta(days=1) if timestamp.hour < 12 else day
+            reference_price = noon_reference_prices.get(reference_day)
+            if reference_price is None:
+                continue
+            delta_rows.append(
+                {
+                    "hour": int(timestamp.hour),
+                    "price": float(price) - float(reference_price),
+                }
+            )
+
+        if delta_rows:
+            delta_frames.append(pd.DataFrame(delta_rows))
+            used_days += 1
+
+    if not delta_frames:
+        return (
+            pd.DataFrame(columns=["hour", "price"]),
+            pd.DataFrame(columns=["hour", "price"]),
+            minabs,
+            maxabs,
+            used_days,
+            int(filled.notna().sum()),
+        )
+
+    grouped = pd.concat(delta_frames).groupby("hour")["price"].mean().reset_index()
+    grouped["price"] = grouped["price"].round(2)
+    grouped = grouped.set_index("hour").reindex(range(24), fill_value=0).reset_index()
+    grouped = grouped.sort_values("hour")
+
+    absolute_grouped = pd.concat(absolute_frames).groupby("hour")["price"].mean().reset_index()
+    absolute_grouped["price"] = absolute_grouped["price"].round(3)
+    absolute_grouped = absolute_grouped.set_index("hour").reindex(range(24)).reset_index()
+    absolute_grouped = absolute_grouped.sort_values("hour")
+
+    return grouped, absolute_grouped, minabs, maxabs, used_days, int(filled.notna().sum())
+
+
+def _hourly_variation(
+    series: pd.Series,
+    window_start: datetime,
+    window_end: datetime,
+    analysis_days: List[date],
+    noon_reference_prices: Dict[date, float] | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame, float, float, int, int]:
+    if any(day >= LAW_RESET_DATE for day in analysis_days):
+        hourly, best_hourly, minabs, maxabs, used_days, filled_minutes = (
+            _noon_reference_hourly_variation(series, analysis_days, noon_reference_prices or {})
+        )
+        if not hourly.empty:
+            return hourly, best_hourly, minabs, maxabs, used_days, filled_minutes
+
+    hourly, minabs, maxabs, used_days, filled_minutes = _legacy_hourly_variation(
+        series,
+        window_start,
+        window_end,
+        analysis_days,
+    )
+    return hourly, hourly.copy(), minabs, maxabs, used_days, filled_minutes
+
+
 def _station_output_dir(base: Path, station_id: str) -> Path:
     parts = station_id.split("-")
     return base.joinpath(*parts)
@@ -628,14 +827,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--analysis-days",
         type=int,
-        default=8,
+        default=2,
         help="Number of completed days to aggregate into the station-level snapshot.",
+    )
+    parser.add_argument(
+        "--today",
+        type=date.fromisoformat,
+        default=None,
+        help="Override the local run date in YYYY-MM-DD format.",
     )
     return parser.parse_args()
 
 
-def generate(output_root: Path, analysis_days_count: int = 8) -> None:
-    today = date.today()
+def generate(
+    output_root: Path,
+    analysis_days_count: int = 2,
+    today_override: date | None = None,
+) -> None:
+    today = today_override or date.today()
     print("Starting data generation...")
     stations_day = today - timedelta(days=1)
     stations_frame = download_stations(output_root / "data" / "stations.json", stations_day)
@@ -654,15 +863,19 @@ def generate(output_root: Path, analysis_days_count: int = 8) -> None:
     analysis_days = [analysis_start + timedelta(days=offset) for offset in range((analysis_end - analysis_start).days + 1)]
 
     fuels = ("diesel", "e10", "e5")
-    # Collect fast-loading management summaries for both legacy hourly and 12->12 cycle views.
+    noon_reference_prices = _load_noon_reference_prices(
+        output_root,
+        data,
+        stations_frame,
+        fuels,
+        analysis_days,
+    )
+
+    # Collect fast-loading management summaries from station-level noon-anchored hourly deltas.
     mgmt_hourly_values: Dict[str, Dict[int, List[float]]] = {
         fuel: {hour: [] for hour in range(24)} for fuel in fuels
     }
-    mgmt_cycle_values: Dict[str, Dict[int, List[float]]] = {
-        fuel: {hour: [] for hour in range(25)} for fuel in fuels
-    }
     mgmt_hourly_station_counts: Dict[str, int] = {fuel: 0 for fuel in fuels}
-    mgmt_cycle_station_counts: Dict[str, int] = {fuel: 0 for fuel in fuels}
 
     for station_id in tqdm(data["station_uuid"].unique(), desc="Processing stations", unit="station"):
         station = data[data["station_uuid"] == station_id].copy()
@@ -680,8 +893,16 @@ def generate(output_root: Path, analysis_days_count: int = 8) -> None:
             fuel_series = pd.to_numeric(station.set_index("date")[fuel], errors="coerce").dropna()
             if fuel_series.empty:
                 continue
-            hourly, minabs, maxabs, used_days, filled_minutes = _hourly_variation(
-                fuel_series, window_start, window_end, analysis_days
+            station_noon_references = {
+                reference_day: day_prices.get(fuel, {}).get(str(station_id))
+                for reference_day, day_prices in noon_reference_prices.items()
+            }
+            hourly, best_hourly, minabs, maxabs, used_days, filled_minutes = _hourly_variation(
+                fuel_series,
+                window_start,
+                window_end,
+                analysis_days,
+                noon_reference_prices=station_noon_references,
             )
             if hourly.empty:
                 continue
@@ -691,21 +912,15 @@ def generate(output_root: Path, analysis_days_count: int = 8) -> None:
                 analysis_days,
             )
 
-            if cycle_hourly:
-                mgmt_cycle_station_counts[fuel] += 1
-                for row in cycle_hourly:
-                    mgmt_cycle_values[fuel][int(row["cycle_hour"])].append(
-                        float(row["markdown_median"])
-                    )
-            else:
-                mgmt_hourly_station_counts[fuel] += 1
-                for row in hourly.itertuples(index=False):
-                    mgmt_hourly_values[fuel][int(row.hour)].append(float(row.price))
+            mgmt_hourly_station_counts[fuel] += 1
+            for row in hourly.itertuples(index=False):
+                mgmt_hourly_values[fuel][int(row.hour)].append(float(row.price))
 
             _write_station_output(
                 out_dir,
                 fuel,
                 hourly,
+                best_hourly=best_hourly,
                 minabs=minabs,
                 maxabs=maxabs,
                 daily_rows=daily_rows,
@@ -750,19 +965,10 @@ def generate(output_root: Path, analysis_days_count: int = 8) -> None:
     }
     for fuel in fuels:
         fuel_stats = []
-        use_cycle = mgmt_cycle_station_counts[fuel] > 0
-        mgmt_summary["view_modes"][fuel] = "cycle" if use_cycle else "hourly"
-        mgmt_summary["station_counts"][fuel] = (
-            mgmt_cycle_station_counts[fuel]
-            if use_cycle
-            else mgmt_hourly_station_counts[fuel]
-        )
-        values_by_bucket = mgmt_cycle_values[fuel] if use_cycle else mgmt_hourly_values[fuel]
-        if use_cycle:
-            populated_buckets = [hour for hour, values in values_by_bucket.items() if values]
-            bucket_count = (max(populated_buckets) + 1) if populated_buckets else 25
-        else:
-            bucket_count = 24
+        mgmt_summary["view_modes"][fuel] = "hourly"
+        mgmt_summary["station_counts"][fuel] = mgmt_hourly_station_counts[fuel]
+        values_by_bucket = mgmt_hourly_values[fuel]
+        bucket_count = 24
         mgmt_summary["bucket_counts"][fuel] = bucket_count
         for hour in range(bucket_count):
             values = values_by_bucket[hour]
@@ -787,10 +993,6 @@ def generate(output_root: Path, analysis_days_count: int = 8) -> None:
                     "q3": 0.0,
                     "max": 0.0,
                 }
-            if use_cycle:
-                row["cycle_hour"] = hour
-                row["clock_hour"] = (12 + hour) % 24
-                row["label"] = f"{((12 + hour) % 24):02d}"
             fuel_stats.append(row)
         mgmt_summary["fuels"][fuel] = fuel_stats
 
@@ -809,7 +1011,7 @@ def generate(output_root: Path, analysis_days_count: int = 8) -> None:
 def main() -> None:
     args = parse_args()
     output_root = Path(__file__).resolve().parents[1]
-    generate(output_root, analysis_days_count=args.analysis_days)
+    generate(output_root, analysis_days_count=args.analysis_days, today_override=args.today)
 
 
 if __name__ == "__main__":

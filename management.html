@@ -141,8 +141,10 @@
           </p>
           <p class="footer-note">
             <strong>Untertägige Preissenkungen:</strong> Zeigt, wie sich die
-            Preise nach <code>12:00</code> im Tagesverlauf verändern. Antippen
-            zeigt die genauen Werte.
+            Preise im Tagesverlauf relativ zum Noon-Referenzpreis verändern:
+            vor <code>12:00</code> gegen Vortag <code>12:00</code>, ab
+            <code>12:00</code> gegen den aktuellen Mittagspreis. Antippen zeigt
+            die genauen Werte.
           </p>
         </div>
       </section>
@@ -362,7 +364,10 @@
         plot.width = w - plot.left - plot.right;
         plot.height = h - plot.top - plot.bottom;
         state.layout = { plot, w, h };
-        titleEl.textContent = "Untertägige Preissenkungen";
+        titleEl.textContent =
+          viewMode === "cycle"
+            ? "Untertägige Preissenkungen"
+            : "Preisveraenderung relativ zu 12:00";
 
         ctx.clearRect(0, 0, w, h);
 
