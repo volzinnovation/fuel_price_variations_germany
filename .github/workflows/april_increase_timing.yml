@@ -1,0 +1,53 @@
+name: April increase timing
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_date:
+        description: First local analysis day
+        required: true
+        default: "2026-04-01"
+      end_date:
+        description: Last local analysis day
+        required: true
+        default: "2026-04-02"
+      bucket_minutes:
+        description: Time bucket size in minutes
+        required: true
+        default: "15"
+
+jobs:
+  analyze-increase-timing:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Europe/Berlin
+      TK_USER: ${{ secrets.TK_USER }}
+      TK_PASS: ${{ secrets.TK_PASS }}
+    steps:
+      - name: Checkout latest version
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+
+      - name: Run increase timing analysis
+        run: >-
+          python scripts/analyze_april_increase_timing.py
+          --start-date ${{ inputs.start_date }}
+          --end-date ${{ inputs.end_date }}
+          --bucket-minutes ${{ inputs.bucket_minutes }}
+          --output-dir output/april_increase_timing
+
+      - name: Publish report summary
+        run: cat output/april_increase_timing/increase_timing_report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload analysis artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: april-increase-timing
+          path: output/april_increase_timing
