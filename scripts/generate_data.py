@@ -207,7 +207,10 @@ def _noon_cycle_windows(analysis_days: List[date]) -> List[dict[str, object]]:
                     "start_day": start_day,
                     "kind": "full",
                     "anchor_time": _local_dt(start_day, 12, 0),
-                    "metric_end_time": _local_dt(start_day + timedelta(days=1), 12, 0),
+                    # Daily metrics cover the completed noon cycle up to 11:59;
+                    # the next day's 12:00 belongs to the following cycle.
+                    "metric_end_time": _local_dt(start_day + timedelta(days=1), 12, 0)
+                    - timedelta(minutes=1),
                     "profile_end_time": _local_dt(start_day + timedelta(days=1), 12, 0),
                     "prior_reference_time": prior_reference_time,
                     "prior_reference_label": "00:00" if start_day == LAW_RESET_DATE else "Vortag 12:00",
@@ -755,9 +758,13 @@ def _noon_reference_hourly_variation(
         absolute_frames.append(absolute_frame[["hour", "price"]])
 
         delta_rows: List[dict[str, float | int]] = []
+        midnight_reference_price = filled.get(day_start) if day == LAW_RESET_DATE else None
         for timestamp, price in hourly_mean.items():
-            reference_day = day - timedelta(days=1) if timestamp.hour < 12 else day
-            reference_price = noon_reference_prices.get(reference_day)
+            if timestamp.hour < 12 and day == LAW_RESET_DATE and not pd.isna(midnight_reference_price):
+                reference_price = midnight_reference_price
+            else:
+                reference_day = day - timedelta(days=1) if timestamp.hour < 12 else day
+                reference_price = noon_reference_prices.get(reference_day)
             if reference_price is None:
                 continue
             delta_rows.append(

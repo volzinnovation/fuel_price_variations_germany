@@ -139,10 +139,10 @@
           typeof summary.law_effective_date === "string" &&
           summary.analysis_start <= summary.law_effective_date
         ) {
-          parts.push("am 1. April bis 12:00 gegen 00:00");
+          parts.push("am 1. April bis 11:59 gegen 00:00");
         }
         const minimum = TankzeitStats.minimumText(stats, "");
-        if (minimum) parts.push(`Minimum meist ${minimum}`);
+        if (minimum) parts.push(`Minimum im 12:00-11:59-Fenster meist ${minimum}`);
         return parts.join(" · ");
       }
 
@@ -155,6 +155,24 @@
         }`;
       }
 
+      function referenceTooltipLines(stats, row) {
+        if (!row) return [];
+        if (row.hour < 12) {
+          const lines = ["Referenz: meist Vortag 12:00"];
+          const summary = TankzeitStats.summaryFromStats(stats);
+          if (
+            summary &&
+            typeof summary.analysis_start === "string" &&
+            typeof summary.law_effective_date === "string" &&
+            summary.analysis_start <= summary.law_effective_date
+          ) {
+            lines.push("Am 1. April 2026 bis 11:59 ausnahmsweise 00:00.");
+          }
+          return lines;
+        }
+        return ["Referenz: 12:00 desselben Tages"];
+      }
+
       function renderReferenceChart(stats) {
         const hourly = Array.isArray(stats.hourly) ? stats.hourly : [];
         const labels = hourly.map((row) => `${String(row.hour).padStart(2, "0")}:00`);
@@ -163,22 +181,31 @@
         const minValue = finiteValues.length ? Math.min(0, ...finiteValues) : -1;
         const maxValue = finiteValues.length ? Math.max(0, ...finiteValues) : 1;
         const padding = Math.max(0.5, (maxValue - minValue) * 0.12 || 0.5);
+        const fuelColor = "#0f766e";
+        const positiveFill = "rgba(234, 88, 12, 0.22)";
+        const positiveStroke = "#ea580c";
+        const negativeFill = `${fuelColor}33`;
         const ctx = document.getElementById("chart").getContext("2d");
         if (chartInstance) chartInstance.destroy();
         chartInstance = new Chart(ctx, {
-          type: "line",
+          type: "bar",
           data: {
             labels,
             datasets: [
               {
                 label: "Preisänderung zur Referenz (ct/l)",
                 data: values,
-                borderColor: "#0f766e",
-                backgroundColor: "rgba(15, 118, 110, 0.14)",
-                tension: 0.2,
-                fill: "origin",
-                pointRadius: 2,
-                pointHoverRadius: 4,
+                borderColor: values.map((value) =>
+                  value >= 0 ? positiveStroke : fuelColor,
+                ),
+                backgroundColor: values.map((value) =>
+                  value >= 0 ? positiveFill : negativeFill,
+                ),
+                borderWidth: 1.5,
+                borderRadius: 4,
+                borderSkipped: false,
+                barPercentage: 0.84,
+                categoryPercentage: 0.92,
               },
             ],
           },
@@ -199,10 +226,20 @@
               y: {
                 suggestedMin: minValue - padding,
                 suggestedMax: maxValue + padding,
+                grid: {
+                  color(context) {
+                    return context.tick.value === 0
+                      ? "rgba(15, 118, 110, 0.35)"
+                      : "rgba(0, 0, 0, 0.08)";
+                  },
+                },
                 title: { display: true, text: "Preisänderung zur Referenz (ct/l)" },
               },
             },
             plugins: {
+              legend: {
+                display: false,
+              },
               tooltip: {
                 callbacks: {
                   label(context) {
@@ -212,11 +249,7 @@
                   },
                   afterBody(items) {
                     const row = hourly[items[0].dataIndex];
-                    if (!row) return [];
-                    if (row.hour < 12) {
-                      return ["Referenz: Vortag 12:00, am 1. April 00:00"];
-                    }
-                    return ["Referenz: 12:00 desselben Tages"];
+                    return referenceTooltipLines(stats, row);
                   },
                 },
               },

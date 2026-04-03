@@ -301,7 +301,7 @@ def fuel_profile_text(stats: dict[str, object] | None) -> str:
 def fuel_minimum_text(stats: dict[str, object] | None) -> str:
     summary = fuel_summary(stats)
     if not summary:
-        return "Kein Tagesminimum hinterlegt."
+        return "Kein Minimum im 12:00-11:59-Fenster hinterlegt."
     time_text = str(summary.get("min_time_text") or "").strip()
     duration_text = str(summary.get("min_duration_text") or "").strip()
     if time_text and duration_text:
@@ -310,7 +310,7 @@ def fuel_minimum_text(stats: dict[str, object] | None) -> str:
         return f"{time_text} Uhr"
     if duration_text:
         return duration_text
-    return "Kein Tagesminimum hinterlegt."
+    return "Kein Minimum im 12:00-11:59-Fenster hinterlegt."
 
 
 def fuel_chip_text(stats: dict[str, object] | None) -> str:
@@ -337,7 +337,7 @@ def build_station_description(
             profile = fuel_profile_text(stats)
             minimum = fuel_minimum_text(stats)
             snippets.append(
-                f"{fuel_label}: {profile}, Tagesminimum meist {minimum}"
+                f"{fuel_label}: {profile}, Minimum im 12:00-11:59-Fenster meist {minimum}"
             )
         else:
             snippets.append(f"{fuel_label}: beste Tankzeit {fuel_best_text(stats)}")
@@ -406,7 +406,7 @@ def build_fuel_cards(
                 "<article class=\"station-fuel-card\">"
                 f"<h3>{FUEL_LABELS[fuel]}</h3>"
                 f"<p><strong>Mittagsmaximum:</strong> {format_text(fuel_profile_text(stats))}</p>"
-                f"<p><strong>Tagesminimum:</strong> {format_text(fuel_minimum_text(stats))}</p>"
+                f"<p><strong>Minimum 12:00-11:59:</strong> {format_text(fuel_minimum_text(stats))}</p>"
                 f"<p><strong>Historische Spanne:</strong> {format_text(fuel_range_text(stats))}</p>"
                 f"<a class=\"link-btn secondary-link\" href=\"{chart_url}\">Chart öffnen</a>"
                 "</article>"
@@ -523,7 +523,7 @@ def build_station_page(
           <span class="station-chip">E5: {format_text(fuel_chip_text(stats_by_fuel.get("e5")))}</span>
         </div>
         <p class="station-summary">
-          {"Tankzeit zeigt für diese Tankstelle das typische 12:00-Maximum, die Senkungen nach 12 Uhr und das Tagesminimum aus den veröffentlichten Tankerkönig-Daten seit dem Mittagsreset vom 1. April 2026." if has_noon_reset_stats else "Tankzeit zeigt für diese Tankstelle historische Tagesprofile aus den veröffentlichten Tankerkönig-Daten. So findest du schneller die typischen Zeitfenster mit günstigeren Preisen."}
+          {"Tankzeit zeigt für diese Tankstelle das typische 12:00-Maximum, die Senkungen nach 12 Uhr und das Minimum im 12:00-11:59-Fenster aus den veröffentlichten Tankerkönig-Daten seit dem Mittagsreset vom 1. April 2026." if has_noon_reset_stats else "Tankzeit zeigt für diese Tankstelle historische Tagesprofile aus den veröffentlichten Tankerkönig-Daten. So findest du schneller die typischen Zeitfenster mit günstigeren Preisen."}
         </p>
         <div class="station-actions">
           <a class="link-btn" href="{diesel_chart_url}">Diesel-Chart</a>

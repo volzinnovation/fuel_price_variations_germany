@@ -79,8 +79,8 @@
             <tr>
               <th>Name</th>
               <th>Preis €/l</th>
-              <th>Typ. Mittag / Senkungen</th>
-              <th>Typ. Tagesminimum</th>
+              <th>Mittagspreis/Vortag</th>
+              <th>Typ. Minimum 12:00-11:59</th>
               <th></th>
             </tr>
           </thead>
@@ -334,8 +334,8 @@
             <tr id="${s.id}">
               <td data-label="Name"><a href="${mapsHref}" target="_blank" rel="noopener">${escapeHtml(s.name)} (${escapeHtml(s.brand || "")})</a></td>
               <td data-label="Preis">${s[FUEL]} €/l</td>
-              <td data-label="Typ. Mittag / Senkungen" id="${s.id}-profile"><a href="${detailsHref}">Details</a></td>
-              <td data-label="Typ. Tagesminimum" id="${s.id}-minimum">-</td>
+              <td data-label="Mittagspreis/Vortag" id="${s.id}-profile"><a href="${detailsHref}">Details</a></td>
+              <td data-label="Typ. Minimum 12:00-11:59" id="${s.id}-minimum">-</td>
               <td><button class="fav" data-id="${s.id}" ${isSaved ? "disabled" : ""}>${isSaved ? "❤️" : "🤍"}</button></td>
             </tr>
           `;
