@@ -488,7 +488,7 @@ p {
 }
 
 .chart-sub {
-  margin: 0 0 16px;
+  margin: 16px 0 0;
   color: var(--muted);
   font-size: 0.92rem;
 }
