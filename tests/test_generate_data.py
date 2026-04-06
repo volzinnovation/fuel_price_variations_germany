@@ -14,6 +14,7 @@ from scripts.generate_data import (
     _hourly_variation,
     _load_prices,
     _noon_to_noon_markdown_profile,
+    _raw_noon_snapshot,
     generate,
 )
 
@@ -300,6 +301,51 @@ class BrandDistributionSummaryTests(unittest.TestCase):
         self.assertEqual(rows[1]["median"], 1.71)
         self.assertEqual(rows[2]["count"], 2)
         self.assertEqual(rows[2]["median"], 1.735)
+
+
+class RawNoonReferenceSnapshotTests(unittest.TestCase):
+    def test_raw_noon_snapshot_uses_daily_increase_reference_and_noon_fallback(self) -> None:
+        prices = pd.DataFrame(
+            {
+                "station_uuid": [
+                    "station-1",
+                    "station-1",
+                    "station-1",
+                    "station-2",
+                    "station-2",
+                    "station-2",
+                ],
+                "date": pd.to_datetime(
+                    [
+                        "2026-04-04T21:30:00Z",
+                        "2026-04-05T10:01:43Z",
+                        "2026-04-05T10:04:45Z",
+                        "2026-04-04T21:40:00Z",
+                        "2026-04-05T09:20:00Z",
+                        "2026-04-05T11:10:00Z",
+                    ],
+                    utc=True,
+                ),
+                "diesel": [1.70, 1.77, 1.76, 1.65, 1.64, 1.63],
+                "e10": [1.75, 1.82, 1.81, 1.70, 1.69, 1.68],
+                "e5": [1.80, 1.87, 1.86, 1.75, 1.74, 1.73],
+            }
+        )
+
+        snapshot = _raw_noon_snapshot(
+            prices,
+            ["station-1", "station-2"],
+            date(2026, 4, 5),
+            ("diesel", "e10", "e5"),
+        )
+
+        station_1 = snapshot.loc[snapshot["station_uuid"] == "station-1"].iloc[0]
+        self.assertEqual(station_1["diesel"], 1.77)
+        self.assertEqual(station_1["last_update"], "2026-04-05T12:01:43+02:00")
+
+        station_2 = snapshot.loc[snapshot["station_uuid"] == "station-2"].iloc[0]
+        self.assertEqual(station_2["diesel"], 1.64)
+        self.assertEqual(station_2["last_update"], "2026-04-05T12:00:00+02:00")
 
     @patch("scripts.generate_data._load_prices")
     @patch("scripts.generate_data.download_stations")

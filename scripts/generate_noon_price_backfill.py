@@ -1,27 +1,34 @@
 #!/usr/bin/env python3
-"""Export per-station local noon prices for a historical date range."""
+"""Export per-station daily increase reference prices for a historical date range."""
 
 from __future__ import annotations
 
 import argparse
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Sequence
 
 import pandas as pd
-import pytz
 
 try:
     from .generate_data import TZ, TANKER_BASE, _data_path, _parse_dates_utc, _read_csv_from_url
+    from .noon_reference import (
+        FUELS,
+        build_noon_reference_snapshot,
+        filter_valid_snapshot_rows,
+    )
 except ImportError:  # pragma: no cover
     from generate_data import TZ, TANKER_BASE, _data_path, _parse_dates_utc, _read_csv_from_url
+    from noon_reference import (
+        FUELS,
+        build_noon_reference_snapshot,
+        filter_valid_snapshot_rows,
+    )
 
 
-FUELS: tuple[str, ...] = ("diesel", "e5", "e10")
 DEFAULT_START_DATE = date(2026, 3, 1)
 DEFAULT_END_DATE = date(2026, 3, 30)
 DEFAULT_LOOKBACK_DAYS = 3
-OUTPUT_COLUMNS: tuple[str, ...] = ("station_uuid", "diesel", "e5", "e10", "last_update")
 
 
 def _parse_target_date(value: str) -> date:
@@ -91,37 +98,9 @@ def _window_prices(target_day: date, lookback_days: int, cache: dict[date, pd.Da
     return pd.concat(frames, ignore_index=True)
 
 
-def _latest_station_rows(prices: pd.DataFrame, cutoff: pd.Timestamp) -> pd.DataFrame:
-    available = [column for column in FUELS if column in prices.columns]
-    subset = prices.loc[prices["date"] <= cutoff, ["station_uuid", "date", *available]].copy()
-    if subset.empty:
-        return pd.DataFrame(columns=list(OUTPUT_COLUMNS))
-
-    for fuel in available:
-        subset[fuel] = pd.to_numeric(subset[fuel], errors="coerce")
-    subset = subset.sort_values(["station_uuid", "date"]).groupby("station_uuid", sort=False).tail(1)
-    for fuel in FUELS:
-        if fuel not in subset.columns:
-            subset[fuel] = pd.NA
-    subset["last_update"] = subset["date"].map(lambda ts: ts.tz_convert(TZ).isoformat())
-    return subset[list(OUTPUT_COLUMNS)]
-
-
-def _filter_valid_rows(snapshot: pd.DataFrame) -> pd.DataFrame:
-    filtered = snapshot.copy()
-    for fuel in FUELS:
-        filtered[fuel] = pd.to_numeric(filtered[fuel], errors="coerce")
-    valid = (filtered[list(FUELS)] > 0).all(axis=1)
-    return filtered.loc[valid, list(OUTPUT_COLUMNS)].reset_index(drop=True)
-
-
 def build_noon_snapshot(prices: pd.DataFrame, station_ids: Sequence[str], target_day: date) -> pd.DataFrame:
-    noon_local = TZ.localize(datetime.combine(target_day, datetime.min.time()) + timedelta(hours=12))
-    cutoff = pd.Timestamp(noon_local.astimezone(pytz.UTC))
-
-    snapshot = pd.DataFrame({"station_uuid": sorted({str(station_id) for station_id in station_ids})})
-    snapshot = snapshot.merge(_latest_station_rows(prices, cutoff), on="station_uuid", how="left")
-    return _filter_valid_rows(snapshot[list(OUTPUT_COLUMNS)])
+    snapshot = build_noon_reference_snapshot(prices, station_ids, target_day, TZ, fuels=FUELS)
+    return filter_valid_snapshot_rows(snapshot, fuels=FUELS)
 
 
 def _dated_output_path(output_root: Path, target_day: date) -> Path:
@@ -160,7 +139,7 @@ def generate_noon_price_backfill(
         _write_snapshot(snapshot, dated_output_path)
         written_paths.append(dated_output_path)
         latest_snapshot = snapshot
-        print(f"{target_day:%Y-%m-%d}: captured {len(snapshot):,} station noon prices")
+        print(f"{target_day:%Y-%m-%d}: captured {len(snapshot):,} station reference prices")
         _prune_cache(price_cache, target_day - timedelta(days=lookback_days))
 
     if latest_snapshot is None:

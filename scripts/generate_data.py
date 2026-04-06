@@ -18,6 +18,11 @@ import pytz
 import requests
 from tqdm import tqdm
 
+try:
+    from .noon_reference import build_noon_reference_snapshot
+except ImportError:  # pragma: no cover
+    from noon_reference import build_noon_reference_snapshot
+
 TZ = pytz.timezone("Europe/Berlin")
 LAW_RESET_DATE = date(2026, 4, 1)
 TANKER_BASE = (
@@ -511,10 +516,7 @@ def _raw_noon_snapshot(
     target_day: date,
     fuels: tuple[str, ...],
 ) -> pd.DataFrame:
-    noon_cutoff = pd.Timestamp(_local_dt(target_day, 12, 0).astimezone(pytz.UTC))
-    latest = _latest_price_snapshot(prices, noon_cutoff, fuels).drop(columns=["date"], errors="ignore")
-    snapshot = pd.DataFrame({"station_uuid": station_ids})
-    return snapshot.merge(latest, on="station_uuid", how="left")
+    return build_noon_reference_snapshot(prices, station_ids, target_day, TZ, fuels=fuels)
 
 
 def _load_noon_reference_prices(

@@ -5,8 +5,11 @@ import pandas as pd
 
 from scripts.analyze_prior_day_station_increase import (
     build_first_daily_increase_events,
+    build_histogram_rows,
+    build_histogram_summary_rows,
     build_raw_noon_snapshot,
     build_validation_rows,
+    filter_histogram_rows,
 )
 
 
@@ -57,6 +60,59 @@ class PriorDayIncreaseEventTests(unittest.TestCase):
         self.assertFalse(
             ((events["station_uuid"] == "station-2") & (events["fuel"] == "diesel")).any()
         )
+
+    def test_build_histogram_rows_groups_first_increase_timestamps_into_time_buckets(self) -> None:
+        prices = pd.DataFrame(
+            {
+                "station_uuid": [
+                    "station-1",
+                    "station-1",
+                    "station-1",
+                    "station-1",
+                    "station-2",
+                    "station-2",
+                    "station-2",
+                ],
+                "date": pd.to_datetime(
+                    [
+                        "2026-04-04T21:30:00Z",
+                        "2026-04-05T07:00:00Z",
+                        "2026-04-05T08:15:00Z",
+                        "2026-04-05T11:45:00Z",
+                        "2026-04-04T21:40:00Z",
+                        "2026-04-05T10:00:00Z",
+                        "2026-04-05T11:55:00Z",
+                    ],
+                    utc=True,
+                ),
+                "diesel": [1.50, 1.50, 1.53, 1.51, 1.60, 1.60, 1.60],
+                "e5": [1.60, 1.60, 1.60, 1.64, 1.70, 1.72, 1.73],
+                "e10": [1.55, 1.55, 1.58, 1.58, 1.65, 1.64, 1.66],
+            }
+        )
+
+        events = build_first_daily_increase_events(prices, date(2026, 4, 5))
+        histogram = build_histogram_rows(events, 15)
+        summary = build_histogram_summary_rows(events, histogram)
+
+        diesel_1015 = histogram.loc[
+            (histogram["fuel"] == "diesel") & (histogram["bucket_label"] == "10:15")
+        ].iloc[0]
+        self.assertEqual(diesel_1015["increase_events"], 1)
+        self.assertEqual(diesel_1015["stations"], 1)
+
+        e5_1200 = histogram.loc[(histogram["fuel"] == "e5") & (histogram["bucket_label"] == "12:00")].iloc[0]
+        self.assertEqual(e5_1200["increase_events"], 1)
+
+        e5_summary = summary.loc[summary["fuel"] == "e5"].iloc[0]
+        self.assertEqual(e5_summary["peak_bucket_label"], "12:00")
+        self.assertEqual(e5_summary["peak_bucket_events"], 1)
+        self.assertEqual(e5_summary["first_increase_timestamp"], "2026-04-05T12:00:00+02:00")
+        self.assertEqual(e5_summary["last_increase_timestamp"], "2026-04-05T13:45:00+02:00")
+
+        focused = filter_histogram_rows(histogram, 12 * 60, 12 * 60)
+        self.assertEqual(focused["bucket_label"].tolist(), ["12:00"])
+        self.assertEqual(focused["fuel"].tolist(), ["e5"])
 
 
 class PriorDayIncreaseValidationTests(unittest.TestCase):
