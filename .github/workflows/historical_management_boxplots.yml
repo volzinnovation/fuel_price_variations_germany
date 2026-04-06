@@ -1,0 +1,70 @@
+name: Historical management boxplots
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_date:
+        description: Local snapshot day to regenerate
+        required: true
+        default: "2026-04-03"
+      analysis_days:
+        description: Number of completed days to aggregate
+        required: true
+        default: "2"
+
+concurrency:
+  group: master-data-writer
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  backfill-management-boxplots:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Europe/Berlin
+      TK_USER: ${{ secrets.TK_USER }}
+      TK_PASS: ${{ secrets.TK_PASS }}
+    steps:
+      - name: Checkout latest version
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+
+      - name: Generate dated management summary
+        run: >-
+          python scripts/generate_historical_management_boxplots.py
+          --target-date ${{ inputs.target_date }}
+          --analysis-days ${{ inputs.analysis_days }}
+
+      - name: Configure git
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "<>"
+
+      - name: Commit management summary
+        run: |
+          TARGET_PATH=$(python - <<'PY'
+          from datetime import date
+          day = date.fromisoformat("${{ inputs.target_date }}")
+          print(f"data2/{day:%Y}/{day:%m}/{day:%d}/management_boxplots.json")
+          PY
+          )
+          git add "$TARGET_PATH"
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git commit -m "Backfill management boxplots ${{ inputs.target_date }}"
+          git fetch origin master
+          git rebase origin/master
+          git push origin master
