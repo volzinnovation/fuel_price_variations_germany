@@ -12,7 +12,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta
       name="description"
-      content="Preisverlauf nach Stunde für eine Tankstelle."
+      content="Mittagspreise und Tagesprofil für eine Tankstelle."
     />
     <meta name="robots" content="noindex,follow" />
     <title>Tankzeit | Chart</title>
@@ -34,12 +34,16 @@
       <header>
         <div class="brand">
           <h1>Tankzeit</h1>
-          <p>Preisänderung seit Vortag 12:00.</p>
+          <p>Mittagspreise seit 1. April und 12:00-11:59-Profil.</p>
         </div>
       </header>
 
       <section class="card chart-card">
         <div class="chart-actions">
+          <button class="btn primary" id="history-view" type="button">
+            Mittagspreise
+          </button>
+          <button class="btn" id="profile-view" type="button">Tagesprofil</button>
           <a class="btn" id="maps-link" href="#" target="_blank" rel="noopener"
             >Zur Tankstelle</a
           >
@@ -96,12 +100,14 @@
     <script>
       const params = new URLSearchParams(window.location.search);
       const stationId = params.get("id");
-      const fuel = params.get("fuel") || "diesel";
+      const fuel = (params.get("fuel") || "diesel").toLowerCase();
       const name = params.get("name") || "Tankstelle";
       const lat = params.get("lat");
       const lng = params.get("lng");
       const DATA_BASE = "data2/";
+      const HISTORY_START = "2026-04-01";
       let chartInstance = null;
+      let activeView = params.get("view") === "profile" ? "profile" : "history";
       const PRIOR_DAY_COLOR = {
         fill: "rgba(107, 114, 128, 0.2)",
         stroke: "#6b7280",
@@ -109,6 +115,10 @@
       const SAME_DAY_COLOR = {
         fill: "rgba(37, 99, 235, 0.2)",
         stroke: "#2563eb",
+      };
+      const HISTORY_COLOR = {
+        stroke: "#0f766e",
+        fill: "rgba(15, 118, 110, 0.16)",
       };
       const noonDividerPlugin = {
         id: "noonDivider",
@@ -136,11 +146,12 @@
           ctx.restore();
         },
       };
+      const historyButton = document.getElementById("history-view");
+      const profileButton = document.getElementById("profile-view");
 
       const title = `${name} · ${fuel.toUpperCase()}`;
       document.getElementById("chart-title").textContent = title;
-      document.getElementById("chart-sub").textContent =
-        "Lade Preisänderung seit Vortag 12:00...";
+      document.getElementById("chart-sub").textContent = "Lade Chart...";
 
       if (lat && lng) {
         const maps = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
@@ -153,6 +164,56 @@
         if (!response.ok) throw new Error(`Request failed: ${response.status}`);
         return response.json();
       }
+
+      async function fetchCsv(url) {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+        return parseCsv(await response.text());
+      }
+
+      function parseCsv(text) {
+        const lines = text
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean);
+        if (!lines.length) return [];
+        const headers = lines[0].split(",").map((header) => header.trim());
+        return lines.slice(1).map((line) => {
+          const values = line.split(",");
+          const row = {};
+          headers.forEach((header, index) => {
+            row[header] = values[index] ?? "";
+          });
+          return row;
+        });
+      }
+
+      function stationPath(station) {
+        return station.split("-").join("/");
+      }
+
+      function setButtonState() {
+        historyButton.classList.toggle("primary", activeView === "history");
+        profileButton.classList.toggle("primary", activeView === "profile");
+      }
+
+      function updateViewInUrl() {
+        params.set("view", activeView);
+        const nextUrl = `${window.location.pathname}?${params.toString()}`;
+        window.history.replaceState({}, "", nextUrl);
+      }
+
+      function switchView(view) {
+        activeView = view;
+        setButtonState();
+        updateViewInUrl();
+        loadChart();
+      }
+
+      historyButton.addEventListener("click", () => switchView("history"));
+      profileButton.addEventListener("click", () => switchView("profile"));
+      setButtonState();
+      updateViewInUrl();
 
       function buildReferenceSubtitle(stats) {
         const summary = TankzeitStats.summaryFromStats(stats);
@@ -196,6 +257,15 @@
         }).format(amount);
       }
 
+      function formatFuelPrice(valueInEuro) {
+        const amount = Number(valueInEuro);
+        if (!Number.isFinite(amount)) return "-";
+        return new Intl.NumberFormat("de-DE", {
+          minimumFractionDigits: 3,
+          maximumFractionDigits: 3,
+        }).format(amount);
+      }
+
       function computeSeriesDomain(values) {
         const finiteValues = values.filter((value) => Number.isFinite(value));
         if (!finiteValues.length) {
@@ -213,6 +283,144 @@
 
       function referenceTooltipLines() {
         return ["Referenz: Vortag 12:00"];
+      }
+
+      function formatHistoryDay(day) {
+        const [year, month, date] = String(day).split("-");
+        if (!year || !month || !date) return String(day);
+        return `${date}.${month}.${year}`;
+      }
+
+      function formatHistoryTick(day) {
+        const [year, month, date] = String(day).split("-");
+        if (!year || !month || !date) return String(day);
+        return `${date}.${month}.`;
+      }
+
+      function formatLastUpdate(lastUpdate) {
+        if (!lastUpdate) return null;
+        const parsed = new Date(lastUpdate);
+        if (Number.isNaN(parsed.getTime())) return lastUpdate;
+        return new Intl.DateTimeFormat("de-DE", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        }).format(parsed);
+      }
+
+      function normalizeHistoryRows(rows) {
+        return rows
+          .map((row) => ({
+            date: String(row.date || "").trim(),
+            price: Number(row.price),
+            lastUpdate: String(row.last_update || "").trim(),
+          }))
+          .filter(
+            (row) =>
+              row.date &&
+              row.date >= HISTORY_START &&
+              Number.isFinite(row.price),
+          )
+          .sort((left, right) => left.date.localeCompare(right.date));
+      }
+
+      function buildHistorySubtitle(rows) {
+        if (!rows.length) {
+          return `${fuel.toUpperCase()} · Keine Mittagspreise ab ${formatHistoryDay(HISTORY_START)} verfügbar.`;
+        }
+        const first = rows[0].date;
+        const last = rows[rows.length - 1].date;
+        return [
+          `${fuel.toUpperCase()} · Mittagspreise aus noon.csv`,
+          `${rows.length} Tage`,
+          `${formatHistoryDay(first)} - ${formatHistoryDay(last)}`,
+          "y-Achse = etablierter Mittagspreis",
+        ].join(" · ");
+      }
+
+      function renderNoonHistoryChart(rows) {
+        const labels = rows.map((row) => formatHistoryTick(row.date));
+        const values = rows.map((row) => row.price);
+        const domain = computeSeriesDomain(values);
+        const ctx = document.getElementById("chart").getContext("2d");
+        if (chartInstance) chartInstance.destroy();
+        chartInstance = new Chart(ctx, {
+          type: "line",
+          data: {
+            labels,
+            datasets: [
+              {
+                label: "Mittagspreis",
+                data: values,
+                borderColor: HISTORY_COLOR.stroke,
+                backgroundColor: HISTORY_COLOR.fill,
+                borderWidth: 2.4,
+                pointRadius: 2.5,
+                pointHoverRadius: 5,
+                pointBackgroundColor: HISTORY_COLOR.stroke,
+                pointBorderColor: HISTORY_COLOR.stroke,
+                fill: true,
+                tension: 0.2,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+              mode: "index",
+              intersect: false,
+            },
+            scales: {
+              x: {
+                title: {
+                  display: true,
+                  text: "Datum",
+                },
+              },
+              y: {
+                min: domain.min,
+                max: domain.max,
+                ticks: {
+                  callback(value) {
+                    return formatFuelPrice(value);
+                  },
+                },
+                title: {
+                  display: true,
+                  text: "Mittagspreis (€/l)",
+                },
+              },
+            },
+            plugins: {
+              legend: {
+                position: "bottom",
+              },
+              tooltip: {
+                callbacks: {
+                  title(context) {
+                    const row = rows[context[0].dataIndex];
+                    return row ? formatHistoryDay(row.date) : "";
+                  },
+                  label(context) {
+                    const row = rows[context.dataIndex];
+                    if (!row) return "";
+                    return `${formatFuelPrice(row.price)} €/l`;
+                  },
+                  afterBody(context) {
+                    const row = rows[context[0].dataIndex];
+                    const lastUpdate = formatLastUpdate(row?.lastUpdate);
+                    return lastUpdate
+                      ? [`Stand aus noon.csv: ${lastUpdate}`]
+                      : ["Stand aus noon.csv"];
+                  },
+                },
+              },
+            },
+          },
+        });
       }
 
       function renderReferenceChart(stats) {
@@ -373,6 +581,36 @@
         });
       }
 
+      async function loadHistoryChart() {
+        const historyUrl = `${DATA_BASE}${stationPath(stationId)}/${fuel}/history.csv`;
+        const rows = normalizeHistoryRows(await fetchCsv(historyUrl));
+        if (!rows.length) {
+          throw new Error("History unavailable");
+        }
+        document.getElementById("chart-sub").textContent =
+          buildHistorySubtitle(rows);
+        renderNoonHistoryChart(rows);
+      }
+
+      async function loadProfileChart() {
+        const statsUrl = `${DATA_BASE}${stationPath(stationId)}/${fuel}.json`;
+        const stats = await fetchJson(statsUrl);
+        if (
+          TankzeitStats.summaryFromStats(stats) &&
+          Array.isArray(stats.hourly) &&
+          stats.hourly.length
+        ) {
+          document.getElementById("chart-sub").textContent =
+            buildReferenceSubtitle(stats);
+          renderReferenceChart(stats);
+          return;
+        }
+
+        document.getElementById("chart-sub").textContent =
+          "Fallback: historische Abweichung vom Tagesmittel (altes Datenformat).";
+        renderLegacyHourlyChart(stats);
+      }
+
       async function loadChart() {
         if (!stationId) return;
 
@@ -392,19 +630,17 @@
           });
 
         await waitForChart();
-
-        const statsUrl = `${DATA_BASE}${stationId.split("-").join("/")}/${fuel}.json`;
-        const stats = await fetchJson(statsUrl);
-        if (TankzeitStats.summaryFromStats(stats) && Array.isArray(stats.hourly) && stats.hourly.length) {
-          document.getElementById("chart-sub").textContent =
-            buildReferenceSubtitle(stats);
-          renderReferenceChart(stats);
-          return;
+        if (activeView === "history") {
+          try {
+            await loadHistoryChart();
+            return;
+          } catch (_error) {
+            activeView = "profile";
+            setButtonState();
+            updateViewInUrl();
+          }
         }
-
-        document.getElementById("chart-sub").textContent =
-          "Fallback: historische Abweichung vom Tagesmittel (altes Datenformat).";
-        renderLegacyHourlyChart(stats);
+        await loadProfileChart();
       }
 
       loadChart().catch(() => {

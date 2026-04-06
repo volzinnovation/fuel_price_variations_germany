@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import defaultdict
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Sequence
@@ -29,6 +30,8 @@ except ImportError:  # pragma: no cover
 DEFAULT_START_DATE = date(2026, 3, 1)
 DEFAULT_END_DATE = date(2026, 3, 30)
 DEFAULT_LOOKBACK_DAYS = 3
+DEFAULT_HISTORY_START_DATE = date(2026, 4, 1)
+HISTORY_COLUMNS: tuple[str, ...] = ("date", "price", "last_update")
 
 
 def _parse_target_date(value: str) -> date:
@@ -112,6 +115,101 @@ def _write_snapshot(snapshot: pd.DataFrame, output_path: Path) -> None:
     snapshot.to_csv(output_path, index=False, float_format="%.3f")
 
 
+def _history_output_path(output_root: Path, station_id: str, fuel: str) -> Path:
+    return output_root / "data2" / Path(*station_id.split("-")) / fuel / "history.csv"
+
+
+def _collect_history_rows(
+    rows_by_file: dict[tuple[str, str], list[dict[str, object]]],
+    snapshot: pd.DataFrame,
+    target_day: date,
+    history_start_date: date,
+) -> None:
+    if target_day < history_start_date or snapshot.empty or "station_uuid" not in snapshot.columns:
+        return
+
+    base = snapshot.copy()
+    base["station_uuid"] = base["station_uuid"].astype(str)
+    if "last_update" in base.columns:
+        base["last_update"] = base["last_update"].fillna("").astype(str)
+    else:
+        base["last_update"] = ""
+    day_label = target_day.isoformat()
+
+    for fuel in FUELS:
+        if fuel not in base.columns:
+            continue
+        prices = pd.to_numeric(base[fuel], errors="coerce")
+        valid = prices > 0
+        if not valid.any():
+            continue
+        for station_id, price, last_update in zip(
+            base.loc[valid, "station_uuid"].tolist(),
+            prices.loc[valid].tolist(),
+            base.loc[valid, "last_update"].tolist(),
+        ):
+            rows_by_file.setdefault((str(station_id), fuel), []).append(
+                {
+                    "date": day_label,
+                    "price": round(float(price), 3),
+                    "last_update": str(last_update or ""),
+                }
+            )
+
+
+def _load_history_frame(path: Path) -> pd.DataFrame:
+    if not path.exists():
+        return pd.DataFrame(columns=HISTORY_COLUMNS)
+
+    frame = pd.read_csv(path, dtype={"date": "string", "last_update": "string"})
+    for column in HISTORY_COLUMNS:
+        if column not in frame.columns:
+            frame[column] = pd.NA
+    return frame[list(HISTORY_COLUMNS)]
+
+
+def _merge_history_rows(existing: pd.DataFrame, additions: pd.DataFrame) -> pd.DataFrame:
+    if existing.empty:
+        merged = additions.copy()
+    elif additions.empty:
+        merged = existing.copy()
+    else:
+        merged = pd.concat([existing, additions], ignore_index=True)
+    if merged.empty:
+        return pd.DataFrame(columns=HISTORY_COLUMNS)
+
+    merged["date"] = merged["date"].astype("string").fillna("").str.strip()
+    merged["price"] = pd.to_numeric(merged["price"], errors="coerce")
+    merged["last_update"] = merged["last_update"].astype("string").fillna("").str.strip()
+    merged = merged.loc[merged["date"].ne("") & merged["price"].notna()].copy()
+    if merged.empty:
+        return pd.DataFrame(columns=HISTORY_COLUMNS)
+
+    merged["_sort_date"] = pd.to_datetime(merged["date"], errors="coerce")
+    merged = merged.dropna(subset=["_sort_date"]).sort_values(["_sort_date", "last_update"])
+    merged = merged.drop_duplicates(subset=["date"], keep="last")
+    return merged[list(HISTORY_COLUMNS)].reset_index(drop=True)
+
+
+def _write_history_files(
+    output_root: Path,
+    rows_by_file: dict[tuple[str, str], list[dict[str, object]]],
+) -> list[Path]:
+    written_paths: list[Path] = []
+
+    for (station_id, fuel), rows in sorted(rows_by_file.items()):
+        additions = pd.DataFrame(rows, columns=HISTORY_COLUMNS)
+        history_path = _history_output_path(output_root, station_id, fuel)
+        merged = _merge_history_rows(_load_history_frame(history_path), additions)
+        if merged.empty:
+            continue
+        history_path.parent.mkdir(parents=True, exist_ok=True)
+        merged.to_csv(history_path, index=False, float_format="%.3f")
+        written_paths.append(history_path)
+
+    return written_paths
+
+
 def _prune_cache(cache: dict[date, pd.DataFrame], oldest_day_to_keep: date) -> None:
     for day in list(cache):
         if day < oldest_day_to_keep:
@@ -125,11 +223,13 @@ def generate_noon_price_backfill(
     end_date: date,
     lookback_days: int = DEFAULT_LOOKBACK_DAYS,
     write_latest_output: bool = True,
+    history_start_date: date = DEFAULT_HISTORY_START_DATE,
 ) -> list[Path]:
     station_cache: dict[date, list[str]] = {}
     price_cache: dict[date, pd.DataFrame] = {}
     written_paths: list[Path] = []
     latest_snapshot: pd.DataFrame | None = None
+    history_rows: dict[tuple[str, str], list[dict[str, object]]] = defaultdict(list)
 
     for target_day in _iter_days(start_date, end_date):
         station_ids = _load_station_ids(target_day, station_cache)
@@ -139,14 +239,24 @@ def generate_noon_price_backfill(
         _write_snapshot(snapshot, dated_output_path)
         written_paths.append(dated_output_path)
         latest_snapshot = snapshot
+        _collect_history_rows(
+            history_rows,
+            snapshot,
+            target_day,
+            history_start_date=history_start_date,
+        )
         print(f"{target_day:%Y-%m-%d}: captured {len(snapshot):,} station reference prices")
         _prune_cache(price_cache, target_day - timedelta(days=lookback_days))
 
     if latest_snapshot is None:
         raise RuntimeError("No noon snapshots were generated.")
 
+    history_paths = _write_history_files(output_root, history_rows)
+
     if write_latest_output:
         _write_snapshot(latest_snapshot, latest_output_path)
+    if history_paths:
+        print(f"Wrote {len(history_paths):,} station fuel noon history files")
     return written_paths
 
 

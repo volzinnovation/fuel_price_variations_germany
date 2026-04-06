@@ -44,6 +44,17 @@ Jeweils gleichartiger Aufbau dieser Dateien für alle Tankstellen
 * 2 Spalten: Uhrzeit, Preisdifferenz in Euro
 * 25 Zeilen, Header, dann Stunde, Preisdifferenz
 
+Die Dateien `diesel.csv`, `e10.csv` und `e5.csv` bleiben die untertägigen Preisdifferenzen.
+
+Für die Mittags-Historie seit dem 1. April 2026 gibt es zusätzlich pro Tankstelle und Kraftstoff:
+
+* `data2/<station>/<fuel>/history.csv`
+
+Aufbau von `history.csv`:
+
+* 3 Spalten: `date`, `price`, `last_update`
+* eine Zeile pro lokalem Tag mit dem in `noon.csv` etablierten Mittagspreis
+
 ## Website Build
 
 SEO-Landingpages pro Tankstelle sowie `sitemap.xml` werden mit folgendem Skript erzeugt:
