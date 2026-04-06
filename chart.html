@@ -126,10 +126,11 @@
           if (!options || options.enabled === false) return;
           const xScale = chart.scales?.x;
           const chartArea = chart.chartArea;
-          if (!xScale || !chartArea || xScale.ticks.length < 13) return;
-          const leftTick = xScale.getPixelForTick(11);
-          const rightTick = xScale.getPixelForTick(12);
-          const dividerX = (leftTick + rightTick) / 2;
+          const labels = chart.data?.labels;
+          if (!xScale || !chartArea || !Array.isArray(labels) || labels.length < 13) {
+            return;
+          }
+          const dividerX = xScale.getPixelForValue(12);
           const { ctx } = chart;
           ctx.save();
           ctx.setLineDash([6, 4]);
@@ -379,6 +380,9 @@
                   display: true,
                   text: "Datum",
                 },
+                ticks: {
+                  align: "start",
+                },
               },
               y: {
                 min: domain.min,
@@ -493,6 +497,9 @@
                 title: {
                   display: true,
                   text: "Stunde",
+                },
+                ticks: {
+                  align: "start",
                 },
               },
               y: {
