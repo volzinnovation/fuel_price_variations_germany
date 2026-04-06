@@ -110,8 +110,8 @@
         fill: "rgba(37, 99, 235, 0.2)",
         stroke: "#2563eb",
       };
-      const noonDividerPlugin = {
-        id: "noonDivider",
+      const cycleDividerPlugin = {
+        id: "cycleDivider",
         afterDatasetsDraw(chart, _args, options) {
           if (!options || options.enabled === false) return;
           const xScale = chart.scales?.x;
@@ -154,10 +154,10 @@
         return response.json();
       }
 
-      function buildReferenceSubtitle(stats) {
+      function buildCycleSubtitle(stats) {
         const summary = TankzeitStats.summaryFromStats(stats);
         if (!summary) {
-          return "Referenz ist durchgehend Vortag 12:00. Grau zeigt 00:00 bis 11:59, blau 12:00 bis 23:59. Positive Werte liegen über der Referenz, negative darunter; die y-Achse passt sich dem sichtbaren Bereich an.";
+          return "Referenz ist Vortag 12:00. Die Uhrzeiten bleiben bei 00:00 bis 23:00; negative Werte liegen unter der Referenz.";
         }
         const parts = [];
         const dayCount = TankzeitStats.toNumber(
@@ -166,10 +166,10 @@
         if (dayCount !== null) {
           parts.push(`${TankzeitStats.formatCount(dayCount)} Tage`);
         }
-        parts.push("Referenz durchgehend Vortag 12:00");
-        parts.push("grau 00:00 - 11:59, blau 12:00 - 23:59");
-        parts.push("positive Werte = teurer, negative Werte = günstiger");
-        parts.push("y-Achse nach sichtbarem Minimum und Maximum");
+        parts.push("0,00 = Vortag 12:00");
+        parts.push("x-Achse 00:00 - 23:00");
+        parts.push("negative Werte = günstiger");
+        parts.push("lokal aus der letzten abgeschlossenen 12:00 - 11:59-Spanne");
         return parts.join(" · ");
       }
 
@@ -197,39 +197,6 @@
         }).format(amount);
       }
 
-      function priorNoonShift(stats) {
-        const daily = Array.isArray(stats?.daily) ? stats.daily : [];
-        const shifts = daily
-          .map((row) => Number(row?.noon_price) - Number(row?.prior_reference_price))
-          .filter((value) => Number.isFinite(value));
-        if (shifts.length) {
-          return shifts.reduce((sum, value) => sum + value, 0) / shifts.length;
-        }
-        const summary = TankzeitStats.summaryFromStats(stats);
-        if (!summary) return 0;
-        const noonPrice = TankzeitStats.toNumber(
-          summary.noon_price_avg ?? summary.noon_price_median,
-        );
-        const priorPrice = TankzeitStats.toNumber(
-          summary.prior_reference_price_avg ?? summary.prior_reference_price_median,
-        );
-        if (noonPrice === null || priorPrice === null) return 0;
-        return noonPrice - priorPrice;
-      }
-
-      function buildDisplaySeries(stats) {
-        const shift = priorNoonShift(stats);
-        const hourly = Array.isArray(stats?.hourly) ? stats.hourly : [];
-        return hourly.map((row) => {
-          const rawValue = Number(row?.price ?? 0) + (Number(row?.hour) >= 12 ? shift : 0);
-          return {
-            hour: Number(row?.hour ?? 0),
-            rawValue,
-            displayValue: sanitizeRelativeValue(rawValue),
-          };
-        });
-      }
-
       function computeSeriesDomain(values) {
         const finiteValues = values.filter((value) => Number.isFinite(value));
         if (!finiteValues.length) {
@@ -245,14 +212,151 @@
         return { min: min - pad, max: max + pad };
       }
 
-      function referenceTooltipLines(row) {
-        if (!row) return [];
+      function referenceTooltipLines() {
         return ["Referenz: Vortag 12:00"];
       }
 
+      function renderCycleChart(stats) {
+        const rawCycleSeries = TankzeitStats.cycleMarkdownSeries(stats, {
+          includeClosingNoon: false,
+        });
+        if (!rawCycleSeries.length) return false;
+
+        const byClockHour = new Map(
+          rawCycleSeries.map((row) => [
+            row.clockHour,
+            {
+              ...row,
+              displayValue: sanitizeRelativeValue(-row.markdown),
+            },
+          ]),
+        );
+        const cycleSeries = Array.from({ length: 24 }, (_value, hour) => ({
+          hour,
+          label: String(hour).padStart(2, "0"),
+          displayValue: byClockHour.get(hour)?.displayValue ?? null,
+        }));
+        const labels = cycleSeries.map((row) => `${row.label}:00`);
+        const morningValues = cycleSeries.map((row) =>
+          row.hour < 12 ? row.displayValue : null,
+        );
+        const afternoonValues = cycleSeries.map((row) =>
+          row.hour >= 12 ? row.displayValue : null,
+        );
+        const domain = computeSeriesDomain(
+          cycleSeries.map((row) => row.displayValue),
+        );
+        const ctx = document.getElementById("chart").getContext("2d");
+        if (chartInstance) chartInstance.destroy();
+        chartInstance = new Chart(ctx, {
+          type: "line",
+          plugins: [cycleDividerPlugin],
+          data: {
+            labels,
+            datasets: [
+              {
+                label: "00:00 - 11:59",
+                data: morningValues,
+                borderColor: PRIOR_DAY_COLOR.stroke,
+                backgroundColor: PRIOR_DAY_COLOR.stroke,
+                borderWidth: 2.4,
+                pointRadius: 1.8,
+                pointHoverRadius: 4,
+                pointBackgroundColor: PRIOR_DAY_COLOR.stroke,
+                pointBorderColor: PRIOR_DAY_COLOR.stroke,
+                stepped: "after",
+                tension: 0,
+                spanGaps: false,
+                fill: false,
+              },
+              {
+                label: "12:00 - 23:59",
+                data: afternoonValues,
+                borderColor: SAME_DAY_COLOR.stroke,
+                backgroundColor: SAME_DAY_COLOR.stroke,
+                borderWidth: 2.4,
+                pointRadius: 1.8,
+                pointHoverRadius: 4,
+                pointBackgroundColor: SAME_DAY_COLOR.stroke,
+                pointBorderColor: SAME_DAY_COLOR.stroke,
+                stepped: "after",
+                tension: 0,
+                spanGaps: false,
+                fill: false,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+              mode: "index",
+              intersect: false,
+            },
+            scales: {
+              x: {
+                title: {
+                  display: true,
+                  text: "Uhrzeit",
+                },
+              },
+              y: {
+                min: domain.min,
+                max: domain.max,
+                ticks: {
+                  callback(value) {
+                    return formatEuroTick(value);
+                  },
+                },
+                grid: {
+                  color(context) {
+                    return context.tick.value === 0
+                      ? "rgba(37, 99, 235, 0.28)"
+                      : "rgba(0, 0, 0, 0.08)";
+                  },
+                },
+                title: {
+                  display: true,
+                  text: "Preisänderung ggü. Vortag 12:00 (€/l)",
+                },
+              },
+            },
+            plugins: {
+              legend: {
+                position: "bottom",
+              },
+              cycleDivider: {
+                enabled: labels.length >= 13,
+              },
+              tooltip: {
+                callbacks: {
+                  label(context) {
+                    const row = cycleSeries[context.dataIndex];
+                    if (!row) return "";
+                    return formatRelativeChange(row.displayValue);
+                  },
+                  afterBody() {
+                    return referenceTooltipLines();
+                  },
+                },
+              },
+            },
+          },
+        });
+        return true;
+      }
+
       function renderReferenceChart(stats) {
-        const displaySeries = buildDisplaySeries(stats);
-        const labels = displaySeries.map((row) => `${String(row.hour).padStart(2, "0")}:00`);
+        const hourly = Array.isArray(stats?.hourly) ? stats.hourly : [];
+        const displaySeries = hourly
+          .map((row) => ({
+            hour: Number(row?.hour ?? 0),
+            displayValue: sanitizeRelativeValue(Number(row?.price ?? 0)),
+          }))
+          .filter((row) => Number.isFinite(row.hour));
+        const labels = displaySeries.map(
+          (row) => `${String(row.hour).padStart(2, "0")}:00`,
+        );
         const priorDayValues = displaySeries.map((row, index) =>
           index < 12 ? row.displayValue : null,
         );
@@ -264,7 +368,6 @@
         if (chartInstance) chartInstance.destroy();
         chartInstance = new Chart(ctx, {
           type: "line",
-          plugins: [noonDividerPlugin],
           data: {
             labels,
             datasets: [
@@ -339,9 +442,6 @@
               legend: {
                 position: "bottom",
               },
-              noonDivider: {
-                enabled: labels.length >= 24,
-              },
               tooltip: {
                 callbacks: {
                   label(context) {
@@ -349,9 +449,8 @@
                     if (!row) return "";
                     return formatRelativeChange(row.displayValue);
                   },
-                  afterBody(items) {
-                    const row = displaySeries[items[0].dataIndex];
-                    return referenceTooltipLines(row);
+                  afterBody() {
+                    return referenceTooltipLines();
                   },
                 },
               },
@@ -423,9 +522,15 @@
 
         const statsUrl = `${DATA_BASE}${stationId.split("-").join("/")}/${fuel}.json`;
         const stats = await fetchJson(statsUrl);
+        if (renderCycleChart(stats)) {
+          document.getElementById("chart-sub").textContent =
+            buildCycleSubtitle(stats);
+          return;
+        }
+
         if (TankzeitStats.summaryFromStats(stats) && Array.isArray(stats.hourly) && stats.hourly.length) {
           document.getElementById("chart-sub").textContent =
-            buildReferenceSubtitle(stats);
+            "Fallback: stündliche Preisabweichung relativ zum verfügbaren Referenzwert.";
           renderReferenceChart(stats);
           return;
         }
