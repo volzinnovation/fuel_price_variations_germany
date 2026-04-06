@@ -243,9 +243,10 @@ class DailyNoonResetMetricTests(unittest.TestCase):
 
         self.assertEqual(used_days, 1)
         self.assertEqual(hourly.loc[hourly["hour"] == 0, "price"].item(), -0.05)
-        self.assertEqual(hourly.loc[hourly["hour"] == 12, "price"].item(), 0.0)
-        self.assertEqual(hourly.loc[hourly["hour"] == 13, "price"].item(), -0.05)
+        self.assertEqual(hourly.loc[hourly["hour"] == 12, "price"].item(), 0.1)
+        self.assertEqual(hourly.loc[hourly["hour"] == 13, "price"].item(), 0.05)
         self.assertEqual(best_hourly.loc[best_hourly["hour"] == 0, "price"].item(), 1.95)
+        self.assertEqual(best_hourly.loc[best_hourly["hour"] == 12, "price"].item(), 2.1)
 
     def test_hourly_variation_uses_midnight_reference_before_noon_on_law_effective_day(self) -> None:
         series = pd.Series(
@@ -274,7 +275,7 @@ class DailyNoonResetMetricTests(unittest.TestCase):
 
         self.assertEqual(used_days, 1)
         self.assertEqual(hourly.loc[hourly["hour"] == 8, "price"].item(), -0.05)
-        self.assertEqual(hourly.loc[hourly["hour"] == 12, "price"].item(), 0.0)
+        self.assertEqual(hourly.loc[hourly["hour"] == 12, "price"].item(), 0.1)
 
 
 class BrandDistributionSummaryTests(unittest.TestCase):
@@ -399,19 +400,28 @@ class RawNoonReferenceSnapshotTests(unittest.TestCase):
             )
             summary = json.loads(summary_path.read_text(encoding="utf-8"))
 
-        self.assertEqual(summary["snapshot_date"], "2026-04-02")
-        self.assertEqual(summary["view_modes"]["diesel"], "hourly")
-        self.assertEqual(summary["bucket_counts"]["diesel"], 24)
-        self.assertEqual(summary["brand_snapshot_label"], "Vortag 12:00")
-        self.assertEqual(summary["brand_snapshot_date"], "2026-04-02")
-        self.assertTrue(summary["brand_snapshot_timestamp"].startswith("2026-04-02T12:00"))
+            self.assertEqual(summary["snapshot_date"], "2026-04-02")
+            self.assertEqual(summary["view_modes"]["diesel"], "hourly")
+            self.assertEqual(summary["bucket_counts"]["diesel"], 24)
+            self.assertEqual(summary["brand_snapshot_label"], "Vortag 12:00")
+            self.assertEqual(summary["brand_snapshot_date"], "2026-04-02")
+            self.assertTrue(summary["brand_snapshot_timestamp"].startswith("2026-04-02T12:00"))
+            diesel_rows = summary["fuels"]["diesel"]
+            self.assertEqual(diesel_rows[11]["median"], -0.1)
+            self.assertEqual(diesel_rows[13]["median"], 0.1)
 
-        brand_medians = {
-            row["brand"]: row["median"] for row in summary["brand_distributions"]["diesel"]
-        }
-        self.assertEqual(brand_medians["Gesamtmarkt"], 1.725)
-        self.assertEqual(brand_medians["ARAL"], 1.7)
-        self.assertEqual(brand_medians["SHELL"], 1.75)
+            brand_medians = {
+                row["brand"]: row["median"] for row in summary["brand_distributions"]["diesel"]
+            }
+            self.assertEqual(brand_medians["Gesamtmarkt"], 1.725)
+            self.assertEqual(brand_medians["ARAL"], 1.7)
+            self.assertEqual(brand_medians["SHELL"], 1.75)
+
+            station_path = Path(tmpdir) / "data2" / "s1" / "diesel.json"
+            station_payload = json.loads(station_path.read_text(encoding="utf-8"))
+            station_hourly = {row["hour"]: row["price"] for row in station_payload["hourly"]}
+            self.assertEqual(station_hourly[11], -0.1)
+            self.assertEqual(station_hourly[13], 0.1)
 
 
 if __name__ == "__main__":

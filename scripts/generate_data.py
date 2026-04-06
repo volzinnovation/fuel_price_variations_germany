@@ -732,9 +732,19 @@ def _noon_reference_hourly_variation(
             0,
         )
 
-    window_start = datetime.combine(min(legal_days), datetime.min.time())
-    window_end = datetime.combine(max(legal_days), datetime.max.time())
-    filled = _filled_minute_series(series, window_start, window_end)
+    target_day = max(legal_days)
+    reference_time = (
+        _local_dt(target_day, 0, 0)
+        if target_day == LAW_RESET_DATE
+        else _local_dt(target_day - timedelta(days=1), 12, 0)
+    )
+    day_start = _local_dt(target_day, 0, 0)
+    day_end = _local_dt(target_day, 23, 59)
+    filled = _filled_minute_series(
+        series,
+        reference_time.replace(tzinfo=None),
+        day_end.replace(tzinfo=None),
+    )
     if filled.empty or filled.dropna().empty:
         return (
             pd.DataFrame(columns=["hour", "price"]),
@@ -745,69 +755,66 @@ def _noon_reference_hourly_variation(
             0,
         )
 
-    minabs = float(filled.min())
-    maxabs = float(filled.max())
-    delta_frames: List[pd.DataFrame] = []
-    absolute_frames: List[pd.DataFrame] = []
-    used_days = 0
-
-    for day in legal_days:
-        day_start = TZ.localize(datetime.combine(day, datetime.min.time()))
-        day_end = TZ.localize(datetime.combine(day, datetime.max.time()))
-        day_series = filled.loc[day_start:day_end]
-        if day_series.dropna().empty:
-            continue
-
-        hourly_mean = day_series.resample("1h").mean().dropna()
-        if hourly_mean.empty:
-            continue
-
-        absolute_frame = hourly_mean.to_frame(name="price")
-        absolute_frame["hour"] = absolute_frame.index.hour
-        absolute_frames.append(absolute_frame[["hour", "price"]])
-
-        delta_rows: List[dict[str, float | int]] = []
-        midnight_reference_price = filled.get(day_start) if day == LAW_RESET_DATE else None
-        for timestamp, price in hourly_mean.items():
-            if timestamp.hour < 12 and day == LAW_RESET_DATE and not pd.isna(midnight_reference_price):
-                reference_price = midnight_reference_price
-            else:
-                reference_day = day - timedelta(days=1) if timestamp.hour < 12 else day
-                reference_price = noon_reference_prices.get(reference_day)
-            if reference_price is None:
-                continue
-            delta_rows.append(
-                {
-                    "hour": int(timestamp.hour),
-                    "price": float(price) - float(reference_price),
-                }
-            )
-
-        if delta_rows:
-            delta_frames.append(pd.DataFrame(delta_rows))
-            used_days += 1
-
-    if not delta_frames:
+    day_series = filled.loc[day_start:day_end].dropna()
+    if day_series.empty:
         return (
             pd.DataFrame(columns=["hour", "price"]),
             pd.DataFrame(columns=["hour", "price"]),
-            minabs,
-            maxabs,
-            used_days,
+            0.0,
+            0.0,
+            0,
             int(filled.notna().sum()),
         )
 
-    grouped = pd.concat(delta_frames).groupby("hour")["price"].mean().reset_index()
+    reference_price = (
+        filled.get(reference_time)
+        if target_day == LAW_RESET_DATE
+        else noon_reference_prices.get(target_day - timedelta(days=1))
+    )
+    if reference_price is None or pd.isna(reference_price):
+        return (
+            pd.DataFrame(columns=["hour", "price"]),
+            pd.DataFrame(columns=["hour", "price"]),
+            float(day_series.min()),
+            float(day_series.max()),
+            0,
+            int(filled.notna().sum()),
+        )
+
+    hourly_mean = day_series.resample("1h").mean().dropna()
+    if hourly_mean.empty:
+        return (
+            pd.DataFrame(columns=["hour", "price"]),
+            pd.DataFrame(columns=["hour", "price"]),
+            float(day_series.min()),
+            float(day_series.max()),
+            0,
+            int(filled.notna().sum()),
+        )
+
+    delta_frame = hourly_mean.to_frame(name="price")
+    delta_frame["price"] = delta_frame["price"] - float(reference_price)
+    delta_frame["hour"] = delta_frame.index.hour
+    grouped = delta_frame[["hour", "price"]].copy()
     grouped["price"] = grouped["price"].round(2)
     grouped = grouped.set_index("hour").reindex(range(24), fill_value=0).reset_index()
     grouped = grouped.sort_values("hour")
 
-    absolute_grouped = pd.concat(absolute_frames).groupby("hour")["price"].mean().reset_index()
+    absolute_grouped = hourly_mean.to_frame(name="price")
+    absolute_grouped["hour"] = absolute_grouped.index.hour
+    absolute_grouped = absolute_grouped[["hour", "price"]].copy()
     absolute_grouped["price"] = absolute_grouped["price"].round(3)
     absolute_grouped = absolute_grouped.set_index("hour").reindex(range(24)).reset_index()
     absolute_grouped = absolute_grouped.sort_values("hour")
 
-    return grouped, absolute_grouped, minabs, maxabs, used_days, int(filled.notna().sum())
+    return (
+        grouped,
+        absolute_grouped,
+        float(day_series.min()),
+        float(day_series.max()),
+        1,
+        int(filled.notna().sum()),
+    )
 
 
 def _hourly_variation(

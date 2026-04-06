@@ -110,8 +110,8 @@
         fill: "rgba(37, 99, 235, 0.2)",
         stroke: "#2563eb",
       };
-      const cycleDividerPlugin = {
-        id: "cycleDivider",
+      const noonDividerPlugin = {
+        id: "noonDivider",
         afterDatasetsDraw(chart, _args, options) {
           if (!options || options.enabled === false) return;
           const xScale = chart.scales?.x;
@@ -154,10 +154,10 @@
         return response.json();
       }
 
-      function buildCycleSubtitle(stats) {
+      function buildReferenceSubtitle(stats) {
         const summary = TankzeitStats.summaryFromStats(stats);
         if (!summary) {
-          return "Referenz ist Vortag 12:00. Die Uhrzeiten bleiben bei 00:00 bis 23:00; negative Werte liegen unter der Referenz.";
+          return `${fuel.toUpperCase()}: Referenz ist der etablierte Mittagspreis des Vortags. Negative Werte liegen darunter, positive darüber.`;
         }
         const parts = [];
         const dayCount = TankzeitStats.toNumber(
@@ -166,10 +166,9 @@
         if (dayCount !== null) {
           parts.push(`${TankzeitStats.formatCount(dayCount)} Tage`);
         }
-        parts.push("0,00 = Vortag 12:00");
+        parts.push(`${fuel.toUpperCase()} · 0,00 = etablierter Vortagspreis um 12:00`);
         parts.push("x-Achse 00:00 - 23:00");
-        parts.push("negative Werte = günstiger");
-        parts.push("lokal aus der letzten abgeschlossenen 12:00 - 11:59-Spanne");
+        parts.push("negative Werte = günstiger, positive Werte = teurer");
         return parts.join(" · ");
       }
 
@@ -216,136 +215,6 @@
         return ["Referenz: Vortag 12:00"];
       }
 
-      function renderCycleChart(stats) {
-        const rawCycleSeries = TankzeitStats.cycleMarkdownSeries(stats, {
-          includeClosingNoon: false,
-        });
-        if (!rawCycleSeries.length) return false;
-
-        const byClockHour = new Map(
-          rawCycleSeries.map((row) => [
-            row.clockHour,
-            {
-              ...row,
-              displayValue: sanitizeRelativeValue(-row.markdown),
-            },
-          ]),
-        );
-        const cycleSeries = Array.from({ length: 24 }, (_value, hour) => ({
-          hour,
-          label: String(hour).padStart(2, "0"),
-          displayValue: byClockHour.get(hour)?.displayValue ?? null,
-        }));
-        const labels = cycleSeries.map((row) => `${row.label}:00`);
-        const morningValues = cycleSeries.map((row) =>
-          row.hour < 12 ? row.displayValue : null,
-        );
-        const afternoonValues = cycleSeries.map((row) =>
-          row.hour >= 12 ? row.displayValue : null,
-        );
-        const domain = computeSeriesDomain(
-          cycleSeries.map((row) => row.displayValue),
-        );
-        const ctx = document.getElementById("chart").getContext("2d");
-        if (chartInstance) chartInstance.destroy();
-        chartInstance = new Chart(ctx, {
-          type: "line",
-          plugins: [cycleDividerPlugin],
-          data: {
-            labels,
-            datasets: [
-              {
-                label: "00:00 - 11:59",
-                data: morningValues,
-                borderColor: PRIOR_DAY_COLOR.stroke,
-                backgroundColor: PRIOR_DAY_COLOR.stroke,
-                borderWidth: 2.4,
-                pointRadius: 1.8,
-                pointHoverRadius: 4,
-                pointBackgroundColor: PRIOR_DAY_COLOR.stroke,
-                pointBorderColor: PRIOR_DAY_COLOR.stroke,
-                stepped: "after",
-                tension: 0,
-                spanGaps: false,
-                fill: false,
-              },
-              {
-                label: "12:00 - 23:59",
-                data: afternoonValues,
-                borderColor: SAME_DAY_COLOR.stroke,
-                backgroundColor: SAME_DAY_COLOR.stroke,
-                borderWidth: 2.4,
-                pointRadius: 1.8,
-                pointHoverRadius: 4,
-                pointBackgroundColor: SAME_DAY_COLOR.stroke,
-                pointBorderColor: SAME_DAY_COLOR.stroke,
-                stepped: "after",
-                tension: 0,
-                spanGaps: false,
-                fill: false,
-              },
-            ],
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: {
-              mode: "index",
-              intersect: false,
-            },
-            scales: {
-              x: {
-                title: {
-                  display: true,
-                  text: "Uhrzeit",
-                },
-              },
-              y: {
-                min: domain.min,
-                max: domain.max,
-                ticks: {
-                  callback(value) {
-                    return formatEuroTick(value);
-                  },
-                },
-                grid: {
-                  color(context) {
-                    return context.tick.value === 0
-                      ? "rgba(37, 99, 235, 0.28)"
-                      : "rgba(0, 0, 0, 0.08)";
-                  },
-                },
-                title: {
-                  display: true,
-                  text: "Preisänderung ggü. Vortag 12:00 (€/l)",
-                },
-              },
-            },
-            plugins: {
-              legend: {
-                position: "bottom",
-              },
-              cycleDivider: {
-                enabled: labels.length >= 13,
-              },
-              tooltip: {
-                callbacks: {
-                  label(context) {
-                    const row = cycleSeries[context.dataIndex];
-                    if (!row) return "";
-                    return formatRelativeChange(row.displayValue);
-                  },
-                  afterBody() {
-                    return referenceTooltipLines();
-                  },
-                },
-              },
-            },
-          },
-        });
-        return true;
-      }
-
       function renderReferenceChart(stats) {
         const hourly = Array.isArray(stats?.hourly) ? stats.hourly : [];
         const displaySeries = hourly
@@ -368,6 +237,7 @@
         if (chartInstance) chartInstance.destroy();
         chartInstance = new Chart(ctx, {
           type: "line",
+          plugins: [noonDividerPlugin],
           data: {
             labels,
             datasets: [
@@ -441,6 +311,9 @@
             plugins: {
               legend: {
                 position: "bottom",
+              },
+              noonDivider: {
+                enabled: labels.length >= 24,
               },
               tooltip: {
                 callbacks: {
@@ -522,15 +395,9 @@
 
         const statsUrl = `${DATA_BASE}${stationId.split("-").join("/")}/${fuel}.json`;
         const stats = await fetchJson(statsUrl);
-        if (renderCycleChart(stats)) {
-          document.getElementById("chart-sub").textContent =
-            buildCycleSubtitle(stats);
-          return;
-        }
-
         if (TankzeitStats.summaryFromStats(stats) && Array.isArray(stats.hourly) && stats.hourly.length) {
           document.getElementById("chart-sub").textContent =
-            "Fallback: stündliche Preisabweichung relativ zum verfügbaren Referenzwert.";
+            buildReferenceSubtitle(stats);
           renderReferenceChart(stats);
           return;
         }

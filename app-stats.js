@@ -115,33 +115,6 @@
     return uniqueSortedHours(stats.besthours);
   }
 
-  function priorNoonShift(stats) {
-    const daily = Array.isArray(stats && stats.daily) ? stats.daily : [];
-    const shifts = daily
-      .map((row) => {
-        const noonPrice = toNumber(row && row.noon_price);
-        const priorPrice = toNumber(row && row.prior_reference_price);
-        if (noonPrice === null || priorPrice === null) return null;
-        return noonPrice - priorPrice;
-      })
-      .filter((value) => value !== null);
-    if (shifts.length) {
-      return shifts.reduce((sum, value) => sum + value, 0) / shifts.length;
-    }
-    const summary = summaryFromStats(stats);
-    if (!summary) return 0;
-    const noonPrice = pickNumber(
-      summary.noon_price_avg,
-      summary.noon_price_median,
-    );
-    const priorPrice = pickNumber(
-      summary.prior_reference_price_avg,
-      summary.prior_reference_price_median,
-    );
-    if (noonPrice === null || priorPrice === null) return 0;
-    return noonPrice - priorPrice;
-  }
-
   function chartCycleSeries(stats) {
     return cycleMarkdownSeries(stats, { includeClosingNoon: false }).map((row) => ({
       cycleHour: row.cycleHour,
@@ -154,7 +127,6 @@
     if (!stats || typeof stats !== "object" || !Array.isArray(stats.hourly)) {
       return [];
     }
-    const shift = priorNoonShift(stats);
     return stats.hourly
       .map((row) => {
         const hour = normalizeHour(row && row.hour);
@@ -162,7 +134,7 @@
         if (hour === null || price === null) return null;
         return {
           hour,
-          displayValue: price + (hour >= 12 ? shift : 0),
+          displayValue: price,
         };
       })
       .filter((row) => row !== null)
@@ -170,18 +142,18 @@
   }
 
   function tankzeitSeries(stats) {
-    const cycleSeries = chartCycleSeries(stats);
-    if (cycleSeries.length) {
-      return {
-        kind: "cycle",
-        rows: cycleSeries,
-      };
-    }
     const referenceSeries = chartReferenceSeries(stats);
     if (referenceSeries.length) {
       return {
         kind: "clock",
         rows: referenceSeries,
+      };
+    }
+    const cycleSeries = chartCycleSeries(stats);
+    if (cycleSeries.length) {
+      return {
+        kind: "cycle",
+        rows: cycleSeries,
       };
     }
     return {

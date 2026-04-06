@@ -145,7 +145,8 @@
             <code>00:00</code> bis <code>11:59</code>, blau zeigt
             <code>12:00</code> bis <code>23:59</code>; die vertikale Linie
             markiert <code>12:00</code>. Gezeigt wird eine stufenförmige Linie
-            für die mediane Preisänderung: Positive Werte liegen über der
+            für die mediane Preisänderung des gewählten Kraftstoffs in
+            <code>Euro / Liter</code>: Positive Werte liegen über der
             Referenz, negative darunter; die y-Achse passt sich dem
             sichtbaren Minimum und Maximum an. Antippen zeigt zusätzlich
             Quartilspanne und Spannweite.
@@ -233,7 +234,6 @@
         brandLayout: null,
         date: null,
         nav: { prev: false, next: false },
-        noonShiftByFuel: { diesel: 0, e10: 0, e5: 0 },
       };
 
       function setStatus(message, type = "info") {
@@ -260,6 +260,16 @@
           minimumFractionDigits: 1,
           maximumFractionDigits: 1,
         }).format(v);
+      }
+
+      function fuelDisplayName(fuel) {
+        return (
+          {
+            diesel: "Diesel",
+            e10: "E10",
+            e5: "E5",
+          }[fuel] || String(fuel || "").toUpperCase()
+        );
       }
 
       function sanitizeRelativeValue(valueInEuro) {
@@ -308,23 +318,17 @@
             }
           : {
               label: "12:00 - 23:59",
-              colors: HOURLY_REFERENCE_COLORS.sameDay,
-            };
+            colors: HOURLY_REFERENCE_COLORS.sameDay,
+          };
       }
 
-      function marketNoonShiftForBucket(bucket) {
-        if (Number(bucket?.hour) < 12) return 0;
-        return Number(state.noonShiftByFuel?.[state.fuel] || 0);
-      }
-
-      function adjustedHourlyRow(bucket) {
-        const shift = marketNoonShiftForBucket(bucket);
+      function adjustedHourlyRow(bucket, viewMode = viewModeForFuel()) {
         return {
-          min: sanitizeRelativeValue(Number(bucket?.min || 0) + shift),
-          q1: sanitizeRelativeValue(Number(bucket?.q1 || 0) + shift),
-          median: sanitizeRelativeValue(Number(bucket?.median || 0) + shift),
-          q3: sanitizeRelativeValue(Number(bucket?.q3 || 0) + shift),
-          max: sanitizeRelativeValue(Number(bucket?.max || 0) + shift),
+          min: sanitizeRelativeValue(bucket?.min),
+          q1: sanitizeRelativeValue(bucket?.q1),
+          median: sanitizeRelativeValue(bucket?.median),
+          q3: sanitizeRelativeValue(bucket?.q3),
+          max: sanitizeRelativeValue(bucket?.max),
         };
       }
 
@@ -449,17 +453,18 @@
         const h = canvas.getBoundingClientRect().height;
 
         const plot = { left: 54, right: 18, top: 18, bottom: 42 };
+        plot.left = 72;
         plot.width = w - plot.left - plot.right;
         plot.height = h - plot.top - plot.bottom;
         state.layout = { plot, w, h };
         titleEl.textContent =
-          "Preisänderung seit Vortag 12:00";
+          `Preisänderung seit Vortag 12:00 · ${fuelDisplayName(state.fuel)}`;
 
         ctx.clearRect(0, 0, w, h);
 
         const domain = computeDomain(stats);
 
-        // Grid + axis labels (EUR/l)
+        // Grid + axis labels (Euro / Liter)
         ctx.strokeStyle = "rgba(0,0,0,0.08)";
         ctx.fillStyle = "rgba(0,0,0,0.55)";
         ctx.lineWidth = 1;
@@ -486,6 +491,18 @@
           ctx.stroke();
           ctx.strokeStyle = "rgba(0,0,0,0.08)";
         }
+
+        ctx.save();
+        ctx.translate(18, plot.top + plot.height / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.textAlign = "center";
+        ctx.fillStyle = "rgba(0,0,0,0.68)";
+        ctx.fillText(
+          `Preisänderung ${fuelDisplayName(state.fuel)} (Euro / Liter)`,
+          0,
+          0,
+        );
+        ctx.restore();
 
         if (viewMode !== "cycle" && stats.length >= 24) {
           const noonX = plot.left + (12 * plot.width) / stats.length;
@@ -734,105 +751,6 @@
         nextBtn.style.display = state.nav.next ? "" : "none";
       }
 
-      function noonCsvUrlForDate(d) {
-        const p = dateParts(d);
-        return `data2/${p.y}/${p.m}/${p.d}/noon.csv`;
-      }
-
-      function parseCsv(text) {
-        const lines = text.trim().split(/\r?\n/);
-        if (!lines.length) return [];
-        const headers = lines[0].split(",");
-        return lines.slice(1).map((line) => {
-          const values = line.split(",");
-          const row = {};
-          headers.forEach((header, index) => {
-            row[header] = values[index] ?? "";
-          });
-          return row;
-        });
-      }
-
-      function median(values) {
-        if (!values.length) return 0;
-        const sorted = [...values].sort((left, right) => left - right);
-        const middle = Math.floor(sorted.length / 2);
-        return sorted.length % 2 === 0
-          ? (sorted[middle - 1] + sorted[middle]) / 2
-          : sorted[middle];
-      }
-
-      async function fetchCsv(url) {
-        const response = await fetch(url, { cache: "no-store" });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return parseCsv(await response.text());
-      }
-
-      async function loadNoonShift(summary) {
-        const startValue = summary?.analysis_start || summary?.snapshot_date;
-        const endValue = summary?.analysis_end || summary?.snapshot_date;
-        if (!startValue || !endValue) {
-          return { diesel: 0, e10: 0, e5: 0 };
-        }
-
-        const minDate = parseISODate(MIN_DATE_STR);
-        const days = [];
-        for (
-          let day = parseISODate(startValue);
-          day <= parseISODate(endValue);
-          day = addDays(day, 1)
-        ) {
-          if (addDays(day, -1) >= minDate) days.push(formatISODate(day));
-        }
-        if (!days.length) return { diesel: 0, e10: 0, e5: 0 };
-
-        const uniqueDates = [...new Set(days.flatMap((day) => [day, formatISODate(addDays(parseISODate(day), -1))]))];
-        const csvByDate = new Map();
-        await Promise.all(
-          uniqueDates.map(async (dayStr) => {
-            try {
-              csvByDate.set(dayStr, await fetchCsv(noonCsvUrlForDate(parseISODate(dayStr))));
-            } catch {
-              csvByDate.set(dayStr, []);
-            }
-          }),
-        );
-
-        const stationShiftSamples = {
-          diesel: new Map(),
-          e10: new Map(),
-          e5: new Map(),
-        };
-
-        days.forEach((dayStr) => {
-          const currentRows = csvByDate.get(dayStr) || [];
-          const priorRows = csvByDate.get(formatISODate(addDays(parseISODate(dayStr), -1))) || [];
-          const priorByStation = new Map(priorRows.map((row) => [row.station_uuid, row]));
-          currentRows.forEach((row) => {
-            const prior = priorByStation.get(row.station_uuid);
-            if (!prior) return;
-            ["diesel", "e10", "e5"].forEach((fuel) => {
-              const currentValue = Number(row[fuel]);
-              const priorValue = Number(prior[fuel]);
-              if (!Number.isFinite(currentValue) || !Number.isFinite(priorValue)) return;
-              if (currentValue <= 0 || priorValue <= 0) return;
-              const existing = stationShiftSamples[fuel].get(row.station_uuid) || [];
-              existing.push(currentValue - priorValue);
-              stationShiftSamples[fuel].set(row.station_uuid, existing);
-            });
-          });
-        });
-
-        return Object.fromEntries(
-          ["diesel", "e10", "e5"].map((fuel) => {
-            const stationAverages = [...stationShiftSamples[fuel].values()]
-              .map((values) => values.reduce((sum, value) => sum + value, 0) / values.length)
-              .filter((value) => Number.isFinite(value));
-            return [fuel, median(stationAverages)];
-          }),
-        );
-      }
-
       async function updateNav() {
         const minDate = parseISODate(MIN_DATE_STR);
         const maxDate = addDays(new Date(), -1); // yesterday (viewer local)
@@ -863,13 +781,11 @@
           const response = await fetch(url, { cache: "no-store" });
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           state.summary = await response.json();
-          state.noonShiftByFuel = await loadNoonShift(state.summary);
           draw();
           drawBrandChart();
         } catch (e) {
           setStatus("Management-Daten konnten nicht geladen werden.", "error");
           state.summary = null;
-          state.noonShiftByFuel = { diesel: 0, e10: 0, e5: 0 };
           state.brandLayout = null;
           brandCtx.clearRect(0, 0, brandCanvas.width, brandCanvas.height);
         }
