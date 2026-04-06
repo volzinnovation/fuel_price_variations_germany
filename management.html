@@ -140,16 +140,14 @@
             Gesamtmarkt. Antippen zeigt die genauen Werte.
           </p>
           <p class="footer-note">
-            <strong>Preisvorteil ggü. Mittagsreferenz:</strong> Die
-            Null-Linie ist jeweils der geltende Referenzpreis. Grau zeigt die
-            Stunden bis <code>11:59</code> gegen Vortag <code>12:00</code>,
-            blau zeigt die Stunden ab <code>12:00</code> gegen den
-            <code>12:00</code>-Snapshot desselben Tages. Balken unter der
-            Null-Linie zeigen, wie viel günstiger der Markt ist; die vertikale
-            Linie markiert <code>12:00</code>. Am <code>1. April 2026</code>
-            gilt bis <code>11:59</code> mangels Vortagsreferenz
-            <code>00:00</code> als Referenz. Antippen zeigt Median,
-            Quartilspanne und Referenz.
+            <strong>Preisvorteil ggü. Vortag 12:00:</strong> Referenz ist
+            durchgehend der Mittagspreis des Vortags. Grau zeigt
+            <code>00:00</code> bis <code>11:59</code>, blau zeigt
+            <code>12:00</code> bis <code>23:59</code>; die vertikale Linie
+            markiert <code>12:00</code>. Gezeigt wird nur der Preisvorteil:
+            Alles auf oder über der Referenz liegt auf der Null-Linie, alles
+            darunter zeigt die Ersparnis bis maximal <code>-0,30 €/l</code>.
+            Antippen zeigt Median, Quartilspanne und Spannweite.
           </p>
         </div>
       </section>
@@ -226,6 +224,8 @@
         },
       };
       const BRAND_PRICE_DOMAIN = { min: 1.5, max: 3.0 };
+      const HOURLY_DOMAIN = { min: -0.3, max: 0.0 };
+      const HOURLY_TICKS = [0, -0.05, -0.1, -0.15, -0.2, -0.25, -0.3];
 
       const state = {
         summary: null,
@@ -234,6 +234,7 @@
         brandLayout: null,
         date: null,
         nav: { prev: false, next: false },
+        noonShiftByFuel: { diesel: 0, e10: 0, e5: 0 },
       };
 
       function setStatus(message, type = "info") {
@@ -248,7 +249,10 @@
 
       function formatValue(v) {
         if (typeof v !== "number" || Number.isNaN(v)) return "-";
-        return v.toFixed(1);
+        return new Intl.NumberFormat("de-DE", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }).format(v);
       }
 
       function formatBrandAxisValue(v) {
@@ -259,26 +263,26 @@
         }).format(v);
       }
 
-      function clampMarkdownDisplay(valueInCents) {
-        const numeric = Number(valueInCents);
+      function clampMarkdownDisplay(valueInEuro) {
+        const numeric = Number(valueInEuro);
         if (!Number.isFinite(numeric)) return 0;
-        return Math.min(0, numeric);
+        return Math.max(HOURLY_DOMAIN.min, Math.min(0, numeric));
       }
 
-      function formatSavingsText(valueInCents) {
-        const displayValue = clampMarkdownDisplay(valueInCents);
-        if (displayValue >= -0.05) return "auf Referenzniveau";
-        return `${Math.abs(displayValue).toFixed(1)} ct/l günstiger`;
+      function formatSavingsText(valueInEuro) {
+        const displayValue = clampMarkdownDisplay(valueInEuro);
+        if (displayValue >= -0.0005) return "auf/über Vortag-12:00-Niveau";
+        return `${(Math.abs(displayValue) * 100).toFixed(1)} ct/l günstiger`;
       }
 
-      function formatSavingsRangeText(firstValueInCents, secondValueInCents) {
+      function formatSavingsRangeText(firstValueInEuro, secondValueInEuro) {
         const clipped = [
-          clampMarkdownDisplay(firstValueInCents),
-          clampMarkdownDisplay(secondValueInCents),
+          clampMarkdownDisplay(firstValueInEuro),
+          clampMarkdownDisplay(secondValueInEuro),
         ].sort((left, right) => left - right);
-        const maxSaving = Math.abs(clipped[0]);
-        const minSaving = Math.abs(clipped[1]);
-        if (maxSaving < 0.05) return "auf Referenzniveau";
+        const maxSaving = Math.abs(clipped[0] * 100);
+        const minSaving = Math.abs(clipped[1] * 100);
+        if (maxSaving < 0.05) return "auf/über Vortag-12:00-Niveau";
         if (Math.abs(maxSaving - minSaving) < 0.05) {
           return `${maxSaving.toFixed(1)} ct/l günstiger`;
         }
@@ -291,19 +295,35 @@
       function hourlyReferenceMeta(bucket, viewMode) {
         if (viewMode === "cycle") {
           return {
-            label: "Referenz: 12:00 zu Zyklusbeginn",
+            label: "Referenz: Vortag 12:00",
             colors: HOURLY_REFERENCE_COLORS.sameDay,
           };
         }
         return Number(bucket?.hour) < 12
           ? {
-              label: "Referenz: Vortag 12:00",
+              label: "00:00 - 11:59",
               colors: HOURLY_REFERENCE_COLORS.priorDay,
             }
           : {
-              label: "Referenz: gleicher Tag 12:00",
+              label: "12:00 - 23:59",
               colors: HOURLY_REFERENCE_COLORS.sameDay,
             };
+      }
+
+      function marketNoonShiftForBucket(bucket) {
+        if (Number(bucket?.hour) < 12) return 0;
+        return Number(state.noonShiftByFuel?.[state.fuel] || 0);
+      }
+
+      function adjustedHourlyRow(bucket) {
+        const shift = marketNoonShiftForBucket(bucket);
+        return {
+          min: clampMarkdownDisplay(Number(bucket?.min || 0) + shift),
+          q1: clampMarkdownDisplay(Number(bucket?.q1 || 0) + shift),
+          median: clampMarkdownDisplay(Number(bucket?.median || 0) + shift),
+          q3: clampMarkdownDisplay(Number(bucket?.q3 || 0) + shift),
+          max: clampMarkdownDisplay(Number(bucket?.max || 0) + shift),
+        };
       }
 
       function viewModeForFuel() {
@@ -380,18 +400,8 @@
         targetCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
       }
 
-      const VALUE_SCALE = 100; // EUR/l -> Cent/l for display
-
       function computeDomain(stats) {
-        const medians = stats.map((d) =>
-          clampMarkdownDisplay(d.median * VALUE_SCALE),
-        );
-        let min = Math.min(...medians, 0);
-        if (!Number.isFinite(min) || Math.abs(min) < 0.05) {
-          min = -0.5;
-        }
-        const pad = Math.max(0.4, Math.abs(min) * 0.12);
-        return { min: min - pad, max: 0 };
+        return HOURLY_DOMAIN;
       }
 
       function yScale(domain, plot, value) {
@@ -425,8 +435,8 @@
         state.layout = { plot, w, h };
         titleEl.textContent =
           viewMode === "cycle"
-            ? "Preisvorteil seit 12:00"
-            : "Preisvorteil ggü. Mittagsreferenz";
+            ? "Preisvorteil seit Vortag 12:00"
+            : "Preisvorteil ggü. Vortag 12:00";
 
         ctx.clearRect(0, 0, w, h);
 
@@ -438,9 +448,7 @@
         ctx.lineWidth = 1;
         ctx.font = "12px Manrope, sans-serif";
 
-        const ticks = 5;
-        for (let i = 0; i < ticks; i++) {
-          const v = domain.min + (i * (domain.max - domain.min)) / (ticks - 1);
+        for (const v of HOURLY_TICKS) {
           const y = yScale(domain, plot, v);
           ctx.beginPath();
           ctx.moveTo(plot.left, y);
@@ -497,15 +505,33 @@
         for (let i = 0; i < stats.length; i++) {
           const d = stats[i];
           const x = plot.left + ((i + 0.5) * plot.width) / stats.length;
-          const displayMedian = clampMarkdownDisplay(d.median * VALUE_SCALE);
-          const yMed = yScale(domain, plot, displayMedian);
-          const barTop = Math.min(y0, yMed);
-          const barHeight = Math.max(1, Math.abs(yMed - y0));
+          const adjusted = adjustedHourlyRow(d);
           const referenceMeta = hourlyReferenceMeta(d, viewMode);
+          const whiskerTop = yScale(domain, plot, adjusted.max);
+          const whiskerBottom = yScale(domain, plot, adjusted.min);
+          const boxTop = yScale(domain, plot, adjusted.q3);
+          const boxBottom = yScale(domain, plot, adjusted.q1);
+          const medianY = yScale(domain, plot, adjusted.median);
+          const boxHeight = Math.max(1, boxBottom - boxTop);
+          const capWidth = Math.max(4, barW * 0.55);
           ctx.fillStyle = referenceMeta.colors.fill;
           ctx.strokeStyle = referenceMeta.colors.stroke;
-          ctx.fillRect(x - barW / 2, barTop, barW, barHeight);
-          ctx.strokeRect(x - barW / 2, barTop, barW, barHeight);
+          ctx.beginPath();
+          ctx.moveTo(x, whiskerTop);
+          ctx.lineTo(x, whiskerBottom);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(x - capWidth / 2, whiskerTop);
+          ctx.lineTo(x + capWidth / 2, whiskerTop);
+          ctx.moveTo(x - capWidth / 2, whiskerBottom);
+          ctx.lineTo(x + capWidth / 2, whiskerBottom);
+          ctx.stroke();
+          ctx.fillRect(x - barW / 2, boxTop, barW, boxHeight);
+          ctx.strokeRect(x - barW / 2, boxTop, barW, boxHeight);
+          ctx.beginPath();
+          ctx.moveTo(x - barW / 2, medianY);
+          ctx.lineTo(x + barW / 2, medianY);
+          ctx.stroke();
         }
       }
 
@@ -629,19 +655,14 @@
         const d = stats[bucketIndex];
         if (!d) return;
         const viewMode = viewModeForFuel();
+        const adjusted = adjustedHourlyRow(d);
         const referenceMeta = hourlyReferenceMeta(d, viewMode);
         const label =
           viewMode === "cycle"
             ? `Zyklus ${bucketLabel(d)}`
             : `Stunde ${d.hour}`;
-        const exceptionNote =
-          viewMode !== "cycle" &&
-          Number(d.hour) < 12 &&
-          state.summary?.snapshot_date === "2026-04-01"
-            ? " · Am 1. April bis 11:59 ausnahmsweise Referenz 00:00"
-            : "";
         setStatus(
-          `${state.fuel.toUpperCase()} ${label}: Median ${formatSavingsText(d.median * VALUE_SCALE)}, mittlere 50 % ${formatSavingsRangeText(d.q1 * VALUE_SCALE, d.q3 * VALUE_SCALE)}, Spannweite ${formatSavingsRangeText(d.min * VALUE_SCALE, d.max * VALUE_SCALE)} · ${referenceMeta.label}${exceptionNote} (n=${d.count})`,
+          `${state.fuel.toUpperCase()} ${label}: Median ${formatSavingsText(adjusted.median)}, mittlere 50 % ${formatSavingsRangeText(adjusted.q1, adjusted.q3)}, Spannweite ${formatSavingsRangeText(adjusted.min, adjusted.max)} · Zeitraum ${referenceMeta.label} · Referenz: Vortag 12:00 (n=${d.count})`,
         );
       });
 
@@ -652,7 +673,7 @@
         const row = rows[index];
         if (!row) return;
         setStatus(
-          `${state.fuel.toUpperCase()} ${row.brand}: Median ${formatValue(row.median * VALUE_SCALE)} ct/l, q1 ${formatValue(row.q1 * VALUE_SCALE)}, q3 ${formatValue(row.q3 * VALUE_SCALE)}, min ${formatValue(row.min * VALUE_SCALE)}, max ${formatValue(row.max * VALUE_SCALE)} (n=${row.count})`,
+          `${state.fuel.toUpperCase()} ${row.brand}: Median ${formatBrandAxisValue(row.median)} €/l, q1 ${formatBrandAxisValue(row.q1)}, q3 ${formatBrandAxisValue(row.q3)}, min ${formatBrandAxisValue(row.min)}, max ${formatBrandAxisValue(row.max)} €/l (n=${row.count})`,
         );
       });
 
@@ -675,6 +696,105 @@
       function setArrowVisibility() {
         prevBtn.style.display = state.nav.prev ? "" : "none";
         nextBtn.style.display = state.nav.next ? "" : "none";
+      }
+
+      function noonCsvUrlForDate(d) {
+        const p = dateParts(d);
+        return `data2/${p.y}/${p.m}/${p.d}/noon.csv`;
+      }
+
+      function parseCsv(text) {
+        const lines = text.trim().split(/\r?\n/);
+        if (!lines.length) return [];
+        const headers = lines[0].split(",");
+        return lines.slice(1).map((line) => {
+          const values = line.split(",");
+          const row = {};
+          headers.forEach((header, index) => {
+            row[header] = values[index] ?? "";
+          });
+          return row;
+        });
+      }
+
+      function median(values) {
+        if (!values.length) return 0;
+        const sorted = [...values].sort((left, right) => left - right);
+        const middle = Math.floor(sorted.length / 2);
+        return sorted.length % 2 === 0
+          ? (sorted[middle - 1] + sorted[middle]) / 2
+          : sorted[middle];
+      }
+
+      async function fetchCsv(url) {
+        const response = await fetch(url, { cache: "no-store" });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return parseCsv(await response.text());
+      }
+
+      async function loadNoonShift(summary) {
+        const startValue = summary?.analysis_start || summary?.snapshot_date;
+        const endValue = summary?.analysis_end || summary?.snapshot_date;
+        if (!startValue || !endValue) {
+          return { diesel: 0, e10: 0, e5: 0 };
+        }
+
+        const minDate = parseISODate(MIN_DATE_STR);
+        const days = [];
+        for (
+          let day = parseISODate(startValue);
+          day <= parseISODate(endValue);
+          day = addDays(day, 1)
+        ) {
+          if (addDays(day, -1) >= minDate) days.push(formatISODate(day));
+        }
+        if (!days.length) return { diesel: 0, e10: 0, e5: 0 };
+
+        const uniqueDates = [...new Set(days.flatMap((day) => [day, formatISODate(addDays(parseISODate(day), -1))]))];
+        const csvByDate = new Map();
+        await Promise.all(
+          uniqueDates.map(async (dayStr) => {
+            try {
+              csvByDate.set(dayStr, await fetchCsv(noonCsvUrlForDate(parseISODate(dayStr))));
+            } catch {
+              csvByDate.set(dayStr, []);
+            }
+          }),
+        );
+
+        const stationShiftSamples = {
+          diesel: new Map(),
+          e10: new Map(),
+          e5: new Map(),
+        };
+
+        days.forEach((dayStr) => {
+          const currentRows = csvByDate.get(dayStr) || [];
+          const priorRows = csvByDate.get(formatISODate(addDays(parseISODate(dayStr), -1))) || [];
+          const priorByStation = new Map(priorRows.map((row) => [row.station_uuid, row]));
+          currentRows.forEach((row) => {
+            const prior = priorByStation.get(row.station_uuid);
+            if (!prior) return;
+            ["diesel", "e10", "e5"].forEach((fuel) => {
+              const currentValue = Number(row[fuel]);
+              const priorValue = Number(prior[fuel]);
+              if (!Number.isFinite(currentValue) || !Number.isFinite(priorValue)) return;
+              if (currentValue <= 0 || priorValue <= 0) return;
+              const existing = stationShiftSamples[fuel].get(row.station_uuid) || [];
+              existing.push(currentValue - priorValue);
+              stationShiftSamples[fuel].set(row.station_uuid, existing);
+            });
+          });
+        });
+
+        return Object.fromEntries(
+          ["diesel", "e10", "e5"].map((fuel) => {
+            const stationAverages = [...stationShiftSamples[fuel].values()]
+              .map((values) => values.reduce((sum, value) => sum + value, 0) / values.length)
+              .filter((value) => Number.isFinite(value));
+            return [fuel, median(stationAverages)];
+          }),
+        );
       }
 
       async function updateNav() {
@@ -707,11 +827,13 @@
           const response = await fetch(url, { cache: "no-store" });
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           state.summary = await response.json();
+          state.noonShiftByFuel = await loadNoonShift(state.summary);
           draw();
           drawBrandChart();
         } catch (e) {
           setStatus("Management-Daten konnten nicht geladen werden.", "error");
           state.summary = null;
+          state.noonShiftByFuel = { diesel: 0, e10: 0, e5: 0 };
           state.brandLayout = null;
           brandCtx.clearRect(0, 0, brandCanvas.width, brandCanvas.height);
         }
