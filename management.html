@@ -140,13 +140,16 @@
             Gesamtmarkt. Antippen zeigt die genauen Werte.
           </p>
           <p class="footer-note">
-            <strong>Untertägige Preissenkungen:</strong> Zeigt, wie sich die
-            Preise im Tagesverlauf relativ zu einem 12:00-Referenzsnapshot
-            verändern: vor <code>12:00</code> gegen Vortag <code>12:00</code>,
-            ab <code>12:00</code> gegen den 12:00-Snapshot desselben Tages. Am
-            <code>1. April 2026</code> gilt bis <code>11:59</code> mangels
-            Vortagsreferenz <code>00:00</code> als Referenz. Antippen zeigt die
-            genauen Werte.
+            <strong>Preisvorteil ggü. Mittagsreferenz:</strong> Die
+            Null-Linie ist jeweils der geltende Referenzpreis. Grau zeigt die
+            Stunden bis <code>11:59</code> gegen Vortag <code>12:00</code>,
+            blau zeigt die Stunden ab <code>12:00</code> gegen den
+            <code>12:00</code>-Snapshot desselben Tages. Balken unter der
+            Null-Linie zeigen, wie viel günstiger der Markt ist; die vertikale
+            Linie markiert <code>12:00</code>. Am <code>1. April 2026</code>
+            gilt bis <code>11:59</code> mangels Vortagsreferenz
+            <code>00:00</code> als Referenz. Antippen zeigt Median,
+            Quartilspanne und Referenz.
           </p>
         </div>
       </section>
@@ -212,6 +215,16 @@
         e10: "#ea580c",
         e5: "#7c2d12",
       };
+      const HOURLY_REFERENCE_COLORS = {
+        priorDay: {
+          fill: "rgba(107, 114, 128, 0.2)",
+          stroke: "#6b7280",
+        },
+        sameDay: {
+          fill: "rgba(37, 99, 235, 0.2)",
+          stroke: "#2563eb",
+        },
+      };
       const BRAND_PRICE_DOMAIN = { min: 1.5, max: 3.0 };
 
       const state = {
@@ -244,6 +257,53 @@
           minimumFractionDigits: 1,
           maximumFractionDigits: 1,
         }).format(v);
+      }
+
+      function clampMarkdownDisplay(valueInCents) {
+        const numeric = Number(valueInCents);
+        if (!Number.isFinite(numeric)) return 0;
+        return Math.min(0, numeric);
+      }
+
+      function formatSavingsText(valueInCents) {
+        const displayValue = clampMarkdownDisplay(valueInCents);
+        if (displayValue >= -0.05) return "auf Referenzniveau";
+        return `${Math.abs(displayValue).toFixed(1)} ct/l günstiger`;
+      }
+
+      function formatSavingsRangeText(firstValueInCents, secondValueInCents) {
+        const clipped = [
+          clampMarkdownDisplay(firstValueInCents),
+          clampMarkdownDisplay(secondValueInCents),
+        ].sort((left, right) => left - right);
+        const maxSaving = Math.abs(clipped[0]);
+        const minSaving = Math.abs(clipped[1]);
+        if (maxSaving < 0.05) return "auf Referenzniveau";
+        if (Math.abs(maxSaving - minSaving) < 0.05) {
+          return `${maxSaving.toFixed(1)} ct/l günstiger`;
+        }
+        if (minSaving < 0.05) {
+          return `bis ${maxSaving.toFixed(1)} ct/l günstiger`;
+        }
+        return `${minSaving.toFixed(1)} bis ${maxSaving.toFixed(1)} ct/l günstiger`;
+      }
+
+      function hourlyReferenceMeta(bucket, viewMode) {
+        if (viewMode === "cycle") {
+          return {
+            label: "Referenz: 12:00 zu Zyklusbeginn",
+            colors: HOURLY_REFERENCE_COLORS.sameDay,
+          };
+        }
+        return Number(bucket?.hour) < 12
+          ? {
+              label: "Referenz: Vortag 12:00",
+              colors: HOURLY_REFERENCE_COLORS.priorDay,
+            }
+          : {
+              label: "Referenz: gleicher Tag 12:00",
+              colors: HOURLY_REFERENCE_COLORS.sameDay,
+            };
       }
 
       function viewModeForFuel() {
@@ -323,18 +383,15 @@
       const VALUE_SCALE = 100; // EUR/l -> Cent/l for display
 
       function computeDomain(stats) {
-        const medians = stats.map((d) => d.median * VALUE_SCALE);
+        const medians = stats.map((d) =>
+          clampMarkdownDisplay(d.median * VALUE_SCALE),
+        );
         let min = Math.min(...medians, 0);
-        let max = Math.max(...medians, 0);
-
-        if (!Number.isFinite(min) || !Number.isFinite(max)) {
-          min = -0.05;
-          max = 0.05;
+        if (!Number.isFinite(min) || Math.abs(min) < 0.05) {
+          min = -0.5;
         }
-        let maxAbs = Math.max(Math.abs(min), Math.abs(max));
-        if (!Number.isFinite(maxAbs) || maxAbs === 0) maxAbs = 0.01;
-        const pad = maxAbs * 0.18;
-        return { min: -maxAbs - pad, max: maxAbs + pad };
+        const pad = Math.max(0.4, Math.abs(min) * 0.12);
+        return { min: min - pad, max: 0 };
       }
 
       function yScale(domain, plot, value) {
@@ -368,8 +425,8 @@
         state.layout = { plot, w, h };
         titleEl.textContent =
           viewMode === "cycle"
-            ? "Untertägige Preissenkungen"
-            : "Preisveränderung relativ zu 12:00";
+            ? "Preisvorteil seit 12:00"
+            : "Preisvorteil ggü. Mittagsreferenz";
 
         ctx.clearRect(0, 0, w, h);
 
@@ -401,6 +458,21 @@
         ctx.stroke();
         ctx.strokeStyle = "rgba(0,0,0,0.08)";
 
+        if (viewMode !== "cycle" && stats.length >= 24) {
+          const noonX = plot.left + (12 * plot.width) / stats.length;
+          ctx.save();
+          ctx.setLineDash([6, 4]);
+          ctx.strokeStyle = "rgba(37,99,235,0.35)";
+          ctx.beginPath();
+          ctx.moveTo(noonX, plot.top);
+          ctx.lineTo(noonX, plot.top + plot.height);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.fillStyle = "rgba(37,99,235,0.78)";
+          ctx.fillText("12:00", noonX + 6, plot.top + 14);
+          ctx.restore();
+        }
+
         // X labels
         const step = w < 600 ? 2 : 1;
         ctx.fillStyle = "rgba(0,0,0,0.6)";
@@ -420,18 +492,18 @@
 
         // Bars
         const barW = Math.max(8, plot.width / Math.max(stats.length, 1) / 1.35);
-        const fuelColor = FUEL_COLORS[state.fuel] || "#0f766e";
         ctx.lineWidth = 1.5;
 
         for (let i = 0; i < stats.length; i++) {
           const d = stats[i];
           const x = plot.left + ((i + 0.5) * plot.width) / stats.length;
-          const yMed = yScale(domain, plot, d.median * VALUE_SCALE);
+          const displayMedian = clampMarkdownDisplay(d.median * VALUE_SCALE);
+          const yMed = yScale(domain, plot, displayMedian);
           const barTop = Math.min(y0, yMed);
           const barHeight = Math.max(1, Math.abs(yMed - y0));
-          const positive = viewMode === "cycle" ? false : d.median >= 0;
-          ctx.fillStyle = positive ? "rgba(234, 88, 12, 0.22)" : `${fuelColor}33`;
-          ctx.strokeStyle = positive ? "#ea580c" : fuelColor;
+          const referenceMeta = hourlyReferenceMeta(d, viewMode);
+          ctx.fillStyle = referenceMeta.colors.fill;
+          ctx.strokeStyle = referenceMeta.colors.stroke;
           ctx.fillRect(x - barW / 2, barTop, barW, barHeight);
           ctx.strokeRect(x - barW / 2, barTop, barW, barHeight);
         }
@@ -557,12 +629,19 @@
         const d = stats[bucketIndex];
         if (!d) return;
         const viewMode = viewModeForFuel();
+        const referenceMeta = hourlyReferenceMeta(d, viewMode);
         const label =
           viewMode === "cycle"
             ? `Zyklus ${bucketLabel(d)}`
             : `Stunde ${d.hour}`;
+        const exceptionNote =
+          viewMode !== "cycle" &&
+          Number(d.hour) < 12 &&
+          state.summary?.snapshot_date === "2026-04-01"
+            ? " · Am 1. April bis 11:59 ausnahmsweise Referenz 00:00"
+            : "";
         setStatus(
-          `${state.fuel.toUpperCase()} ${label}: Median ${formatValue(d.median * VALUE_SCALE)} ct/l, q1 ${formatValue(d.q1 * VALUE_SCALE)}, q3 ${formatValue(d.q3 * VALUE_SCALE)}, min ${formatValue(d.min * VALUE_SCALE)}, max ${formatValue(d.max * VALUE_SCALE)} (n=${d.count})`,
+          `${state.fuel.toUpperCase()} ${label}: Median ${formatSavingsText(d.median * VALUE_SCALE)}, mittlere 50 % ${formatSavingsRangeText(d.q1 * VALUE_SCALE, d.q3 * VALUE_SCALE)}, Spannweite ${formatSavingsRangeText(d.min * VALUE_SCALE, d.max * VALUE_SCALE)} · ${referenceMeta.label}${exceptionNote} (n=${d.count})`,
         );
       });
 

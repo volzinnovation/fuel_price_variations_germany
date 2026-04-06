@@ -34,7 +34,7 @@
       <header>
         <div class="brand">
           <h1>Tankzeit</h1>
-          <p>Preisprofil relativ zur Referenz.</p>
+          <p>Preisprofil relativ zur Mittagsreferenz.</p>
         </div>
       </header>
 
@@ -102,11 +102,45 @@
       const lng = params.get("lng");
       const DATA_BASE = "data2/";
       let chartInstance = null;
+      const PRIOR_DAY_COLOR = {
+        fill: "rgba(107, 114, 128, 0.2)",
+        stroke: "#6b7280",
+      };
+      const SAME_DAY_COLOR = {
+        fill: "rgba(37, 99, 235, 0.2)",
+        stroke: "#2563eb",
+      };
+      const noonDividerPlugin = {
+        id: "noonDivider",
+        afterDatasetsDraw(chart, _args, options) {
+          if (!options || options.enabled === false) return;
+          const xScale = chart.scales?.x;
+          const chartArea = chart.chartArea;
+          if (!xScale || !chartArea || xScale.ticks.length < 13) return;
+          const leftTick = xScale.getPixelForTick(11);
+          const rightTick = xScale.getPixelForTick(12);
+          const dividerX = (leftTick + rightTick) / 2;
+          const { ctx } = chart;
+          ctx.save();
+          ctx.setLineDash([6, 4]);
+          ctx.strokeStyle = "rgba(37, 99, 235, 0.38)";
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(dividerX, chartArea.top);
+          ctx.lineTo(dividerX, chartArea.bottom);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.fillStyle = "rgba(37, 99, 235, 0.82)";
+          ctx.font = "12px Manrope, sans-serif";
+          ctx.fillText("12:00", dividerX + 6, chartArea.top + 14);
+          ctx.restore();
+        },
+      };
 
       const title = `${name} · ${fuel.toUpperCase()}`;
       document.getElementById("chart-title").textContent = title;
       document.getElementById("chart-sub").textContent =
-        "Lade Referenzprofil...";
+        "Lade Mittagsreferenzprofil...";
 
       if (lat && lng) {
         const maps = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
@@ -123,7 +157,7 @@
       function buildReferenceSubtitle(stats) {
         const summary = TankzeitStats.summaryFromStats(stats);
         if (!summary) {
-          return "Vor 12:00 gegen Vortag 12:00-Snapshot, ab 12:00 gegen 12:00-Snapshot desselben Tages.";
+          return "Grau bis 11:59 gegen Vortag 12:00, blau ab 12:00 gegen den 12:00-Snapshot desselben Tages. 0 ct/l ist jeweils der Referenzpreis; darunter wird es günstiger.";
         }
         const parts = [];
         const dayCount = TankzeitStats.toNumber(
@@ -132,35 +166,40 @@
         if (dayCount !== null) {
           parts.push(`${TankzeitStats.formatCount(dayCount)} Tage`);
         }
-        parts.push("vor 12:00 gegen Vortag 12:00-Snapshot");
-        parts.push("ab 12:00 gegen 12:00-Snapshot desselben Tages");
+        parts.push("grau bis 11:59 gegen Vortag 12:00");
+        parts.push("blau ab 12:00 gegen denselben Tag 12:00");
+        parts.push("0 ct/l = Referenzpreis");
         if (
           typeof summary.analysis_start === "string" &&
           typeof summary.law_effective_date === "string" &&
           summary.analysis_start <= summary.law_effective_date
         ) {
-          parts.push("am 1. April bis 11:59 mangels Vortagsreferenz gegen 00:00");
+          parts.push("am 1. April bis 11:59 ausnahmsweise gegen 00:00");
         }
         const minimum = TankzeitStats.relativeMinimumText(stats, "");
         if (minimum) {
-          parts.push(`Tiefstphase relativ zur Referenz meist ${minimum}`);
+          parts.push(`größter Preisvorteil meist ${minimum}`);
         }
         return parts.join(" · ");
       }
 
-      function formatSignedDelta(valueInEuros) {
-        const cents = Number(valueInEuros) * 100;
+      function clampMarkdownDisplay(valueInCents) {
+        const cents = Number(valueInCents);
+        if (!Number.isFinite(cents)) return 0;
+        return Math.min(0, cents);
+      }
+
+      function formatSavingsCents(valueInCents) {
+        const cents = clampMarkdownDisplay(valueInCents);
         if (!Number.isFinite(cents)) return "-";
         if (Math.abs(cents) < 0.05) return "auf Referenzniveau";
-        return `${Math.abs(cents).toFixed(1)} ct/l ${
-          cents > 0 ? "teurer" : "günstiger"
-        }`;
+        return `${Math.abs(cents).toFixed(1)} ct/l günstiger als Referenz`;
       }
 
       function referenceTooltipLines(stats, row) {
         if (!row) return [];
         if (row.hour < 12) {
-          const lines = ["Referenz: meist Vortag 12:00-Snapshot"];
+          const lines = ["Referenz: Vortag 12:00"];
           const summary = TankzeitStats.summaryFromStats(stats);
           if (
             summary &&
@@ -172,37 +211,47 @@
           }
           return lines;
         }
-        return ["Referenz: 12:00-Snapshot desselben Tages"];
+        return ["Referenz: gleicher Tag 12:00"];
       }
 
       function renderReferenceChart(stats) {
         const hourly = Array.isArray(stats.hourly) ? stats.hourly : [];
         const labels = hourly.map((row) => `${String(row.hour).padStart(2, "0")}:00`);
-        const values = hourly.map((row) => Number(row.price ?? 0) * 100);
+        const values = hourly.map((row) =>
+          clampMarkdownDisplay(Number(row.price ?? 0) * 100),
+        );
         const finiteValues = values.filter((value) => Number.isFinite(value));
-        const minValue = finiteValues.length ? Math.min(0, ...finiteValues) : -1;
-        const maxValue = finiteValues.length ? Math.max(0, ...finiteValues) : 1;
-        const padding = Math.max(0.5, (maxValue - minValue) * 0.12 || 0.5);
-        const fuelColor = "#0f766e";
-        const positiveFill = "rgba(234, 88, 12, 0.22)";
-        const positiveStroke = "#ea580c";
-        const negativeFill = `${fuelColor}33`;
+        const minValue =
+          finiteValues.length && Math.min(...finiteValues) < -0.05
+            ? Math.min(...finiteValues)
+            : -1;
+        const padding = Math.max(0.5, Math.abs(minValue) * 0.12 || 0.5);
+        const priorDayValues = values.map((value, index) => (index < 12 ? value : null));
+        const sameDayValues = values.map((value, index) => (index >= 12 ? value : null));
         const ctx = document.getElementById("chart").getContext("2d");
         if (chartInstance) chartInstance.destroy();
         chartInstance = new Chart(ctx, {
           type: "bar",
+          plugins: [noonDividerPlugin],
           data: {
             labels,
             datasets: [
               {
-                label: "Preisänderung zur Referenz (ct/l)",
-                data: values,
-                borderColor: values.map((value) =>
-                  value >= 0 ? positiveStroke : fuelColor,
-                ),
-                backgroundColor: values.map((value) =>
-                  value >= 0 ? positiveFill : negativeFill,
-                ),
+                label: "Bis 11:59 · Referenz Vortag 12:00",
+                data: priorDayValues,
+                borderColor: PRIOR_DAY_COLOR.stroke,
+                backgroundColor: PRIOR_DAY_COLOR.fill,
+                borderWidth: 1.5,
+                borderRadius: 4,
+                borderSkipped: false,
+                barPercentage: 0.84,
+                categoryPercentage: 0.92,
+              },
+              {
+                label: "Ab 12:00 · Referenz gleicher Tag 12:00",
+                data: sameDayValues,
+                borderColor: SAME_DAY_COLOR.stroke,
+                backgroundColor: SAME_DAY_COLOR.fill,
                 borderWidth: 1.5,
                 borderRadius: 4,
                 borderSkipped: false,
@@ -226,28 +275,34 @@
                 },
               },
               y: {
-                suggestedMin: minValue - padding,
-                suggestedMax: maxValue + padding,
+                min: minValue - padding,
+                max: 0,
                 grid: {
                   color(context) {
                     return context.tick.value === 0
-                      ? "rgba(15, 118, 110, 0.35)"
+                      ? "rgba(37, 99, 235, 0.28)"
                       : "rgba(0, 0, 0, 0.08)";
                   },
                 },
-                title: { display: true, text: "Preisänderung zur Referenz (ct/l)" },
+                title: {
+                  display: true,
+                  text: "Preisabstand zur Mittagsreferenz (ct/l)",
+                },
               },
             },
             plugins: {
               legend: {
-                display: false,
+                position: "bottom",
+              },
+              noonDivider: {
+                enabled: labels.length >= 24,
               },
               tooltip: {
                 callbacks: {
                   label(context) {
                     const row = hourly[context.dataIndex];
                     if (!row) return "";
-                    return formatSignedDelta(row.price ?? 0);
+                    return formatSavingsCents(Number(row.price ?? 0) * 100);
                   },
                   afterBody(items) {
                     const row = hourly[items[0].dataIndex];
