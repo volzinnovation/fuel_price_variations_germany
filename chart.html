@@ -141,8 +141,10 @@
         ) {
           parts.push("am 1. April bis 11:59 gegen 00:00");
         }
-        const minimum = TankzeitStats.minimumText(stats, "");
-        if (minimum) parts.push(`Minimum im 12:00-11:59-Fenster meist ${minimum}`);
+        const minimum = TankzeitStats.relativeMinimumText(stats, "");
+        if (minimum) {
+          parts.push(`Tiefstphase relativ zur Referenz meist ${minimum}`);
+        }
         return parts.join(" · ");
       }
 

@@ -361,9 +361,9 @@
               document.getElementById(`${s.id}-profile`).innerHTML =
                 `<a href="${detailsHref}">${escapeHtml(TankzeitStats.profileText(stats, "Details"))}</a>`;
               document.getElementById(`${s.id}-minimum`).textContent =
-                TankzeitStats.minimumText(stats, stats.text || "-");
+                TankzeitStats.relativeMinimumText(stats, stats.text || "-");
 
-              if (TankzeitStats.isNowInTypicalMinimumWindow(stats)) {
+              if (TankzeitStats.isNowInRelativeMinimumWindow(stats)) {
                 const row = document.getElementById(s.id);
                 row.classList.add("row-highlight");
               }

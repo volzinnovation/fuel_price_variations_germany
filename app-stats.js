@@ -87,6 +87,65 @@
     return fallback;
   }
 
+  function normalizeHour(value) {
+    const hour = toNumber(value);
+    if (hour === null) return null;
+    return ((Math.round(hour) % 24) + 24) % 24;
+  }
+
+  function relativeMinimumHours(stats) {
+    if (!stats || typeof stats !== "object" || !Array.isArray(stats.hourly)) {
+      return [];
+    }
+    const hourly = stats.hourly
+      .map((row) => ({
+        hour: normalizeHour(row && row.hour),
+        price: toNumber(row && row.price),
+      }))
+      .filter((row) => row.hour !== null && row.price !== null);
+    if (!hourly.length) return [];
+    const minimumPrice = Math.min(...hourly.map((row) => row.price));
+    const epsilon = 1e-9;
+    return [...new Set(
+      hourly
+        .filter((row) => Math.abs(row.price - minimumPrice) <= epsilon)
+        .map((row) => row.hour),
+    )].sort((left, right) => left - right);
+  }
+
+  function relativeMinimumRangesText(hours) {
+    if (!hours.length) return null;
+    const ranges = [];
+    let start = hours[0];
+    let end = hours[0];
+    for (let index = 1; index < hours.length; index += 1) {
+      const hour = hours[index];
+      if (hour === end + 1) {
+        end = hour;
+        continue;
+      }
+      ranges.push([start, end]);
+      start = hour;
+      end = hour;
+    }
+    ranges.push([start, end]);
+    return ranges
+      .map(([rangeStart, rangeEnd]) => `${rangeStart} - ${rangeEnd + 1}h`)
+      .join(", ");
+  }
+
+  function relativeMinimumText(stats, fallback = "-") {
+    const hours = relativeMinimumHours(stats);
+    if (hours.length) {
+      const text = relativeMinimumRangesText(hours);
+      if (text) return text;
+    }
+    if (stats && typeof stats.text === "string" && stats.text.trim()) {
+      return stats.text.trim();
+    }
+    return fallback;
+  }
+
   function minimumWindow(stats) {
     const summary = summaryFromStats(stats);
     if (!summary) return null;
@@ -116,14 +175,24 @@
     return minuteOfDay >= window.startMinutes || minuteOfDay < end % 1440;
   }
 
+  function isNowInRelativeMinimumWindow(stats, now = new Date()) {
+    const hours = relativeMinimumHours(stats);
+    if (hours.length) {
+      return hours.includes(now.getHours());
+    }
+    return isNowInTypicalMinimumWindow(stats, now);
+  }
+
   window.TankzeitStats = {
     formatClock,
     formatCount,
     formatDuration,
     formatPrice,
+    isNowInRelativeMinimumWindow,
     isNowInTypicalMinimumWindow,
     minimumText,
     profileText,
+    relativeMinimumText,
     summaryFromStats,
     toNumber,
   };

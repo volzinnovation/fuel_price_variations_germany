@@ -366,12 +366,12 @@
                 chartUrl(s.id, s.name, s.lat, s.lng),
               );
               profileEl.innerHTML = `<a href="${detailsHref}">${escapeHtml(TankzeitStats.profileText(stats, "Details"))}</a>`;
-              minimumEl.textContent = TankzeitStats.minimumText(
+              minimumEl.textContent = TankzeitStats.relativeMinimumText(
                 stats,
                 stats.text || "-",
               );
 
-              if (TankzeitStats.isNowInTypicalMinimumWindow(stats)) {
+              if (TankzeitStats.isNowInRelativeMinimumWindow(stats)) {
                 const row = document.getElementById(s.id);
                 row.classList.add("row-highlight");
               }
