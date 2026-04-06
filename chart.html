@@ -110,7 +110,6 @@
         fill: "rgba(37, 99, 235, 0.2)",
         stroke: "#2563eb",
       };
-      const HOURLY_DOMAIN = { min: -0.3, max: 0.0 };
       const noonDividerPlugin = {
         id: "noonDivider",
         afterDatasetsDraw(chart, _args, options) {
@@ -158,7 +157,7 @@
       function buildReferenceSubtitle(stats) {
         const summary = TankzeitStats.summaryFromStats(stats);
         if (!summary) {
-          return "Referenz ist durchgehend Vortag 12:00. Grau zeigt 00:00 bis 11:59, blau 12:00 bis 23:59. Oberhalb der Referenz wird auf 0 gekappt, darunter wird die Ersparnis bis -0,30 €/l gezeigt.";
+          return "Referenz ist durchgehend Vortag 12:00. Grau zeigt 00:00 bis 11:59, blau 12:00 bis 23:59. Positive Werte liegen über der Referenz, negative darunter; die y-Achse passt sich dem sichtbaren Bereich an.";
         }
         const parts = [];
         const dayCount = TankzeitStats.toNumber(
@@ -169,22 +168,24 @@
         }
         parts.push("Referenz durchgehend Vortag 12:00");
         parts.push("grau 00:00 - 11:59, blau 12:00 - 23:59");
-        parts.push("Skala 0 bis -0,30 €/l");
-        parts.push("Werte oberhalb der Referenz liegen auf der Null-Linie");
+        parts.push("positive Werte = teurer, negative Werte = günstiger");
+        parts.push("y-Achse nach sichtbarem Minimum und Maximum");
         return parts.join(" · ");
       }
 
-      function clampSavingsDisplay(valueInEuro) {
+      function sanitizeRelativeValue(valueInEuro) {
         const amount = Number(valueInEuro);
         if (!Number.isFinite(amount)) return 0;
-        return Math.max(HOURLY_DOMAIN.min, Math.min(0, amount));
+        return amount;
       }
 
-      function formatSavings(valueInEuro) {
-        const amount = clampSavingsDisplay(valueInEuro);
+      function formatRelativeChange(valueInEuro) {
+        const amount = sanitizeRelativeValue(valueInEuro);
         if (!Number.isFinite(amount)) return "-";
-        if (Math.abs(amount) < 0.0005) return "auf/über Vortag-12:00-Niveau";
-        return `${(Math.abs(amount) * 100).toFixed(1)} ct/l günstiger als Vortag 12:00`;
+        if (Math.abs(amount) < 0.0005) return "auf Vortag-12:00-Niveau";
+        return `${(Math.abs(amount) * 100).toFixed(1)} ct/l ${
+          amount > 0 ? "teurer" : "günstiger"
+        } als Vortag 12:00`;
       }
 
       function formatEuroTick(valueInEuro) {
@@ -224,20 +225,29 @@
           return {
             hour: Number(row?.hour ?? 0),
             rawValue,
-            displayValue: clampSavingsDisplay(rawValue),
+            displayValue: sanitizeRelativeValue(rawValue),
           };
         });
       }
 
+      function computeSeriesDomain(values) {
+        const finiteValues = values.filter((value) => Number.isFinite(value));
+        if (!finiteValues.length) {
+          return { min: -0.05, max: 0.05 };
+        }
+        let min = Math.min(...finiteValues);
+        let max = Math.max(...finiteValues);
+        if (Math.abs(max - min) < 0.0005) {
+          const pad = Math.max(0.01, Math.abs(max || 0.01) * 0.2);
+          return { min: min - pad, max: max + pad };
+        }
+        const pad = Math.max(0.01, (max - min) * 0.12);
+        return { min: min - pad, max: max + pad };
+      }
+
       function referenceTooltipLines(row) {
         if (!row) return [];
-        const lines = ["Referenz: Vortag 12:00"];
-        if (row.rawValue > 0.0005) {
-          lines.push(
-            `Liegt ${(row.rawValue * 100).toFixed(1)} ct/l über der Referenz und wird daher auf 0 gezeigt.`,
-          );
-        }
-        return lines;
+        return ["Referenz: Vortag 12:00"];
       }
 
       function renderReferenceChart(stats) {
@@ -249,6 +259,7 @@
         const sameDayValues = displaySeries.map((row, index) =>
           index >= 12 ? row.displayValue : null,
         );
+        const domain = computeSeriesDomain(displaySeries.map((row) => row.displayValue));
         const ctx = document.getElementById("chart").getContext("2d");
         if (chartInstance) chartInstance.destroy();
         chartInstance = new Chart(ctx, {
@@ -261,35 +272,31 @@
                 label: "00:00 - 11:59",
                 data: priorDayValues,
                 borderColor: PRIOR_DAY_COLOR.stroke,
-                backgroundColor: PRIOR_DAY_COLOR.fill,
+                backgroundColor: PRIOR_DAY_COLOR.stroke,
                 borderWidth: 2.4,
-                pointRadius: 2.5,
+                pointRadius: 1.8,
                 pointHoverRadius: 4,
                 pointBackgroundColor: PRIOR_DAY_COLOR.stroke,
                 pointBorderColor: PRIOR_DAY_COLOR.stroke,
-                tension: 0.24,
+                stepped: "after",
+                tension: 0,
                 spanGaps: false,
-                fill: {
-                  target: "origin",
-                  below: PRIOR_DAY_COLOR.fill,
-                },
+                fill: false,
               },
               {
                 label: "12:00 - 23:59",
                 data: sameDayValues,
                 borderColor: SAME_DAY_COLOR.stroke,
-                backgroundColor: SAME_DAY_COLOR.fill,
+                backgroundColor: SAME_DAY_COLOR.stroke,
                 borderWidth: 2.4,
-                pointRadius: 2.5,
+                pointRadius: 1.8,
                 pointHoverRadius: 4,
                 pointBackgroundColor: SAME_DAY_COLOR.stroke,
                 pointBorderColor: SAME_DAY_COLOR.stroke,
-                tension: 0.24,
+                stepped: "after",
+                tension: 0,
                 spanGaps: false,
-                fill: {
-                  target: "origin",
-                  below: SAME_DAY_COLOR.fill,
-                },
+                fill: false,
               },
             ],
           },
@@ -308,8 +315,8 @@
                 },
               },
               y: {
-                min: HOURLY_DOMAIN.min,
-                max: HOURLY_DOMAIN.max,
+                min: domain.min,
+                max: domain.max,
                 ticks: {
                   callback(value) {
                     return formatEuroTick(value);
@@ -324,7 +331,7 @@
                 },
                 title: {
                   display: true,
-                  text: "Preisvorteil ggü. Vortag 12:00 (€/l)",
+                  text: "Änderung ggü. Vortag 12:00 (€/l)",
                 },
               },
             },
@@ -340,7 +347,7 @@
                   label(context) {
                     const row = displaySeries[context.dataIndex];
                     if (!row) return "";
-                    return formatSavings(row.displayValue);
+                    return formatRelativeChange(row.displayValue);
                   },
                   afterBody(items) {
                     const row = displaySeries[items[0].dataIndex];

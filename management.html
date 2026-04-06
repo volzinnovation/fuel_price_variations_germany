@@ -140,14 +140,15 @@
             Gesamtmarkt. Antippen zeigt die genauen Werte.
           </p>
           <p class="footer-note">
-            <strong>Preisvorteil ggü. Vortag 12:00:</strong> Referenz ist
-            durchgehend der Mittagspreis des Vortags. Grau zeigt
+            <strong>Mediane Änderung ggü. Vortag 12:00:</strong>
+            Referenz ist durchgehend der Mittagspreis des Vortags. Grau zeigt
             <code>00:00</code> bis <code>11:59</code>, blau zeigt
             <code>12:00</code> bis <code>23:59</code>; die vertikale Linie
-            markiert <code>12:00</code>. Gezeigt wird nur der Preisvorteil:
-            Alles auf oder über der Referenz liegt auf der Null-Linie, alles
-            darunter zeigt die Ersparnis bis maximal <code>-0,30 €/l</code>.
-            Antippen zeigt Median, Quartilspanne und Spannweite.
+            markiert <code>12:00</code>. Gezeigt wird eine stufenförmige Linie
+            für die mediane Änderung: Positive Werte liegen über der
+            Referenz, negative darunter; die y-Achse passt sich dem
+            sichtbaren Minimum und Maximum an. Antippen zeigt zusätzlich
+            Quartilspanne und Spannweite.
           </p>
         </div>
       </section>
@@ -224,8 +225,6 @@
         },
       };
       const BRAND_PRICE_DOMAIN = { min: 1.5, max: 3.0 };
-      const HOURLY_DOMAIN = { min: -0.3, max: 0.0 };
-      const HOURLY_TICKS = [0, -0.05, -0.1, -0.15, -0.2, -0.25, -0.3];
 
       const state = {
         summary: null,
@@ -263,33 +262,36 @@
         }).format(v);
       }
 
-      function clampMarkdownDisplay(valueInEuro) {
+      function sanitizeRelativeValue(valueInEuro) {
         const numeric = Number(valueInEuro);
         if (!Number.isFinite(numeric)) return 0;
-        return Math.max(HOURLY_DOMAIN.min, Math.min(0, numeric));
+        return numeric;
       }
 
-      function formatSavingsText(valueInEuro) {
-        const displayValue = clampMarkdownDisplay(valueInEuro);
-        if (displayValue >= -0.0005) return "auf/über Vortag-12:00-Niveau";
-        return `${(Math.abs(displayValue) * 100).toFixed(1)} ct/l günstiger`;
+      function formatRelativeText(valueInEuro) {
+        const displayValue = sanitizeRelativeValue(valueInEuro);
+        if (Math.abs(displayValue) < 0.0005) return "auf Vortag-12:00-Niveau";
+        return `${(Math.abs(displayValue) * 100).toFixed(1)} ct/l ${
+          displayValue > 0 ? "teurer" : "günstiger"
+        }`;
       }
 
-      function formatSavingsRangeText(firstValueInEuro, secondValueInEuro) {
+      function formatRelativeRangeText(firstValueInEuro, secondValueInEuro) {
         const clipped = [
-          clampMarkdownDisplay(firstValueInEuro),
-          clampMarkdownDisplay(secondValueInEuro),
+          sanitizeRelativeValue(firstValueInEuro),
+          sanitizeRelativeValue(secondValueInEuro),
         ].sort((left, right) => left - right);
-        const maxSaving = Math.abs(clipped[0] * 100);
-        const minSaving = Math.abs(clipped[1] * 100);
-        if (maxSaving < 0.05) return "auf/über Vortag-12:00-Niveau";
-        if (Math.abs(maxSaving - minSaving) < 0.05) {
-          return `${maxSaving.toFixed(1)} ct/l günstiger`;
+        const low = clipped[0] * 100;
+        const high = clipped[1] * 100;
+        if (Math.abs(low) < 0.05 && Math.abs(high) < 0.05) {
+          return "nahe Vortag-12:00-Niveau";
         }
-        if (minSaving < 0.05) {
-          return `bis ${maxSaving.toFixed(1)} ct/l günstiger`;
+        const format = (value) =>
+          `${Math.abs(value).toFixed(1)} ct/l ${value > 0 ? "teurer" : "günstiger"}`;
+        if (Math.abs(low - high) < 0.05) {
+          return format(low);
         }
-        return `${minSaving.toFixed(1)} bis ${maxSaving.toFixed(1)} ct/l günstiger`;
+        return `${format(low)} bis ${format(high)}`;
       }
 
       function hourlyReferenceMeta(bucket, viewMode) {
@@ -318,12 +320,27 @@
       function adjustedHourlyRow(bucket) {
         const shift = marketNoonShiftForBucket(bucket);
         return {
-          min: clampMarkdownDisplay(Number(bucket?.min || 0) + shift),
-          q1: clampMarkdownDisplay(Number(bucket?.q1 || 0) + shift),
-          median: clampMarkdownDisplay(Number(bucket?.median || 0) + shift),
-          q3: clampMarkdownDisplay(Number(bucket?.q3 || 0) + shift),
-          max: clampMarkdownDisplay(Number(bucket?.max || 0) + shift),
+          min: sanitizeRelativeValue(Number(bucket?.min || 0) + shift),
+          q1: sanitizeRelativeValue(Number(bucket?.q1 || 0) + shift),
+          median: sanitizeRelativeValue(Number(bucket?.median || 0) + shift),
+          q3: sanitizeRelativeValue(Number(bucket?.q3 || 0) + shift),
+          max: sanitizeRelativeValue(Number(bucket?.max || 0) + shift),
         };
+      }
+
+      function computeSeriesDomain(values) {
+        const finiteValues = values.filter((value) => Number.isFinite(value));
+        if (!finiteValues.length) {
+          return { min: -0.05, max: 0.05 };
+        }
+        let min = Math.min(...finiteValues);
+        let max = Math.max(...finiteValues);
+        if (Math.abs(max - min) < 0.0005) {
+          const pad = Math.max(0.01, Math.abs(max || 0.01) * 0.2);
+          return { min: min - pad, max: max + pad };
+        }
+        const pad = Math.max(0.01, (max - min) * 0.12);
+        return { min: min - pad, max: max + pad };
       }
 
       function viewModeForFuel() {
@@ -401,7 +418,9 @@
       }
 
       function computeDomain(stats) {
-        return HOURLY_DOMAIN;
+        return computeSeriesDomain(
+          stats.map((bucket) => adjustedHourlyRow(bucket).median),
+        );
       }
 
       function yScale(domain, plot, value) {
@@ -435,20 +454,22 @@
         state.layout = { plot, w, h };
         titleEl.textContent =
           viewMode === "cycle"
-            ? "Preisvorteil seit Vortag 12:00"
-            : "Preisvorteil ggü. Vortag 12:00";
+            ? "Mediane Änderung seit Vortag 12:00"
+            : "Mediane Änderung ggü. Vortag 12:00";
 
         ctx.clearRect(0, 0, w, h);
 
         const domain = computeDomain(stats);
 
-        // Grid + axis labels (Cent/l)
+        // Grid + axis labels (EUR/l)
         ctx.strokeStyle = "rgba(0,0,0,0.08)";
         ctx.fillStyle = "rgba(0,0,0,0.55)";
         ctx.lineWidth = 1;
         ctx.font = "12px Manrope, sans-serif";
 
-        for (const v of HOURLY_TICKS) {
+        const tickCount = 5;
+        for (let i = 0; i < tickCount; i++) {
+          const v = domain.min + (i * (domain.max - domain.min)) / (tickCount - 1);
           const y = yScale(domain, plot, v);
           ctx.beginPath();
           ctx.moveTo(plot.left, y);
@@ -457,14 +478,16 @@
           ctx.fillText(formatValue(v), 8, y + 4);
         }
 
-        // Zero line
+        const zeroInDomain = domain.min <= 0 && domain.max >= 0;
         const y0 = yScale(domain, plot, 0);
-        ctx.strokeStyle = "rgba(15,118,110,0.35)";
-        ctx.beginPath();
-        ctx.moveTo(plot.left, y0);
-        ctx.lineTo(plot.left + plot.width, y0);
-        ctx.stroke();
-        ctx.strokeStyle = "rgba(0,0,0,0.08)";
+        if (zeroInDomain) {
+          ctx.strokeStyle = "rgba(15,118,110,0.35)";
+          ctx.beginPath();
+          ctx.moveTo(plot.left, y0);
+          ctx.lineTo(plot.left + plot.width, y0);
+          ctx.stroke();
+          ctx.strokeStyle = "rgba(0,0,0,0.08)";
+        }
 
         if (viewMode !== "cycle" && stats.length >= 24) {
           const noonX = plot.left + (12 * plot.width) / stats.length;
@@ -498,41 +521,56 @@
           plot.top + plot.height + 38,
         );
 
-        // Bars
-        const barW = Math.max(8, plot.width / Math.max(stats.length, 1) / 1.35);
-        ctx.lineWidth = 1.5;
-
-        for (let i = 0; i < stats.length; i++) {
-          const d = stats[i];
-          const x = plot.left + ((i + 0.5) * plot.width) / stats.length;
+        const points = stats.map((d, index) => {
           const adjusted = adjustedHourlyRow(d);
-          const referenceMeta = hourlyReferenceMeta(d, viewMode);
-          const whiskerTop = yScale(domain, plot, adjusted.max);
-          const whiskerBottom = yScale(domain, plot, adjusted.min);
-          const boxTop = yScale(domain, plot, adjusted.q3);
-          const boxBottom = yScale(domain, plot, adjusted.q1);
-          const medianY = yScale(domain, plot, adjusted.median);
-          const boxHeight = Math.max(1, boxBottom - boxTop);
-          const capWidth = Math.max(4, barW * 0.55);
-          ctx.fillStyle = referenceMeta.colors.fill;
-          ctx.strokeStyle = referenceMeta.colors.stroke;
+          const nextX =
+            index === stats.length - 1
+              ? plot.left + plot.width
+              : plot.left + ((index + 1) * plot.width) / stats.length;
+          return {
+            bucket: d,
+            adjusted,
+            x: plot.left + ((index + 0.5) * plot.width) / stats.length,
+            leftX: plot.left + (index * plot.width) / stats.length,
+            rightX: nextX,
+            y: yScale(domain, plot, adjusted.median),
+          };
+        });
+        const segments =
+          viewMode === "cycle"
+            ? [[0, points.length - 1, HOURLY_REFERENCE_COLORS.sameDay]]
+            : [
+                [0, Math.min(11, points.length - 1), HOURLY_REFERENCE_COLORS.priorDay],
+                [12, points.length - 1, HOURLY_REFERENCE_COLORS.sameDay],
+              ];
+
+        segments.forEach(([startIndex, endIndex, colors]) => {
+          if (startIndex > endIndex || startIndex >= points.length) return;
+
           ctx.beginPath();
-          ctx.moveTo(x, whiskerTop);
-          ctx.lineTo(x, whiskerBottom);
+          ctx.moveTo(points[startIndex].leftX, points[startIndex].y);
+          for (let i = startIndex; i <= endIndex; i++) {
+            const point = points[i];
+            ctx.lineTo(point.rightX, point.y);
+            if (i < endIndex) {
+              ctx.lineTo(point.rightX, points[i + 1].y);
+            }
+          }
+          ctx.strokeStyle = colors.stroke;
+          ctx.lineWidth = 2.4;
           ctx.stroke();
-          ctx.beginPath();
-          ctx.moveTo(x - capWidth / 2, whiskerTop);
-          ctx.lineTo(x + capWidth / 2, whiskerTop);
-          ctx.moveTo(x - capWidth / 2, whiskerBottom);
-          ctx.lineTo(x + capWidth / 2, whiskerBottom);
-          ctx.stroke();
-          ctx.fillRect(x - barW / 2, boxTop, barW, boxHeight);
-          ctx.strokeRect(x - barW / 2, boxTop, barW, boxHeight);
-          ctx.beginPath();
-          ctx.moveTo(x - barW / 2, medianY);
-          ctx.lineTo(x + barW / 2, medianY);
-          ctx.stroke();
-        }
+
+          ctx.fillStyle = colors.stroke;
+          for (let i = startIndex; i <= endIndex; i++) {
+            const point = points[i];
+            ctx.beginPath();
+            ctx.arc(point.leftX, point.y, 2.4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(point.rightX, point.y, 2.4, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        });
       }
 
       function computeBrandDomain(rows) {
@@ -662,7 +700,7 @@
             ? `Zyklus ${bucketLabel(d)}`
             : `Stunde ${d.hour}`;
         setStatus(
-          `${state.fuel.toUpperCase()} ${label}: Median ${formatSavingsText(adjusted.median)}, mittlere 50 % ${formatSavingsRangeText(adjusted.q1, adjusted.q3)}, Spannweite ${formatSavingsRangeText(adjusted.min, adjusted.max)} · Zeitraum ${referenceMeta.label} · Referenz: Vortag 12:00 (n=${d.count})`,
+          `${state.fuel.toUpperCase()} ${label}: Median ${formatRelativeText(adjusted.median)}, mittlere 50 % ${formatRelativeRangeText(adjusted.q1, adjusted.q3)}, Spannweite ${formatRelativeRangeText(adjusted.min, adjusted.max)} · Zeitraum ${referenceMeta.label} · Referenz: Vortag 12:00 (n=${d.count})`,
         );
       });
 
