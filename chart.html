@@ -34,7 +34,7 @@
       <header>
         <div class="brand">
           <h1>Tankzeit</h1>
-          <p>Preisprofil ggü. Vortag 12:00.</p>
+          <p>Preisänderung seit Vortag 12:00.</p>
         </div>
       </header>
 
@@ -140,7 +140,7 @@
       const title = `${name} · ${fuel.toUpperCase()}`;
       document.getElementById("chart-title").textContent = title;
       document.getElementById("chart-sub").textContent =
-        "Lade Vortag-12:00-Profil...";
+        "Lade Preisänderung seit Vortag 12:00...";
 
       if (lat && lng) {
         const maps = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
@@ -331,7 +331,7 @@
                 },
                 title: {
                   display: true,
-                  text: "Änderung ggü. Vortag 12:00 (€/l)",
+                  text: "Preisänderung seit Vortag 12:00 (€/l)",
                 },
               },
             },

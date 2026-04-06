@@ -140,12 +140,12 @@
             Gesamtmarkt. Antippen zeigt die genauen Werte.
           </p>
           <p class="footer-note">
-            <strong>Mediane Änderung ggü. Vortag 12:00:</strong>
+            <strong>Preisänderung seit Vortag 12:00:</strong>
             Referenz ist durchgehend der Mittagspreis des Vortags. Grau zeigt
             <code>00:00</code> bis <code>11:59</code>, blau zeigt
             <code>12:00</code> bis <code>23:59</code>; die vertikale Linie
             markiert <code>12:00</code>. Gezeigt wird eine stufenförmige Linie
-            für die mediane Änderung: Positive Werte liegen über der
+            für die mediane Preisänderung: Positive Werte liegen über der
             Referenz, negative darunter; die y-Achse passt sich dem
             sichtbaren Minimum und Maximum an. Antippen zeigt zusätzlich
             Quartilspanne und Spannweite.
@@ -453,9 +453,7 @@
         plot.height = h - plot.top - plot.bottom;
         state.layout = { plot, w, h };
         titleEl.textContent =
-          viewMode === "cycle"
-            ? "Mediane Änderung seit Vortag 12:00"
-            : "Mediane Änderung ggü. Vortag 12:00";
+          "Preisänderung seit Vortag 12:00";
 
         ctx.clearRect(0, 0, w, h);
 
