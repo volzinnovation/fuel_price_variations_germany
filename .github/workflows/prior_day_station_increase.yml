@@ -1,0 +1,52 @@
+name: Prior day station increase audit
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_date:
+        description: Local analysis day in YYYY-MM-DD format. Leave empty for yesterday.
+        required: false
+        default: ""
+      noon_csv:
+        description: Optional path to a noon snapshot CSV. Leave empty to use data2/YYYY/MM/DD/noon.csv.
+        required: false
+        default: ""
+
+jobs:
+  analyze-prior-day-increase:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Europe/Berlin
+      TK_USER: ${{ secrets.TK_USER }}
+      TK_PASS: ${{ secrets.TK_PASS }}
+    steps:
+      - name: Checkout latest version
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+
+      - name: Run prior-day increase audit
+        run: |
+          ARGS=()
+          if [ -n "${{ inputs.target_date }}" ]; then
+            ARGS+=(--target-date "${{ inputs.target_date }}")
+          fi
+          if [ -n "${{ inputs.noon_csv }}" ]; then
+            ARGS+=(--noon-csv "${{ inputs.noon_csv }}")
+          fi
+          python scripts/analyze_prior_day_station_increase.py "${ARGS[@]}"
+
+      - name: Publish report summary
+        run: cat output/prior_day_station_increase/prior_day_station_increase_report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload analysis artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: prior-day-station-increase
+          path: output/prior_day_station_increase
