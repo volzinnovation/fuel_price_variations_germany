@@ -781,8 +781,9 @@ def _noon_reference_hourly_variation(
             int(filled.notna().sum()),
         )
 
-    hourly_mean = day_series.resample("1h").mean().dropna()
-    if hourly_mean.empty:
+    # Use the observable carried-forward price at each clock hour, not an hourly mean.
+    hourly_observed = day_series.resample("1h").first().dropna()
+    if hourly_observed.empty:
         return (
             pd.DataFrame(columns=["hour", "price"]),
             pd.DataFrame(columns=["hour", "price"]),
@@ -792,7 +793,7 @@ def _noon_reference_hourly_variation(
             int(filled.notna().sum()),
         )
 
-    delta_frame = hourly_mean.to_frame(name="price")
+    delta_frame = hourly_observed.to_frame(name="price")
     delta_frame["price"] = delta_frame["price"] - float(reference_price)
     delta_frame["hour"] = delta_frame.index.hour
     grouped = delta_frame[["hour", "price"]].copy()
@@ -800,7 +801,7 @@ def _noon_reference_hourly_variation(
     grouped = grouped.set_index("hour").reindex(range(24), fill_value=0).reset_index()
     grouped = grouped.sort_values("hour")
 
-    absolute_grouped = hourly_mean.to_frame(name="price")
+    absolute_grouped = hourly_observed.to_frame(name="price")
     absolute_grouped["hour"] = absolute_grouped.index.hour
     absolute_grouped = absolute_grouped[["hour", "price"]].copy()
     absolute_grouped["price"] = absolute_grouped["price"].round(3)

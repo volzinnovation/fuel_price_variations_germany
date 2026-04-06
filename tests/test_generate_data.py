@@ -248,6 +248,37 @@ class DailyNoonResetMetricTests(unittest.TestCase):
         self.assertEqual(best_hourly.loc[best_hourly["hour"] == 0, "price"].item(), 1.95)
         self.assertEqual(best_hourly.loc[best_hourly["hour"] == 12, "price"].item(), 2.1)
 
+    def test_hourly_variation_samples_observable_price_at_hour_start(self) -> None:
+        series = pd.Series(
+            [2.00, 1.95, 2.05, 2.00],
+            index=pd.DatetimeIndex(
+                [
+                    "2026-04-01 12:00",
+                    "2026-04-02 00:00",
+                    "2026-04-02 00:30",
+                    "2026-04-02 01:00",
+                ],
+                tz="Europe/Berlin",
+            ),
+        )
+
+        hourly, best_hourly, _, _, used_days, _ = _hourly_variation(
+            series,
+            window_start=pd.Timestamp("2026-04-02 00:00").to_pydatetime(),
+            window_end=pd.Timestamp("2026-04-02 23:59").to_pydatetime(),
+            analysis_days=[date(2026, 4, 2)],
+            noon_reference_prices={
+                date(2026, 4, 1): 2.00,
+                date(2026, 4, 2): 2.00,
+            },
+        )
+
+        self.assertEqual(used_days, 1)
+        self.assertEqual(hourly.loc[hourly["hour"] == 0, "price"].item(), -0.05)
+        self.assertEqual(hourly.loc[hourly["hour"] == 1, "price"].item(), 0.0)
+        self.assertEqual(best_hourly.loc[best_hourly["hour"] == 0, "price"].item(), 1.95)
+        self.assertEqual(best_hourly.loc[best_hourly["hour"] == 1, "price"].item(), 2.0)
+
     def test_hourly_variation_uses_midnight_reference_before_noon_on_law_effective_day(self) -> None:
         series = pd.Series(
             [2.20, 2.00, 1.95, 2.10],
