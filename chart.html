@@ -123,7 +123,7 @@
       function buildReferenceSubtitle(stats) {
         const summary = TankzeitStats.summaryFromStats(stats);
         if (!summary) {
-          return "Vor 12:00 gegen Vortag 12:00, ab 12:00 gegen den aktuellen Mittagspreis.";
+          return "Vor 12:00 gegen Vortag 12:00-Snapshot, ab 12:00 gegen 12:00-Snapshot desselben Tages.";
         }
         const parts = [];
         const dayCount = TankzeitStats.toNumber(
@@ -132,14 +132,14 @@
         if (dayCount !== null) {
           parts.push(`${TankzeitStats.formatCount(dayCount)} Tage`);
         }
-        parts.push("vor 12:00 gegen Vortag 12:00");
-        parts.push("ab 12:00 gegen aktuellen Mittagspreis");
+        parts.push("vor 12:00 gegen Vortag 12:00-Snapshot");
+        parts.push("ab 12:00 gegen 12:00-Snapshot desselben Tages");
         if (
           typeof summary.analysis_start === "string" &&
           typeof summary.law_effective_date === "string" &&
           summary.analysis_start <= summary.law_effective_date
         ) {
-          parts.push("am 1. April bis 11:59 gegen 00:00");
+          parts.push("am 1. April bis 11:59 mangels Vortagsreferenz gegen 00:00");
         }
         const minimum = TankzeitStats.relativeMinimumText(stats, "");
         if (minimum) {
@@ -160,7 +160,7 @@
       function referenceTooltipLines(stats, row) {
         if (!row) return [];
         if (row.hour < 12) {
-          const lines = ["Referenz: meist Vortag 12:00"];
+          const lines = ["Referenz: meist Vortag 12:00-Snapshot"];
           const summary = TankzeitStats.summaryFromStats(stats);
           if (
             summary &&
@@ -172,7 +172,7 @@
           }
           return lines;
         }
-        return ["Referenz: 12:00 desselben Tages"];
+        return ["Referenz: 12:00-Snapshot desselben Tages"];
       }
 
       function renderReferenceChart(stats) {

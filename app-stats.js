@@ -61,9 +61,16 @@
       summary.post_noon_decreases_avg,
       summary.post_noon_decreases_median,
     );
+    const increases = pickNumber(
+      summary.post_noon_increases_avg,
+      summary.post_noon_increases_median,
+    );
     const parts = [];
     if (noonPrice !== null) parts.push(`12:00 ${noonPrice.toFixed(3)} €/l`);
     if (decreases !== null) parts.push(`${formatCount(decreases)} Senk.`);
+    if (increases !== null && increases > 0.05) {
+      parts.push(`${formatCount(increases)} Erh.`);
+    }
     return parts.length ? parts.join(" · ") : fallback;
   }
 

@@ -290,11 +290,17 @@ def fuel_profile_text(stats: dict[str, object] | None) -> str:
         summary.get("post_noon_decreases_avg"),
         summary.get("post_noon_decreases_median"),
     )
+    increases = _first_number(
+        summary.get("post_noon_increases_avg"),
+        summary.get("post_noon_increases_median"),
+    )
     parts: list[str] = []
     if noon_price is not None:
         parts.append(f"12:00 {noon_price:.3f} €/l")
     if decreases is not None:
-        parts.append(f"{decreases} Senkungen nach 12 Uhr")
+        parts.append(f"{decreases} Senkungen ab 12 Uhr")
+    if increases is not None and increases > 0.05:
+        parts.append(f"{_format_count(increases)} Erhöhungen ab 12 Uhr")
     return " · ".join(parts) if parts else "Kein Tagesprofil hinterlegt."
 
 
@@ -405,7 +411,7 @@ def build_fuel_cards(
             cards.append(
                 "<article class=\"station-fuel-card\">"
                 f"<h3>{FUEL_LABELS[fuel]}</h3>"
-                f"<p><strong>Mittagsmaximum:</strong> {format_text(fuel_profile_text(stats))}</p>"
+                f"<p><strong>12:00-Referenz:</strong> {format_text(fuel_profile_text(stats))}</p>"
                 f"<p><strong>Minimum 12:00-11:59:</strong> {format_text(fuel_minimum_text(stats))}</p>"
                 f"<p><strong>Historische Spanne:</strong> {format_text(fuel_range_text(stats))}</p>"
                 f"<a class=\"link-btn secondary-link\" href=\"{chart_url}\">Chart öffnen</a>"
@@ -523,7 +529,7 @@ def build_station_page(
           <span class="station-chip">E5: {format_text(fuel_chip_text(stats_by_fuel.get("e5")))}</span>
         </div>
         <p class="station-summary">
-          {"Tankzeit zeigt für diese Tankstelle das typische 12:00-Maximum, die Senkungen nach 12 Uhr und das Minimum im 12:00-11:59-Fenster aus den veröffentlichten Tankerkönig-Daten seit dem Mittagsreset vom 1. April 2026." if has_noon_reset_stats else "Tankzeit zeigt für diese Tankstelle historische Tagesprofile aus den veröffentlichten Tankerkönig-Daten. So findest du schneller die typischen Zeitfenster mit günstigeren Preisen."}
+          {"Tankzeit zeigt für diese Tankstelle den 12:00-Referenzpreis, die Preisbewegungen im 12:00-11:59-Fenster und das dortige Minimum auf Basis der veröffentlichten Tankerkönig-Daten." if has_noon_reset_stats else "Tankzeit zeigt für diese Tankstelle historische Tagesprofile aus den veröffentlichten Tankerkönig-Daten. So findest du schneller die typischen Zeitfenster mit günstigeren Preisen."}
         </p>
         <div class="station-actions">
           <a class="link-btn" href="{diesel_chart_url}">Diesel-Chart</a>

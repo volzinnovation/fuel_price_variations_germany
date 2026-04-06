@@ -279,11 +279,13 @@ def _daily_metric_summary(
         summary[f"{key}_median"] = int(round(float(values.median())))
 
     assign_float_metrics("noon_price")
+    assign_float_metrics("max_price")
     assign_float_metrics("prior_reference_price")
     assign_float_metrics("max_price_delta_vs_prior")
     assign_float_metrics("min_price")
     assign_float_metrics("daily_range")
     assign_int_metrics("post_noon_decreases")
+    assign_int_metrics("post_noon_increases")
 
     min_times = numeric_series("min_time_minutes")
     if not min_times.empty:
@@ -337,6 +339,7 @@ def _daily_noon_reset_metrics(
         if pd.isna(noon_price) or pd.isna(prior_reference_price):
             continue
 
+        max_price = float(observed_series.max())
         min_price = float(observed_series.min())
         min_points = observed_series[observed_series == min_price]
         if min_points.empty:
@@ -344,6 +347,7 @@ def _daily_noon_reset_metrics(
         first_min = min_points.index[0]
 
         post_noon_decreases = 0
+        post_noon_increases = 0
         previous_value = float(noon_price)
         post_noon_events = normalized.loc[
             (normalized.index > anchor_time) & (normalized.index <= metric_end_time)
@@ -352,6 +356,8 @@ def _daily_noon_reset_metrics(
             current_value = float(value)
             if current_value < previous_value - 1e-9:
                 post_noon_decreases += 1
+            elif current_value > previous_value + 1e-9:
+                post_noon_increases += 1
             previous_value = current_value
 
         min_duration_minutes = int(min_points.shape[0])
@@ -363,18 +369,19 @@ def _daily_noon_reset_metrics(
                 "window_start_timestamp": anchor_time.isoformat(timespec="minutes"),
                 "window_end_timestamp": metric_end_time.isoformat(timespec="minutes"),
                 "noon_price": round(float(noon_price), 3),
-                "max_price": round(float(noon_price), 3),
+                "max_price": round(max_price, 3),
                 "prior_reference_price": round(float(prior_reference_price), 3),
                 "prior_reference_label": str(window["prior_reference_label"]),
-                "max_price_delta_vs_prior": round(float(noon_price - prior_reference_price), 3),
+                "max_price_delta_vs_prior": round(float(max_price - prior_reference_price), 3),
                 "post_noon_decreases": post_noon_decreases,
+                "post_noon_increases": post_noon_increases,
                 "min_price": round(min_price, 3),
                 "min_timestamp": first_min.isoformat(timespec="minutes"),
                 "min_time_minutes": min_time_minutes,
                 "min_time_text": _clock_text(min_time_minutes),
                 "min_duration_minutes": min_duration_minutes,
                 "min_duration_text": _duration_text(min_duration_minutes),
-                "daily_range": round(float(noon_price - min_price), 3),
+                "daily_range": round(float(max_price - min_price), 3),
             }
         )
 

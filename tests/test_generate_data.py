@@ -140,6 +140,36 @@ class DailyNoonResetMetricTests(unittest.TestCase):
         self.assertEqual(daily[0]["min_price"], 1.67)
         self.assertEqual(daily[0]["min_time_text"], "10:00")
 
+    def test_daily_metrics_track_actual_post_noon_maximum_and_increases(self) -> None:
+        series = pd.Series(
+            [1.70, 1.75, 1.78, 1.74, 1.69],
+            index=pd.DatetimeIndex(
+                [
+                    "2026-03-31 12:00",
+                    "2026-04-01 12:00",
+                    "2026-04-01 13:15",
+                    "2026-04-01 18:00",
+                    "2026-04-02 09:30",
+                ],
+                tz="Europe/Berlin",
+            ),
+        )
+
+        daily, summary = _daily_noon_reset_metrics(
+            series,
+            [date(2026, 4, 1), date(2026, 4, 2)],
+        )
+
+        self.assertEqual(len(daily), 1)
+        self.assertEqual(daily[0]["noon_price"], 1.75)
+        self.assertEqual(daily[0]["max_price"], 1.78)
+        self.assertEqual(daily[0]["max_price_delta_vs_prior"], 0.08)
+        self.assertEqual(daily[0]["post_noon_decreases"], 2)
+        self.assertEqual(daily[0]["post_noon_increases"], 1)
+        self.assertEqual(daily[0]["daily_range"], 0.09)
+        self.assertEqual(summary["max_price_avg"], 1.78)
+        self.assertEqual(summary["post_noon_increases_avg"], 1.0)
+
     def test_cycle_profile_tracks_markdown_from_previous_noon_across_24_hours(self) -> None:
         cycle_hourly, cycle_summary = _noon_to_noon_markdown_profile(
             self.build_series(),
