@@ -145,6 +145,7 @@ def generate_noon_price_backfill(
     start_date: date,
     end_date: date,
     lookback_days: int = DEFAULT_LOOKBACK_DAYS,
+    write_latest_output: bool = True,
 ) -> list[Path]:
     station_cache: dict[date, list[str]] = {}
     price_cache: dict[date, pd.DataFrame] = {}
@@ -165,7 +166,8 @@ def generate_noon_price_backfill(
     if latest_snapshot is None:
         raise RuntimeError("No noon snapshots were generated.")
 
-    _write_snapshot(latest_snapshot, latest_output_path)
+    if write_latest_output:
+        _write_snapshot(latest_snapshot, latest_output_path)
     return written_paths
 
 
@@ -201,6 +203,11 @@ def parse_args() -> argparse.Namespace:
         default=Path(__file__).resolve().parents[1] / "data" / "noon.csv",
         help="Top-level CSV output path for the last processed day. Defaults to data/noon.csv.",
     )
+    parser.add_argument(
+        "--skip-latest-output",
+        action="store_true",
+        help="Do not overwrite the top-level latest snapshot. Useful for historical backfills.",
+    )
     args = parser.parse_args()
     if args.end_date < args.start_date:
         parser.error("--end-date must be on or after --start-date.")
@@ -217,8 +224,12 @@ def main() -> None:
         start_date=args.start_date,
         end_date=args.end_date,
         lookback_days=args.lookback_days,
+        write_latest_output=not args.skip_latest_output,
     )
-    print(f"Wrote {args.latest_output}")
+    if args.skip_latest_output:
+        print("Skipped top-level latest snapshot update")
+    else:
+        print(f"Wrote {args.latest_output}")
     print(f"Wrote {len(written_paths)} dated noon snapshots under {args.output_root / 'data2'}")
 
 
