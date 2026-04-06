@@ -66,9 +66,9 @@
       summary.post_noon_increases_median,
     );
     const parts = [];
-    if (noonPrice !== null) parts.push(`12:00 ${noonPrice.toFixed(3)} €/l`);
+    if (noonPrice !== null) parts.push(`${noonPrice.toFixed(3)} €/l`);
     if (decreases !== null) parts.push(`${formatCount(decreases)} Senk.`);
-    if (increases !== null && increases > 0.05) {
+    if (increases !== null && increases > 1.05) {
       parts.push(`${formatCount(increases)} Erh.`);
     }
     return parts.length ? parts.join(" · ") : fallback;
@@ -100,24 +100,110 @@
     return ((Math.round(hour) % 24) + 24) % 24;
   }
 
-  function relativeMinimumHours(stats) {
+  function uniqueSortedHours(values) {
+    return [...new Set(
+      values
+        .map((value) => normalizeHour(value))
+        .filter((hour) => hour !== null),
+    )].sort((left, right) => left - right);
+  }
+
+  function bestHours(stats) {
+    if (!stats || typeof stats !== "object" || !Array.isArray(stats.besthours)) {
+      return [];
+    }
+    return uniqueSortedHours(stats.besthours);
+  }
+
+  function priorNoonShift(stats) {
+    const daily = Array.isArray(stats && stats.daily) ? stats.daily : [];
+    const shifts = daily
+      .map((row) => {
+        const noonPrice = toNumber(row && row.noon_price);
+        const priorPrice = toNumber(row && row.prior_reference_price);
+        if (noonPrice === null || priorPrice === null) return null;
+        return noonPrice - priorPrice;
+      })
+      .filter((value) => value !== null);
+    if (shifts.length) {
+      return shifts.reduce((sum, value) => sum + value, 0) / shifts.length;
+    }
+    const summary = summaryFromStats(stats);
+    if (!summary) return 0;
+    const noonPrice = pickNumber(
+      summary.noon_price_avg,
+      summary.noon_price_median,
+    );
+    const priorPrice = pickNumber(
+      summary.prior_reference_price_avg,
+      summary.prior_reference_price_median,
+    );
+    if (noonPrice === null || priorPrice === null) return 0;
+    return noonPrice - priorPrice;
+  }
+
+  function chartCycleSeries(stats) {
+    return cycleMarkdownSeries(stats, { includeClosingNoon: false }).map((row) => ({
+      cycleHour: row.cycleHour,
+      hour: row.clockHour,
+      displayValue: -row.markdown,
+    }));
+  }
+
+  function chartReferenceSeries(stats) {
     if (!stats || typeof stats !== "object" || !Array.isArray(stats.hourly)) {
       return [];
     }
-    const hourly = stats.hourly
-      .map((row) => ({
-        hour: normalizeHour(row && row.hour),
-        price: toNumber(row && row.price),
-      }))
-      .filter((row) => row.hour !== null && row.price !== null);
-    if (!hourly.length) return [];
-    const minimumPrice = Math.min(...hourly.map((row) => row.price));
-    const epsilon = 1e-9;
-    return [...new Set(
-      hourly
-        .filter((row) => Math.abs(row.price - minimumPrice) <= epsilon)
+    const shift = priorNoonShift(stats);
+    return stats.hourly
+      .map((row) => {
+        const hour = normalizeHour(row && row.hour);
+        const price = toNumber(row && row.price);
+        if (hour === null || price === null) return null;
+        return {
+          hour,
+          displayValue: price + (hour >= 12 ? shift : 0),
+        };
+      })
+      .filter((row) => row !== null)
+      .sort((left, right) => left.hour - right.hour);
+  }
+
+  function tankzeitSeries(stats) {
+    const cycleSeries = chartCycleSeries(stats);
+    if (cycleSeries.length) {
+      return {
+        kind: "cycle",
+        rows: cycleSeries,
+      };
+    }
+    const referenceSeries = chartReferenceSeries(stats);
+    if (referenceSeries.length) {
+      return {
+        kind: "clock",
+        rows: referenceSeries,
+      };
+    }
+    return {
+      kind: null,
+      rows: [],
+    };
+  }
+
+  function relativeMinimumHours(stats) {
+    const { rows } = tankzeitSeries(stats);
+    if (!rows.length) {
+      const storedBestHours = bestHours(stats);
+      if (storedBestHours.length) return storedBestHours;
+      return [];
+    }
+    const minimumValue = Math.min(...rows.map((row) => row.displayValue));
+    const epsilon = 0.0005;
+    return uniqueSortedHours(
+      rows
+        .filter((row) => Math.abs(row.displayValue - minimumValue) <= epsilon)
         .map((row) => row.hour),
-    )].sort((left, right) => left - right);
+    );
   }
 
   function relativeMinimumRangesText(hours) {
@@ -142,14 +228,46 @@
   }
 
   function relativeMinimumText(stats, fallback = "-") {
-    const hours = relativeMinimumHours(stats);
-    if (hours.length) {
-      const text = relativeMinimumRangesText(hours);
+    const series = tankzeitSeries(stats);
+    if (series.rows.length) {
+      const minimumValue = Math.min(...series.rows.map((row) => row.displayValue));
+      const epsilon = 0.0005;
+      const minimumRows = series.rows.filter(
+        (row) => Math.abs(row.displayValue - minimumValue) <= epsilon,
+      );
+      if (series.kind === "cycle") {
+        if (minimumRows.length >= 24) return "0 - 24h";
+        const ranges = [];
+        let rangeStart = minimumRows[0];
+        let previous = minimumRows[0];
+        for (let index = 1; index < minimumRows.length; index += 1) {
+          const row = minimumRows[index];
+          if (row.cycleHour === previous.cycleHour + 1) {
+            previous = row;
+            continue;
+          }
+          ranges.push([rangeStart.hour, (previous.hour + 1) % 24]);
+          rangeStart = row;
+          previous = row;
+        }
+        ranges.push([rangeStart.hour, (previous.hour + 1) % 24]);
+        return ranges.map(([start, end]) => `${start} - ${end}h`).join(", ");
+      }
+      const text = relativeMinimumRangesText(
+        uniqueSortedHours(minimumRows.map((row) => row.hour)),
+      );
+      if (text) return text;
+    }
+    const storedBestHours = bestHours(stats);
+    if (storedBestHours.length) {
+      const text = relativeMinimumRangesText(storedBestHours);
       if (text) return text;
     }
     if (stats && typeof stats.text === "string" && stats.text.trim()) {
       return stats.text.trim();
     }
+    const minimum = minimumText(stats, "");
+    if (minimum) return minimum;
     return fallback;
   }
 
@@ -190,7 +308,50 @@
     return isNowInTypicalMinimumWindow(stats, now);
   }
 
+  function cycleMarkdownValue(row) {
+    if (!row || typeof row !== "object") return null;
+    return pickNumber(
+      row.markdown_median,
+      row.markdown_avg,
+      row.markdown_max,
+      row.markdown_min,
+    );
+  }
+
+  function cycleMarkdownSeries(stats, options = {}) {
+    if (!stats || typeof stats !== "object" || !Array.isArray(stats.cycle_hourly)) {
+      return [];
+    }
+    const includeClosingNoon = options.includeClosingNoon !== false;
+    return stats.cycle_hourly
+      .map((row) => {
+        const cycleHour = toNumber(row && row.cycle_hour);
+        const clockHour = normalizeHour(
+          row && row.clock_hour != null ? row.clock_hour : row && row.label,
+        );
+        const markdown = cycleMarkdownValue(row);
+        if (cycleHour === null || clockHour === null || markdown === null) {
+          return null;
+        }
+        return {
+          cycleHour,
+          clockHour,
+          label:
+            typeof row.label === "string" && row.label.trim()
+              ? row.label.trim()
+              : String(clockHour).padStart(2, "0"),
+          markdown,
+          count: toNumber(row && row.count),
+        };
+      })
+      .filter((row) => row !== null)
+      .filter((row) => includeClosingNoon || row.cycleHour < 24)
+      .sort((left, right) => left.cycleHour - right.cycleHour);
+  }
+
   window.TankzeitStats = {
+    bestHours,
+    cycleMarkdownSeries,
     formatClock,
     formatCount,
     formatDuration,

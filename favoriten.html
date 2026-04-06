@@ -44,7 +44,7 @@
               <th>E10 €/l</th>
               <th>Diesel €/l</th>
               <th>E10 Mittag / Senkungen</th>
-              <th>E10 Tagesminimum</th>
+              <th>Tankzeit</th>
               <th></th>
             </tr>
           </thead>
@@ -202,7 +202,7 @@
                 profile.innerHTML = `<a href="${detailsHref}">${escapeHtml(TankzeitStats.profileText(stats, "Details"))}</a>`;
               }
               if (minimum) {
-                minimum.textContent = TankzeitStats.minimumText(
+                minimum.textContent = TankzeitStats.relativeMinimumText(
                   stats,
                   stats.text || "-",
                 );
@@ -248,7 +248,7 @@
             <td data-label="E10" id="${station.id}-e10">...</td>
             <td data-label="Diesel" id="${station.id}-diesel">...</td>
             <td data-label="E10 Mittag / Senkungen" id="${station.id}-profile"><a href="${detailsHref}">Details</a></td>
-            <td data-label="E10 Tagesminimum" id="${station.id}-minimum">-</td>
+            <td data-label="Tankzeit" id="${station.id}-minimum">-</td>
             <td><button class="remove" data-id="${station.id}">🗑️</button></td>
           </tr>
         `;
