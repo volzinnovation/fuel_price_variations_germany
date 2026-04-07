@@ -66,8 +66,8 @@
           Tankstellen zu finden. Bitte erlaube den Zugriff im Browser.
         </div>
         <div class="tip">
-          Safari auf dem Mac liefert den Standort oft erst nach einem
-          ausdrücklichen Klick auf den Button.
+          Falls der automatische Abruf nicht klappt, kannst du den Button als
+          Backup erneut verwenden.
         </div>
         <div class="location-actions">
           <button class="btn primary" id="location-request-btn" type="button">
@@ -91,9 +91,7 @@
           </thead>
           <tbody id="stations">
             <tr>
-              <td colspan="5">
-                Bitte Standort laden, um Tankstellen in deiner Nähe zu sehen.
-              </td>
+              <td colspan="5">Wir laden die Daten...</td>
             </tr>
           </tbody>
         </table>
@@ -429,6 +427,7 @@
       }
 
       locationRequestBtn.addEventListener("click", requestLocation);
+      requestLocation();
     </script>
   </body>
 </html>

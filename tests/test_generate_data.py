@@ -326,7 +326,7 @@ class DailyNoonResetMetricTests(unittest.TestCase):
         self.assertEqual(best_hourly.loc[best_hourly["hour"] == 0, "price"].item(), 1.95)
         self.assertEqual(best_hourly.loc[best_hourly["hour"] == 12, "price"].item(), 2.1)
 
-    def test_hourly_variation_samples_observable_price_at_hour_start(self) -> None:
+    def test_hourly_variation_averages_minutely_filled_hour(self) -> None:
         series = pd.Series(
             [2.00, 1.95, 2.05, 2.00],
             index=pd.DatetimeIndex(
@@ -352,10 +352,42 @@ class DailyNoonResetMetricTests(unittest.TestCase):
         )
 
         self.assertEqual(used_days, 1)
-        self.assertEqual(hourly.loc[hourly["hour"] == 0, "price"].item(), -0.05)
+        self.assertEqual(hourly.loc[hourly["hour"] == 0, "price"].item(), 0.0)
         self.assertEqual(hourly.loc[hourly["hour"] == 1, "price"].item(), 0.0)
-        self.assertEqual(best_hourly.loc[best_hourly["hour"] == 0, "price"].item(), 1.95)
+        self.assertEqual(best_hourly.loc[best_hourly["hour"] == 0, "price"].item(), 2.0)
         self.assertEqual(best_hourly.loc[best_hourly["hour"] == 1, "price"].item(), 2.0)
+
+    def test_hourly_variation_keeps_post_noon_increase_in_hour_12_bucket(self) -> None:
+        series = pd.Series(
+            [2.00, 1.90, 2.10],
+            index=pd.DatetimeIndex(
+                [
+                    "2026-04-05 12:00",
+                    "2026-04-06 09:00",
+                    "2026-04-06 12:01",
+                ],
+                tz="Europe/Berlin",
+            ),
+        )
+
+        hourly, best_hourly, _, _, used_days, _ = _hourly_variation(
+            series,
+            window_start=pd.Timestamp("2026-04-05 00:00").to_pydatetime(),
+            window_end=pd.Timestamp("2026-04-06 23:59").to_pydatetime(),
+            analysis_days=[date(2026, 4, 5), date(2026, 4, 6)],
+            noon_reference_prices={
+                date(2026, 4, 5): 2.00,
+                date(2026, 4, 6): 2.10,
+            },
+        )
+
+        self.assertEqual(used_days, 1)
+        self.assertEqual(hourly.loc[hourly["hour"] == 9, "price"].item(), -0.1)
+        self.assertEqual(hourly.loc[hourly["hour"] == 10, "price"].item(), -0.1)
+        self.assertEqual(hourly.loc[hourly["hour"] == 11, "price"].item(), -0.1)
+        self.assertEqual(hourly.loc[hourly["hour"] == 12, "price"].item(), 0.1)
+        self.assertEqual(best_hourly.loc[best_hourly["hour"] == 11, "price"].item(), 1.9)
+        self.assertEqual(best_hourly.loc[best_hourly["hour"] == 12, "price"].item(), 2.097)
 
     def test_hourly_variation_uses_midnight_reference_before_noon_on_law_effective_day(self) -> None:
         series = pd.Series(
