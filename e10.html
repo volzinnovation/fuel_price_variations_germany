@@ -143,7 +143,11 @@
       const ids = JSON.parse(localStorage.getItem("ids")) || [];
       const fav = JSON.parse(localStorage.getItem("fav")) || [];
       const SORT_STORAGE_KEY = `tankzeit_sort_${FUEL}`;
+      const LOCATION_OPTIONS = { enableHighAccuracy: false, maximumAge: 300000 };
+      const LOCATION_DEADLINE_MS = 25000;
       let currentCenter = null;
+      let locationWatchId = null;
+      let locationDeadlineId = null;
 
       sortModeEl.value = localStorage.getItem(SORT_STORAGE_KEY) || "distance";
       sortModeEl.addEventListener("change", () => {
@@ -202,11 +206,13 @@
           <input id="manual-lng" type="number" step="0.0001" placeholder="Längengrad" />
           <button class="btn" id="manual-btn" type="button">Manuell suchen</button>
         `;
-        document.getElementById("retry-location-btn").onclick = requestLocation;
+        const retryButton = wrapper.querySelector("#retry-location-btn");
+        const manualButton = wrapper.querySelector("#manual-btn");
         statusEl.appendChild(wrapper);
-        document.getElementById("manual-btn").onclick = () => {
-          const lat = parseFloat(document.getElementById("manual-lat").value);
-          const lng = parseFloat(document.getElementById("manual-lng").value);
+        retryButton.onclick = requestLocation;
+        manualButton.onclick = () => {
+          const lat = parseFloat(wrapper.querySelector("#manual-lat").value);
+          const lng = parseFloat(wrapper.querySelector("#manual-lng").value);
           if (Number.isFinite(lat) && Number.isFinite(lng)) {
             loadStations(lat, lng);
           }
@@ -214,6 +220,11 @@
       }
 
       function geoError(err) {
+        clearLocationRequest();
+        console.warn("Geolocation failed", {
+          code: err?.code,
+          message: err?.message,
+        });
         let message = "Standort konnte nicht ermittelt werden.";
         if (err && err.code === 1)
           message =
@@ -231,20 +242,52 @@
         manualLocationForm();
       }
 
+      function clearLocationRequest() {
+        if (locationWatchId !== null && navigator.geolocation) {
+          navigator.geolocation.clearWatch(locationWatchId);
+          locationWatchId = null;
+        }
+        if (locationDeadlineId !== null) {
+          window.clearTimeout(locationDeadlineId);
+          locationDeadlineId = null;
+        }
+      }
+
+      function handleLocation(position) {
+        clearLocationRequest();
+        clearStatus();
+        const hint = document.getElementById("location-hint");
+        if (hint) hint.style.display = "none";
+        loadStations(position.coords.latitude, position.coords.longitude);
+      }
+
       function requestLocation() {
         if (!navigator.geolocation) {
           geoError({ code: 2 });
           return;
         }
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            const hint = document.getElementById("location-hint");
-            if (hint) hint.style.display = "none";
-            loadStations(position.coords.latitude, position.coords.longitude);
+        clearLocationRequest();
+        setStatus("Standort wird ermittelt...");
+        locationWatchId = navigator.geolocation.watchPosition(
+          handleLocation,
+          (err) => {
+            console.warn("Geolocation pending", {
+              code: err?.code,
+              message: err?.message,
+            });
+            if (err && err.code === 1) {
+              geoError(err);
+              return;
+            }
+            setStatus(
+              "Standort wird noch ermittelt. Das kann beim ersten Abruf etwas länger dauern.",
+            );
           },
-          geoError,
-          { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 },
+          LOCATION_OPTIONS,
         );
+        locationDeadlineId = window.setTimeout(() => {
+          geoError({ code: 3, message: "Location request deadline exceeded." });
+        }, LOCATION_DEADLINE_MS);
       }
 
       function isTankerkoenigRequest(url) {
