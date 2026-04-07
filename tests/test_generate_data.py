@@ -68,6 +68,29 @@ class LoadPricesTests(unittest.TestCase):
             ],
         )
 
+    @patch("scripts.generate_data._read_csv_from_url")
+    def test_load_prices_accepts_short_utc_offset_suffixes(self, mock_read_csv) -> None:
+        mock_read_csv.return_value = pd.DataFrame(
+            {
+                "date": [
+                    "2026-04-06T12:00:00+02",
+                    "2026-04-06T13:00:00+02",
+                ],
+                "station_uuid": ["station-1", "station-1"],
+            }
+        )
+
+        data = _load_prices(DateRange(date(2026, 4, 6), date(2026, 4, 6)))
+
+        self.assertEqual(str(data["date"].dt.tz), "UTC")
+        self.assertEqual(
+            data["date"].dt.strftime("%Y-%m-%dT%H:%M:%S%z").tolist(),
+            [
+                "2026-04-06T10:00:00+0000",
+                "2026-04-06T11:00:00+0000",
+            ],
+        )
+
 
 class BrentSnapshotTests(unittest.TestCase):
     @patch("scripts.generate_data._read_text_from_url")

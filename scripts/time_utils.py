@@ -6,7 +6,7 @@ import pandas as pd
 import pytz
 
 
-_OFFSET_SUFFIX_RE = re.compile(r"(?:Z|[+-]\d{2}:?\d{2})$", re.IGNORECASE)
+_OFFSET_SUFFIX_RE = re.compile(r"(?:Z|[+-]\d{2}(?::?\d{2})?)$", re.IGNORECASE)
 
 
 def _localize_naive_values_to_utc(
@@ -20,6 +20,10 @@ def _localize_naive_values_to_utc(
         return result
 
     localized_source = parsed.loc[valid].sort_index()
+    if isinstance(localized_source.dtype, pd.DatetimeTZDtype):
+        result.loc[localized_source.index] = localized_source.dt.tz_convert("UTC")
+        return result
+
     try:
         localized = localized_source.dt.tz_localize(
             tz,
