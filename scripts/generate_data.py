@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Iterable, List, Dict
+from xml.etree import ElementTree as ET
 
 import certifi
 import pandas as pd
@@ -20,15 +21,34 @@ from tqdm import tqdm
 
 try:
     from .noon_reference import build_noon_reference_snapshot
+    from .noon_outputs import (
+        build_noon_snapshot,
+        collect_history_rows,
+        dated_noon_snapshot_path as _dated_noon_snapshot_path,
+        write_history_files,
+        write_snapshot,
+    )
 except ImportError:  # pragma: no cover
     from noon_reference import build_noon_reference_snapshot
+    from noon_outputs import (
+        build_noon_snapshot,
+        collect_history_rows,
+        dated_noon_snapshot_path as _dated_noon_snapshot_path,
+        write_history_files,
+        write_snapshot,
+    )
 
 TZ = pytz.timezone("Europe/Berlin")
 LAW_RESET_DATE = date(2026, 4, 1)
+DEFAULT_AVAILABILITY_LOOKBACK_DAYS = 7
+DEFAULT_NOON_LOOKBACK_DAYS = 3
 TANKER_BASE = (
     "https://data.tankerkoenig.de/"
     "tankerkoenig-organization/tankerkoenig-data/raw/branch/master"
 )
+FRED_BRENT_CSV_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DCOILBRENTEU"
+ECB_FX_90D_XML_URL = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist-90d.xml"
+LITERS_PER_BARREL = 42 * 3.785411784
 
 
 @dataclass
@@ -59,6 +79,102 @@ def _read_csv_from_url(url: str, label: str | None = None, show: bool = True) ->
     if text.startswith("<") or text.startswith("{"):
         raise ValueError("Unexpected response payload (not CSV).")
     return pd.read_csv(io.StringIO(text))
+
+
+def _read_text_from_url(url: str, label: str | None = None, show: bool = True) -> str:
+    if label and show:
+        print(f"Downloading {label}...")
+    response = requests.get(url, timeout=120, verify=certifi.where())
+    response.raise_for_status()
+    return response.text
+
+
+def _select_ecb_fx_rate(
+    rates_by_day: Dict[date, float],
+    target_day: date,
+) -> tuple[date, float]:
+    if target_day in rates_by_day:
+        return target_day, rates_by_day[target_day]
+
+    prior_days = [day for day in rates_by_day if day <= target_day]
+    if prior_days:
+        fx_day = max(prior_days)
+        return fx_day, rates_by_day[fx_day]
+
+    fx_day = max(rates_by_day)
+    return fx_day, rates_by_day[fx_day]
+
+
+def _fetch_brent_crude_snapshot() -> dict[str, object]:
+    brent_text = _read_text_from_url(
+        FRED_BRENT_CSV_URL,
+        label="Brent crude (FRED/EIA)",
+        show=False,
+    ).lstrip("\ufeff")
+    brent_df = pd.read_csv(io.StringIO(brent_text))
+    if brent_df.shape[1] < 2:
+        raise ValueError("Unexpected Brent CSV format.")
+
+    date_col, value_col = brent_df.columns[:2]
+    brent_df[date_col] = pd.to_datetime(brent_df[date_col], errors="coerce").dt.date
+    brent_df[value_col] = pd.to_numeric(brent_df[value_col], errors="coerce")
+    brent_df = brent_df.dropna(subset=[date_col, value_col]).sort_values(date_col)
+    if brent_df.empty:
+        raise ValueError("Brent CSV contained no usable rows.")
+
+    latest_row = brent_df.iloc[-1]
+    brent_day = latest_row[date_col]
+    brent_usd_per_barrel = float(latest_row[value_col])
+
+    fx_xml = _read_text_from_url(
+        ECB_FX_90D_XML_URL,
+        label="ECB FX 90d",
+        show=False,
+    ).lstrip()
+    root = ET.fromstring(fx_xml)
+    ns = {"ecb": "http://www.ecb.int/vocabulary/2002-08-01/eurofxref"}
+    rates_by_day: Dict[date, float] = {}
+    for day_cube in root.findall(".//ecb:Cube[@time]", ns):
+        day_text = day_cube.attrib.get("time")
+        if not day_text:
+            continue
+        usd_cube = next(
+            (
+                cube
+                for cube in day_cube.findall("ecb:Cube", ns)
+                if cube.attrib.get("currency") == "USD"
+            ),
+            None,
+        )
+        if usd_cube is None:
+            continue
+        rate_text = usd_cube.attrib.get("rate")
+        if not rate_text:
+            continue
+        rates_by_day[date.fromisoformat(day_text)] = float(rate_text)
+
+    if not rates_by_day:
+        raise ValueError("ECB XML contained no USD exchange rates.")
+
+    fx_day, usd_per_eur = _select_ecb_fx_rate(rates_by_day, brent_day)
+    brent_eur_per_barrel = brent_usd_per_barrel / usd_per_eur
+    brent_eur_per_crude_liter = brent_eur_per_barrel / LITERS_PER_BARREL
+
+    return {
+        "series_id": "DCOILBRENTEU",
+        "barrel_liters": round(LITERS_PER_BARREL, 6),
+        "brent_as_of": str(brent_day),
+        "brent_usd_per_barrel": round(brent_usd_per_barrel, 4),
+        "usd_per_eur_as_of": str(fx_day),
+        "usd_per_eur": round(usd_per_eur, 6),
+        "brent_eur_per_barrel": round(brent_eur_per_barrel, 4),
+        "brent_eur_per_crude_liter": round(brent_eur_per_crude_liter, 6),
+        "generated_at": datetime.now(TZ).isoformat(timespec="seconds"),
+        "sources": {
+            "brent_csv": FRED_BRENT_CSV_URL,
+            "fx_xml": ECB_FX_90D_XML_URL,
+        },
+    }
 
 
 def download_stations(target_path: Path, target_day: date) -> pd.DataFrame:
@@ -130,11 +246,18 @@ def _filled_minute_series(
 
 
 def _load_prices(days: DateRange) -> pd.DataFrame:
+    data, _ = _load_prices_with_days(days)
+    return data
+
+
+def _load_prices_with_days(days: DateRange) -> tuple[pd.DataFrame, list[date]]:
     frames: List[pd.DataFrame] = []
+    available_days: list[date] = []
     for day in tqdm(list(days.iter_days()), desc="Downloading prices", unit="day"):
         url = f"{TANKER_BASE}/{_data_path('prices', day)}"
         try:
             frames.append(_read_csv_from_url(url, label=f"prices {day:%Y-%m-%d}", show=False))
+            available_days.append(day)
         except Exception:
             continue
     if not frames:
@@ -146,7 +269,7 @@ def _load_prices(days: DateRange) -> pd.DataFrame:
     data["date"] = _parse_dates_utc(data["date"])
     data = data.dropna(subset=["date", "station_uuid"])
     data = data.sort_values("date")
-    return data
+    return data, available_days
 
 
 def _range_text(hours: List[int]) -> str:
@@ -493,17 +616,6 @@ def _latest_price_snapshot(
         if fuel not in latest.columns:
             latest[fuel] = pd.NA
     return latest[["station_uuid", "date", *fuels]].reset_index(drop=True)
-
-
-def _dated_noon_snapshot_path(output_root: Path, target_day: date) -> Path:
-    return (
-        output_root
-        / "data2"
-        / f"{target_day:%Y}"
-        / f"{target_day:%m}"
-        / f"{target_day:%d}"
-        / "noon.csv"
-    )
 
 
 def _load_noon_snapshot(path: Path) -> pd.DataFrame:
@@ -870,16 +982,39 @@ def generate(
 ) -> None:
     today = today_override or date.today()
     print("Starting data generation...")
-    stations_day = today - timedelta(days=1)
-    stations_frame = download_stations(output_root / "data" / "stations.json", stations_day)
+    try:
+        brent_snapshot = _fetch_brent_crude_snapshot()
+    except Exception as exc:
+        print(f"Warning: failed to refresh Brent crude snapshot: {exc}")
+    else:
+        brent_path = output_root / "data" / "brent.json"
+        brent_path.parent.mkdir(parents=True, exist_ok=True)
+        brent_path.write_text(
+            json.dumps(brent_snapshot, ensure_ascii=False),
+            encoding="utf-8",
+        )
 
     if analysis_days_count < 2:
         raise SystemExit("--analysis-days must be at least 2.")
-    analysis_start = today - timedelta(days=analysis_days_count)
-    analysis_end = today - timedelta(days=1)
-    data_start = analysis_start - timedelta(days=1)
-    data_end = analysis_end
-    data = _load_prices(DateRange(data_start, data_end))
+    desired_analysis_end = today - timedelta(days=1)
+    desired_analysis_start = today - timedelta(days=analysis_days_count)
+    raw_start = desired_analysis_start - timedelta(
+        days=DEFAULT_NOON_LOOKBACK_DAYS + DEFAULT_AVAILABILITY_LOOKBACK_DAYS
+    )
+    data_end = desired_analysis_end
+    data, available_days = _load_prices_with_days(DateRange(raw_start, data_end))
+    analysis_end = max(available_days)
+    analysis_start = analysis_end - timedelta(days=analysis_days_count - 1)
+    if analysis_end != desired_analysis_end:
+        print(
+            f"Using latest available raw price day {analysis_end:%Y-%m-%d} "
+            f"instead of {desired_analysis_end:%Y-%m-%d}."
+        )
+    if analysis_start - timedelta(days=DEFAULT_NOON_LOOKBACK_DAYS) < raw_start:
+        raise RuntimeError(
+            "Latest available raw price day fell outside the prefetched daily window."
+        )
+    stations_frame = download_stations(output_root / "data" / "stations.json", analysis_end)
     print(f"Loaded {len(data):,} price rows.")
 
     window_start = datetime.combine(analysis_start, datetime.min.time())
@@ -887,6 +1022,23 @@ def generate(
     analysis_days = [analysis_start + timedelta(days=offset) for offset in range((analysis_end - analysis_start).days + 1)]
 
     fuels = ("diesel", "e10", "e5")
+    station_ids = (
+        stations_frame[_station_id_column(stations_frame)].dropna().astype(str).sort_values().unique().tolist()
+    )
+    noon_snapshot = build_noon_snapshot(data, station_ids, analysis_end, TZ, fuels=fuels)
+    write_snapshot(noon_snapshot, _dated_noon_snapshot_path(output_root, analysis_end))
+    write_snapshot(noon_snapshot, output_root / "data" / "noon.csv")
+    history_rows: dict[tuple[str, str], list[dict[str, object]]] = {}
+    collect_history_rows(
+        history_rows,
+        noon_snapshot,
+        target_day=analysis_end,
+        history_start_date=LAW_RESET_DATE,
+        fuels=fuels,
+    )
+    history_paths = write_history_files(output_root, history_rows)
+    if history_paths:
+        print(f"Wrote {len(history_paths):,} station fuel noon history files")
     noon_reference_prices = _load_noon_reference_prices(
         output_root,
         data,

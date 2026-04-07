@@ -6,7 +6,7 @@ name: Daily data update
 # or API.
 on:
   schedule:
-  - cron: '5 0 * * *'  # every day at 5 am
+  - cron: '5 0 * * *'  # 00:05 UTC (GitHub Actions schedules use UTC)
   workflow_dispatch:
 
 concurrency:
@@ -32,10 +32,6 @@ jobs:
           python-version: "3.11"
       - name: Install dependencies
         run: python -m pip install --upgrade pip && pip install -r requirements.txt
-      - name: Capture yesterday noon reference snapshot
-        run: |
-          TARGET_DATE=$(python -c "from datetime import date, timedelta; print((date.today() - timedelta(days=1)).isoformat())")
-          python scripts/generate_noon_price_backfill.py --start-date "$TARGET_DATE" --end-date "$TARGET_DATE"
       - name: Generate data
         run: python scripts/generate_data.py --analysis-days 2
       - name: Configure git
