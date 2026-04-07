@@ -45,6 +45,29 @@ class LoadPricesTests(unittest.TestCase):
             ],
         )
 
+    @patch("scripts.generate_data._read_csv_from_url")
+    def test_load_prices_treats_naive_source_timestamps_as_berlin_local_time(self, mock_read_csv) -> None:
+        mock_read_csv.return_value = pd.DataFrame(
+            {
+                "date": [
+                    "2026-04-06 12:00:00",
+                    "2026-04-06 13:00:00",
+                ],
+                "station_uuid": ["station-1", "station-1"],
+            }
+        )
+
+        data = _load_prices(DateRange(date(2026, 4, 6), date(2026, 4, 6)))
+
+        self.assertEqual(str(data["date"].dt.tz), "UTC")
+        self.assertEqual(
+            data["date"].dt.strftime("%Y-%m-%dT%H:%M:%S%z").tolist(),
+            [
+                "2026-04-06T10:00:00+0000",
+                "2026-04-06T11:00:00+0000",
+            ],
+        )
+
 
 class BrentSnapshotTests(unittest.TestCase):
     @patch("scripts.generate_data._read_text_from_url")
@@ -534,47 +557,49 @@ class RawNoonReferenceSnapshotTests(unittest.TestCase):
         mock_load_prices_with_days.return_value = (
             pd.DataFrame(
                 {
-                    "station_uuid": ["s1"] * 7,
+                    "station_uuid": ["s1"] * 5,
                     "date": pd.to_datetime(
                         [
-                            "2026-04-02T10:00:00Z",
-                            "2026-04-03T07:00:00Z",
-                            "2026-04-03T10:00:00Z",
                             "2026-04-04T07:00:00Z",
                             "2026-04-04T10:00:00Z",
                             "2026-04-05T07:00:00Z",
-                            "2026-04-05T10:01:43Z",
+                            "2026-04-05T10:00:00Z",
+                            "2026-04-06T10:01:43Z",
                         ],
                         utc=True,
                     ),
-                    "diesel": [1.68, 1.67, 1.7, 1.69, 1.72, 1.71, 1.74],
-                    "e10": [1.73, 1.72, 1.75, 1.74, 1.77, 1.76, 1.79],
-                    "e5": [1.78, 1.77, 1.8, 1.79, 1.82, 1.81, 1.84],
+                    "diesel": [1.69, 1.72, 1.71, 1.74, 1.76],
+                    "e10": [1.74, 1.77, 1.76, 1.79, 1.81],
+                    "e5": [1.79, 1.82, 1.81, 1.84, 1.86],
                 }
             ),
-            [date(2026, 4, 2), date(2026, 4, 3), date(2026, 4, 4), date(2026, 4, 5)],
+            [date(2026, 4, 4), date(2026, 4, 5), date(2026, 4, 6)],
         )
 
         with TemporaryDirectory() as tmpdir:
             generate(Path(tmpdir), analysis_days_count=2, today_override=date(2026, 4, 7))
 
+            date_range = mock_load_prices_with_days.call_args.args[0]
+            self.assertEqual(date_range.start, date(2026, 4, 4))
+            self.assertEqual(date_range.end, date(2026, 4, 6))
+
             noon_path = Path(tmpdir) / "data" / "noon.csv"
-            dated_noon_path = Path(tmpdir) / "data2" / "2026" / "04" / "05" / "noon.csv"
+            dated_noon_path = Path(tmpdir) / "data2" / "2026" / "04" / "06" / "noon.csv"
             history_path = Path(tmpdir) / "data2" / "s1" / "diesel" / "history.csv"
             summary_path = (
                 Path(tmpdir)
                 / "data2"
                 / "2026"
                 / "04"
-                / "05"
+                / "06"
                 / "management_boxplots.json"
             )
 
-            mock_download_stations.assert_called_once_with(Path(tmpdir) / "data" / "stations.json", date(2026, 4, 5))
+            mock_download_stations.assert_called_once_with(Path(tmpdir) / "data" / "stations.json", date(2026, 4, 6))
 
             noon_rows = pd.read_csv(noon_path)
-            self.assertEqual(noon_rows.loc[0, "diesel"], 1.74)
-            self.assertEqual(noon_rows.loc[0, "last_update"], "2026-04-05T12:01:43+02:00")
+            self.assertEqual(noon_rows.loc[0, "diesel"], 1.76)
+            self.assertEqual(noon_rows.loc[0, "last_update"], "2026-04-06T12:01:43+02:00")
 
             dated_noon_rows = pd.read_csv(dated_noon_path)
             self.assertEqual(dated_noon_rows.to_dict(orient="records"), noon_rows.to_dict(orient="records"))
@@ -582,14 +607,64 @@ class RawNoonReferenceSnapshotTests(unittest.TestCase):
             history_rows = pd.read_csv(history_path)
             self.assertEqual(history_rows.to_dict(orient="records"), [
                 {
-                    "date": "2026-04-05",
-                    "price": 1.74,
-                    "last_update": "2026-04-05T12:01:43+02:00",
+                    "date": "2026-04-06",
+                    "price": 1.76,
+                    "last_update": "2026-04-06T12:01:43+02:00",
                 }
             ])
 
             summary = json.loads(summary_path.read_text(encoding="utf-8"))
-            self.assertEqual(summary["snapshot_date"], "2026-04-05")
+            self.assertEqual(summary["snapshot_date"], "2026-04-06")
+
+    @patch("scripts.generate_data._load_prices_with_days")
+    @patch("scripts.generate_data.download_stations")
+    @patch("scripts.generate_data._fetch_brent_crude_snapshot")
+    def test_generate_with_one_day_analysis_fetches_only_yesterday(
+        self,
+        mock_brent_snapshot,
+        mock_download_stations,
+        mock_load_prices_with_days,
+    ) -> None:
+        mock_download_stations.return_value = pd.DataFrame(
+            {
+                "uuid": ["s1"],
+                "brand": ["ARAL"],
+            }
+        )
+        mock_brent_snapshot.return_value = {
+            "barrel_liters": 158.987295,
+            "brent_as_of": "2026-03-30",
+            "brent_usd_per_barrel": 121.88,
+            "usd_per_eur_as_of": "2026-03-30",
+            "usd_per_eur": 1.1484,
+            "brent_eur_per_barrel": 106.1303,
+            "brent_eur_per_crude_liter": 0.667539,
+        }
+        mock_load_prices_with_days.return_value = (
+            pd.DataFrame(
+                {
+                    "station_uuid": ["s1", "s1"],
+                    "date": pd.to_datetime(
+                        [
+                            "2026-04-06T07:00:00Z",
+                            "2026-04-06T10:01:43Z",
+                        ],
+                        utc=True,
+                    ),
+                    "diesel": [1.71, 1.76],
+                    "e10": [1.76, 1.81],
+                    "e5": [1.81, 1.86],
+                }
+            ),
+            [date(2026, 4, 6)],
+        )
+
+        with TemporaryDirectory() as tmpdir:
+            generate(Path(tmpdir), analysis_days_count=1, today_override=date(2026, 4, 7))
+
+            date_range = mock_load_prices_with_days.call_args.args[0]
+            self.assertEqual(date_range.start, date(2026, 4, 6))
+            self.assertEqual(date_range.end, date(2026, 4, 6))
 
 
 if __name__ == "__main__":

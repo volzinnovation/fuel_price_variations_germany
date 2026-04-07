@@ -46,6 +46,35 @@ class NoonReferenceSnapshotTests(unittest.TestCase):
         self.assertEqual(snapshot.loc[0, "e10"], 1.82)
         self.assertEqual(snapshot.loc[0, "last_update"], "2026-04-05T12:01:43+02:00")
 
+    def test_build_noon_snapshot_treats_naive_source_timestamps_as_berlin_local_time(self) -> None:
+        prices = pd.DataFrame(
+            {
+                "station_uuid": [
+                    "station-1",
+                    "station-1",
+                    "station-1",
+                    "station-1",
+                ],
+                "date": [
+                    "2026-04-04 23:30:00",
+                    "2026-04-05 12:00:00",
+                    "2026-04-05 12:01:43",
+                    "2026-04-05 12:04:45",
+                ],
+                "diesel": [1.70, 1.70, 1.77, 1.76],
+                "e5": [1.80, 1.80, 1.87, 1.86],
+                "e10": [1.75, 1.75, 1.82, 1.81],
+            }
+        )
+
+        snapshot = build_noon_snapshot(prices, ["station-1"], date(2026, 4, 5))
+
+        self.assertEqual(snapshot["station_uuid"].tolist(), ["station-1"])
+        self.assertEqual(snapshot.loc[0, "diesel"], 1.77)
+        self.assertEqual(snapshot.loc[0, "e5"], 1.87)
+        self.assertEqual(snapshot.loc[0, "e10"], 1.82)
+        self.assertEqual(snapshot.loc[0, "last_update"], "2026-04-05T12:01:43+02:00")
+
     def test_build_noon_snapshot_falls_back_to_price_valid_at_noon_and_sets_timestamp_to_1200(self) -> None:
         prices = pd.DataFrame(
             {

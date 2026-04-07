@@ -9,6 +9,11 @@ from typing import Sequence
 import pandas as pd
 import pytz
 
+try:
+    from .time_utils import parse_timestamps_to_utc
+except ImportError:  # pragma: no cover
+    from time_utils import parse_timestamps_to_utc
+
 
 FUELS: tuple[str, ...] = ("diesel", "e5", "e10")
 OUTPUT_COLUMNS: tuple[str, ...] = ("station_uuid", "diesel", "e5", "e10", "last_update")
@@ -29,7 +34,7 @@ def _normalize_prices(
 
     normalized = prices[["station_uuid", "date", *available]].copy()
     normalized["station_uuid"] = normalized["station_uuid"].astype(str)
-    normalized["date"] = pd.to_datetime(normalized["date"], errors="coerce", utc=True)
+    normalized["date"] = parse_timestamps_to_utc(normalized["date"], tz)
     normalized = normalized.dropna(subset=["station_uuid", "date"])
     for fuel in available:
         normalized[fuel] = pd.to_numeric(normalized[fuel], errors="coerce")

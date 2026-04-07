@@ -28,6 +28,7 @@ try:
         write_history_files,
         write_snapshot,
     )
+    from .time_utils import parse_timestamps_to_utc
 except ImportError:  # pragma: no cover
     from noon_reference import build_noon_reference_snapshot
     from noon_outputs import (
@@ -37,11 +38,10 @@ except ImportError:  # pragma: no cover
         write_history_files,
         write_snapshot,
     )
+    from time_utils import parse_timestamps_to_utc
 
 TZ = pytz.timezone("Europe/Berlin")
 LAW_RESET_DATE = date(2026, 4, 1)
-DEFAULT_AVAILABILITY_LOOKBACK_DAYS = 7
-DEFAULT_NOON_LOOKBACK_DAYS = 3
 TANKER_BASE = (
     "https://data.tankerkoenig.de/"
     "tankerkoenig-organization/tankerkoenig-data/raw/branch/master"
@@ -201,8 +201,8 @@ def download_stations(target_path: Path, target_day: date) -> pd.DataFrame:
 
 
 def _parse_dates_utc(values: pd.Series) -> pd.Series:
-    # Normalize mixed DST offsets to UTC so pandas 3.x does not fail on spring/fall transitions.
-    return pd.to_datetime(values, errors="coerce", utc=True)
+    # Preserve explicit offsets and treat naive source timestamps as Berlin local time.
+    return parse_timestamps_to_utc(values, TZ)
 
 
 def _normalize_station_series(series: pd.Series) -> pd.Series:
@@ -963,7 +963,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--analysis-days",
         type=int,
-        default=2,
+        default=1,
         help="Number of completed days to aggregate into the station-level snapshot.",
     )
     parser.add_argument(
@@ -977,7 +977,7 @@ def parse_args() -> argparse.Namespace:
 
 def generate(
     output_root: Path,
-    analysis_days_count: int = 2,
+    analysis_days_count: int = 1,
     today_override: date | None = None,
 ) -> None:
     today = today_override or date.today()
@@ -994,26 +994,23 @@ def generate(
             encoding="utf-8",
         )
 
-    if analysis_days_count < 2:
-        raise SystemExit("--analysis-days must be at least 2.")
+    if analysis_days_count < 1:
+        raise SystemExit("--analysis-days must be at least 1.")
     desired_analysis_end = today - timedelta(days=1)
     desired_analysis_start = today - timedelta(days=analysis_days_count)
-    raw_start = desired_analysis_start - timedelta(
-        days=DEFAULT_NOON_LOOKBACK_DAYS + DEFAULT_AVAILABILITY_LOOKBACK_DAYS
+    raw_start = (
+        desired_analysis_start
+        if analysis_days_count == 1
+        else desired_analysis_start - timedelta(days=1)
     )
     data_end = desired_analysis_end
     data, available_days = _load_prices_with_days(DateRange(raw_start, data_end))
-    analysis_end = max(available_days)
-    analysis_start = analysis_end - timedelta(days=analysis_days_count - 1)
-    if analysis_end != desired_analysis_end:
-        print(
-            f"Using latest available raw price day {analysis_end:%Y-%m-%d} "
-            f"instead of {desired_analysis_end:%Y-%m-%d}."
-        )
-    if analysis_start - timedelta(days=DEFAULT_NOON_LOOKBACK_DAYS) < raw_start:
+    if desired_analysis_end not in available_days:
         raise RuntimeError(
-            "Latest available raw price day fell outside the prefetched daily window."
+            f"Required raw price day {desired_analysis_end:%Y-%m-%d} was not available."
         )
+    analysis_end = desired_analysis_end
+    analysis_start = desired_analysis_start
     stations_frame = download_stations(output_root / "data" / "stations.json", analysis_end)
     print(f"Loaded {len(data):,} price rows.")
 
