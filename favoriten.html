@@ -100,6 +100,7 @@
     </nav>
 
     <script src="app-stats.js"></script>
+    <script src="fuel-breakdown.js"></script>
     <script>
       const DATA_BASE = "data2/";
       const TANKERKOENIG_APOLOGY =
@@ -128,6 +129,24 @@
 
       function chartUrl(stationId, stationName, lat, lng) {
         return `chart.html?id=${stationId}&fuel=e10&name=${encodeURIComponent(stationName)}&lat=${lat}&lng=${lng}`;
+      }
+
+      function favoriteById(id) {
+        return fav.find((entry) => entry.id === id) || {};
+      }
+
+      function breakdownUrl(station, fuel, price) {
+        return TankzeitFuelBreakdown.buildBreakdownUrl({
+          id: station.id,
+          fuel,
+          name: station.name || "Tankstelle",
+          brand: station.brand || "",
+          price,
+          lat: station.lat || "",
+          lng: station.lng || "",
+          backPath: "favoriten.html",
+          backLabel: "Zurück zu Favoriten",
+        });
       }
 
       function setStatus(message, type = "info") {
@@ -215,9 +234,18 @@
             const diesel = document.getElementById(`${id}-diesel`);
             if (!prices.prices || !prices.prices[id]) return;
             const entry = prices.prices[id];
-            e10.textContent =
-              entry.status === "closed" ? "- (Geschlossen)" : entry.e10;
-            diesel.textContent = entry.status === "closed" ? "-" : entry.diesel;
+            const station = favoriteById(id);
+            if (entry.status === "closed") {
+              e10.textContent = "- (Geschlossen)";
+              diesel.textContent = "-";
+              return;
+            }
+            e10.innerHTML = `<a class="price-link" href="${hrefForHtml(
+              breakdownUrl(station, "e10", entry.e10),
+            )}">${escapeHtml(String(entry.e10))} €/l</a>`;
+            diesel.innerHTML = `<a class="price-link" href="${hrefForHtml(
+              breakdownUrl(station, "diesel", entry.diesel),
+            )}">${escapeHtml(String(entry.diesel))} €/l</a>`;
           });
           clearStatus();
         } catch (err) {

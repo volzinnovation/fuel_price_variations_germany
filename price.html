@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0f766e" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta
+      name="description"
+      content="Preisaufschlüsselung einer Tankstelle mit Energiesteuer, CO2-Abgabe, Umsatzsteuer und Marktanteil."
+    />
+    <meta name="robots" content="noindex,follow" />
+    <title>Tankzeit | Preisaufschlüsselung</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preload" href="styles.css" as="style" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="station-page">
+    <main class="station-shell breakdown-shell">
+      <a class="legal-back" id="back-link" href="index.html">← Zurück</a>
+
+      <section class="station-hero breakdown-hero">
+        <p class="legal-kicker" id="breakdown-meta">Preisaufschlüsselung</p>
+        <h1 id="breakdown-title">Preis wird geladen</h1>
+      </section>
+
+      <section class="legal-card breakdown-card" id="breakdown-card">
+        <div class="breakdown-stack">
+          <div class="breakdown-step">
+            <span>Bruttopreis</span>
+            <strong id="gross-price">-</strong>
+          </div>
+          <div class="breakdown-operator">−</div>
+          <div class="breakdown-step">
+            <span>MwSt. 19 %</span>
+            <strong id="vat-price">-</strong>
+          </div>
+          <div class="breakdown-operator">=</div>
+          <div class="breakdown-step">
+            <span>Netto Preis</span>
+            <strong id="net-price">-</strong>
+          </div>
+          <div class="breakdown-operator">−</div>
+        <div class="breakdown-step">
+            <span>Steuern und Abgaben inkl. CO2</span>
+            <strong id="other-taxes-price">-</strong>
+          </div>
+          <div class="breakdown-operator">=</div>
+          <div class="breakdown-step breakdown-step-result" id="sale-step">
+            <span>Verkaufspreis</span>
+            <strong id="sale-price">-</strong>
+          </div>
+          <div id="brent-steps"></div>
+        </div>
+      </section>
+    </main>
+
+    <nav class="nav-bar" aria-label="Hauptnavigation">
+      <a href="index.html" class="nav-item diesel" id="nav-diesel">
+        <svg viewBox="0 0 24 24">
+          <path
+            d="M12 22s8-4 8-10c0-4.42-3.58-8-8-8s-8 3.58-8 8c0 6 8 10 8 10z"
+          />
+        </svg>
+        <span>Diesel</span>
+      </a>
+      <a href="e10.html" class="nav-item e10" id="nav-e10">
+        <svg viewBox="0 0 24 24">
+          <path
+            d="M12 22s8-4 8-10c0-4.42-3.58-8-8-8s-8 3.58-8 8c0 6 8 10 8 10z"
+          />
+        </svg>
+        <span>E10</span>
+      </a>
+      <a href="favoriten.html" class="nav-item">
+        <svg viewBox="0 0 24 24">
+          <path
+            d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+          />
+        </svg>
+        <span>Favoriten</span>
+      </a>
+      <a href="management.html" class="nav-item">
+        <svg viewBox="0 0 24 24">
+          <rect x="3" y="10" width="4" height="11" />
+          <rect x="10" y="5" width="4" height="16" />
+          <rect x="17" y="8" width="4" height="13" />
+        </svg>
+        <span>Statistik</span>
+      </a>
+      <a href="info.html" class="nav-item">
+        <svg viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4M12 8h.01" />
+        </svg>
+        <span>Info</span>
+      </a>
+    </nav>
+
+    <script src="fuel-breakdown.js"></script>
+    <script>
+      const params = new URLSearchParams(window.location.search);
+      const fuel = (params.get("fuel") || "diesel").toLowerCase();
+      const fuelConfig = TankzeitFuelBreakdown.fuelConfig(fuel);
+      const price = TankzeitFuelBreakdown.toNumber(params.get("price"));
+      const stationId = params.get("id") || "";
+      const stationName = params.get("name") || "Tankstelle";
+      const stationBrand = params.get("brand") || "";
+      const calculation = TankzeitFuelBreakdown.calculate(fuel, price);
+
+      function safeInternalHref(value, fallback) {
+        const candidate = String(value || "").trim();
+        if (!candidate) return fallback;
+        if (/^[a-z]+:/i.test(candidate) || candidate.startsWith("//")) {
+          return fallback;
+        }
+        if (!/^[./a-zA-Z0-9_-]+(?:\.html)?$/.test(candidate)) {
+          return fallback;
+        }
+        return candidate;
+      }
+
+      function setActiveFuelNav() {
+        const activeId =
+          fuelConfig.key === "diesel"
+            ? "nav-diesel"
+            : fuelConfig.key === "e10"
+              ? "nav-e10"
+              : null;
+        if (!activeId) return;
+        const activeLink = document.getElementById(activeId);
+        if (!activeLink) return;
+        activeLink.classList.add("active");
+        activeLink.setAttribute("aria-current", "page");
+      }
+
+      async function fetchJson(url) {
+        const response = await fetch(url, { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error(`Request failed: ${response.status}`);
+        }
+        return response.json();
+      }
+
+      function formatShortDate(value) {
+        if (!value) return "";
+        const [year, month, day] = String(value).split("-");
+        if (!year || !month || !day) return String(value);
+        return `${day}.${month}.${year}`;
+      }
+
+      async function renderBrentSupplement(salePrice) {
+        const brentStepsEl = document.getElementById("brent-steps");
+        try {
+          const brent = await fetchJson("data/brent.json");
+          const brentPerLiter = TankzeitFuelBreakdown.toNumber(
+            brent &&
+              (brent.brent_eur_per_crude_liter ?? brent.brent_eur_per_liter),
+          );
+          if (brentPerLiter === null) return;
+
+          const saleStepEl = document.getElementById("sale-step");
+          if (saleStepEl) {
+            saleStepEl.classList.remove("breakdown-step-result");
+          }
+
+          const operatingDelta = salePrice - brentPerLiter;
+          const brentDateText = formatShortDate(brent.brent_as_of);
+          const crudeLabel = brentDateText
+            ? `Rohölpreis ${brentDateText}`
+            : "Rohölpreis";
+          const operatorLabel = `Betriebskosten und Gewinn von ${stationBrand || stationName}`;
+
+          brentStepsEl.innerHTML = `
+            <div class="breakdown-operator">−</div>
+            <div class="breakdown-step">
+              <span>${crudeLabel}</span>
+              <strong>${TankzeitFuelBreakdown.formatEuroPerLiter(brentPerLiter)}</strong>
+            </div>
+            <div class="breakdown-operator">=</div>
+            <div class="breakdown-step breakdown-step-result">
+              <span>${operatorLabel}</span>
+              <strong>${TankzeitFuelBreakdown.formatEuroPerLiter(operatingDelta)}</strong>
+            </div>
+          `;
+        } catch (_error) {
+          brentStepsEl.innerHTML = "";
+        }
+      }
+
+      function render() {
+        setActiveFuelNav();
+
+        const fallbackBackHref = safeInternalHref(
+          fuelConfig.defaultBackPath,
+          "index.html",
+        );
+        const backHref = safeInternalHref(params.get("back"), fallbackBackHref);
+        const backLabel =
+          params.get("backLabel") || fuelConfig.defaultBackLabel || "Zurück";
+        const backLink = document.getElementById("back-link");
+        backLink.href = backHref;
+        backLink.textContent = `← ${backLabel}`;
+
+        document.getElementById("breakdown-title").textContent =
+          `${stationName} · ${fuelConfig.label}`;
+        document.getElementById("breakdown-meta").textContent =
+          stationBrand && stationBrand !== stationName
+            ? `${stationBrand} · Preisaufschlüsselung`
+            : "Preisaufschlüsselung";
+        document.title = `Tankzeit | ${stationName} · ${fuelConfig.label}`;
+
+        if (!calculation) {
+          document.getElementById("breakdown-card").innerHTML =
+            '<div class="breakdown-empty">Preis fehlt</div>';
+          return;
+        }
+
+        const netPrice = calculation.grossPrice - calculation.vat;
+        const otherTaxes = calculation.regulated - calculation.vat;
+
+        document.getElementById("gross-price").textContent =
+          TankzeitFuelBreakdown.formatEuroPerLiter(calculation.grossPrice);
+        document.getElementById("vat-price").textContent =
+          TankzeitFuelBreakdown.formatEuroPerLiter(calculation.vat);
+        document.getElementById("net-price").textContent =
+          TankzeitFuelBreakdown.formatEuroPerLiter(netPrice);
+        document.getElementById("other-taxes-price").textContent =
+          TankzeitFuelBreakdown.formatEuroPerLiter(otherTaxes);
+        document.getElementById("sale-price").textContent =
+          TankzeitFuelBreakdown.formatEuroPerLiter(calculation.market);
+        void renderBrentSupplement(calculation.market);
+      }
+
+      render();
+    </script>
+  </body>
+</html>

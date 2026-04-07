@@ -315,6 +315,25 @@ p {
   text-decoration: underline;
 }
 
+.price-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+}
+
+.price-link::after {
+  content: "↗";
+  font-size: 0.9em;
+  opacity: 0.55;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.price-link:hover::after {
+  transform: translate(1px, -1px);
+  opacity: 0.9;
+}
+
 .row-highlight {
   background: rgba(15, 118, 110, 0.1);
 }
@@ -712,7 +731,6 @@ canvas {
 .station-page,
 .legal-page {
   min-height: 100vh;
-  padding-bottom: 0;
 }
 
 .station-shell,
@@ -867,6 +885,79 @@ canvas {
   line-height: 1.6;
 }
 
+.breakdown-shell {
+  max-width: 760px;
+}
+
+.breakdown-hero {
+  display: grid;
+  gap: 0;
+}
+
+.breakdown-card {
+  display: grid;
+  gap: 0;
+}
+
+.breakdown-stack {
+  display: grid;
+  gap: 8px;
+}
+
+.breakdown-step {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 20px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(128, 128, 128, 0.14);
+}
+
+.breakdown-step span {
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.breakdown-step strong {
+  font-size: clamp(1.2rem, 3vw, 1.8rem);
+  line-height: 1;
+  text-align: right;
+}
+
+.breakdown-operator {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: var(--muted);
+  font-size: 1.6rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.breakdown-step-result {
+  background: linear-gradient(135deg, rgba(15, 118, 110, 0.92), rgba(20, 184, 166, 0.82));
+  border-color: transparent;
+  box-shadow: 0 22px 48px rgba(15, 118, 110, 0.24);
+}
+
+.breakdown-step-result span,
+.breakdown-step-result strong {
+  color: #fff;
+}
+
+@media (prefers-color-scheme: dark) {
+  .breakdown-step {
+    background: rgba(20, 20, 20, 0.78);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+  .breakdown-step-result {
+    background: linear-gradient(135deg, rgba(15, 118, 110, 0.96), rgba(20, 184, 166, 0.88));
+  }
+}
+
 /* ========== Responsive adjustments ========== */
 @media (max-width: 720px) {
   .app {
@@ -893,6 +984,13 @@ canvas {
   .station-hero,
   .legal-card {
     padding: 22px 18px;
+  }
+  .breakdown-step {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .breakdown-step strong {
+    text-align: left;
   }
 }
 
