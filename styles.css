@@ -179,6 +179,13 @@ p {
   transform: translateY(0);
 }
 
+.btn:disabled {
+  cursor: wait;
+  opacity: 0.7;
+  transform: none;
+  box-shadow: var(--shadow-sm);
+}
+
 .link-btn {
   display: inline-flex;
   align-items: center;
@@ -230,6 +237,13 @@ p {
 
 .tip strong {
   color: var(--ink);
+}
+
+.location-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 4px;
 }
 
 /* ========== Status ========== */
