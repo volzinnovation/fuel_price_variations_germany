@@ -36,7 +36,7 @@
 
       <section class="legal-card breakdown-card" id="breakdown-card">
         <div class="breakdown-stack">
-          <div class="breakdown-step">
+          <div class="breakdown-step breakdown-step-emphasis">
             <span>Bruttopreis</span>
             <strong id="gross-price">-</strong>
           </div>
@@ -46,7 +46,7 @@
             <strong id="vat-price">-</strong>
           </div>
           <div class="breakdown-operator">=</div>
-          <div class="breakdown-step">
+          <div class="breakdown-step breakdown-step-emphasis">
             <span>Netto Preis</span>
             <strong id="net-price">-</strong>
           </div>
@@ -168,11 +168,6 @@
               (brent.brent_eur_per_crude_liter ?? brent.brent_eur_per_liter),
           );
           if (brentPerLiter === null) return;
-
-          const saleStepEl = document.getElementById("sale-step");
-          if (saleStepEl) {
-            saleStepEl.classList.remove("breakdown-step-result");
-          }
 
           const operatingDelta = salePrice - brentPerLiter;
           const brentDateText = formatShortDate(brent.brent_as_of);

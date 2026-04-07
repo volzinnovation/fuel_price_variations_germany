@@ -937,15 +937,22 @@ canvas {
   line-height: 1;
 }
 
+.breakdown-step-emphasis,
 .breakdown-step-result {
   background: linear-gradient(135deg, rgba(15, 118, 110, 0.92), rgba(20, 184, 166, 0.82));
   border-color: transparent;
   box-shadow: 0 22px 48px rgba(15, 118, 110, 0.24);
 }
 
+.breakdown-step-emphasis span,
+.breakdown-step-emphasis strong,
 .breakdown-step-result span,
 .breakdown-step-result strong {
   color: #fff;
+}
+
+.breakdown-step-result {
+  box-shadow: 0 26px 56px rgba(15, 118, 110, 0.28);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -953,6 +960,7 @@ canvas {
     background: rgba(20, 20, 20, 0.78);
     border-color: rgba(255, 255, 255, 0.08);
   }
+  .breakdown-step-emphasis,
   .breakdown-step-result {
     background: linear-gradient(135deg, rgba(15, 118, 110, 0.96), rgba(20, 184, 166, 0.88));
   }
