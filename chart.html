@@ -104,6 +104,7 @@
       const name = params.get("name") || "Tankstelle";
       const lat = params.get("lat");
       const lng = params.get("lng");
+      const APP_TIME_ZONE = "Europe/Berlin";
       const DATA_BASE = "data2/";
       const HISTORY_START = "2026-04-01";
       let chartInstance = null;
@@ -219,19 +220,9 @@
       function buildReferenceSubtitle(stats) {
         const summary = TankzeitStats.summaryFromStats(stats);
         if (!summary) {
-          return `${fuel.toUpperCase()}: Referenz ist der etablierte Mittagspreis des Vortags. Negative Werte liegen darunter, positive darüber.`;
+          return "Preisverlauf Gestern · 0,00 = etablierter Mittagspreis vorgestern um 12:00 · negative Werte = günstiger, positive Werte = teurer";
         }
-        const parts = [];
-        const dayCount = TankzeitStats.toNumber(
-          summary.analysis_days ?? summary.days,
-        );
-        if (dayCount !== null) {
-          parts.push(`${TankzeitStats.formatCount(dayCount)} Tage`);
-        }
-        parts.push(`${fuel.toUpperCase()} · 0,00 = etablierter Vortagspreis um 12:00`);
-        parts.push("x-Achse 00:00 - 23:00");
-        parts.push("negative Werte = günstiger, positive Werte = teurer");
-        return parts.join(" · ");
+        return "Preisverlauf Gestern · 0,00 = etablierter Mittagspreis vorgestern um 12:00 · negative Werte = günstiger, positive Werte = teurer";
       }
 
       function sanitizeRelativeValue(valueInEuro) {
@@ -303,6 +294,7 @@
         const parsed = new Date(lastUpdate);
         if (Number.isNaN(parsed.getTime())) return lastUpdate;
         return new Intl.DateTimeFormat("de-DE", {
+          timeZone: APP_TIME_ZONE,
           day: "2-digit",
           month: "2-digit",
           year: "numeric",
@@ -334,7 +326,7 @@
         const first = rows[0].date;
         const last = rows[rows.length - 1].date;
         return [
-          `${fuel.toUpperCase()} · Mittagspreise aus noon.csv`,
+          `${fuel.toUpperCase()} · Mittagspreise`,
           `${rows.length} Tage`,
           `${formatHistoryDay(first)} - ${formatHistoryDay(last)}`,
           "y-Achse = etablierter Mittagspreis",
@@ -353,7 +345,6 @@
             labels,
             datasets: [
               {
-                label: "Mittagspreis",
                 data: values,
                 borderColor: HISTORY_COLOR.stroke,
                 backgroundColor: HISTORY_COLOR.fill,
@@ -400,7 +391,7 @@
             },
             plugins: {
               legend: {
-                position: "bottom",
+                display: false,
               },
               tooltip: {
                 callbacks: {
@@ -415,10 +406,8 @@
                   },
                   afterBody(context) {
                     const row = rows[context[0].dataIndex];
-                    const lastUpdate = formatLastUpdate(row?.lastUpdate);
-                    return lastUpdate
-                      ? [`Stand aus noon.csv: ${lastUpdate}`]
-                      : ["Stand aus noon.csv"];
+                    const lastUpdate = row?.lastUpdate || "";
+                    return lastUpdate ? [lastUpdate] : [];
                   },
                 },
               },
