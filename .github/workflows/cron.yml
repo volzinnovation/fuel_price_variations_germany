@@ -6,7 +6,7 @@ name: Daily data update
 # or API.
 on:
   schedule:
-  - cron: '5 0 * * *'  # 00:05 UTC (GitHub Actions schedules use UTC)
+  - cron: '15 7 * * *'  # 07:15 UTC; Tankerkönig often publishes the prior day later in the morning
   workflow_dispatch:
 
 concurrency:
@@ -32,6 +32,57 @@ jobs:
           python-version: "3.11"
       - name: Install dependencies
         run: python -m pip install --upgrade pip && pip install -r requirements.txt
+      - name: Wait for yesterday raw price day
+        run: |
+          python - <<'PY'
+          import os
+          import time
+          from datetime import datetime, timedelta
+          from zoneinfo import ZoneInfo
+
+          import certifi
+          import requests
+
+          from scripts.generate_data import TANKER_BASE, _data_path
+
+          wait_minutes = 180
+          interval_seconds = 300
+          berlin_today = datetime.now(ZoneInfo("Europe/Berlin")).date()
+          target_day = berlin_today - timedelta(days=1)
+          url = f"{TANKER_BASE}/{_data_path('prices', target_day)}"
+          auth = None
+          user = os.environ.get("TK_USER")
+          password = os.environ.get("TK_PASS")
+          if user and password:
+              auth = (user, password)
+
+          attempts = max(1, wait_minutes * 60 // interval_seconds)
+          for attempt in range(1, attempts + 1):
+              response = requests.get(
+                  url,
+                  timeout=120,
+                  verify=certifi.where(),
+                  auth=auth,
+                  stream=True,
+              )
+              status_code = response.status_code
+              response.close()
+              if status_code == 200:
+                  print(f"{target_day:%Y-%m-%d} raw price CSV is available.")
+                  break
+              if status_code != 404:
+                  raise SystemExit(f"Unexpected HTTP {status_code} while waiting for {url}")
+              if attempt == attempts:
+                  raise SystemExit(
+                      f"{target_day:%Y-%m-%d} raw price CSV still unavailable after "
+                      f"{wait_minutes} minutes: {url}"
+                  )
+              print(
+                  f"{target_day:%Y-%m-%d} raw price CSV not published yet "
+                  f"(attempt {attempt}/{attempts}); retrying in {interval_seconds // 60} minutes."
+              )
+              time.sleep(interval_seconds)
+          PY
       - name: Generate data
         run: python scripts/generate_data.py --analysis-days 1
       - name: Configure git
