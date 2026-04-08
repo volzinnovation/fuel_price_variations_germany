@@ -225,9 +225,11 @@
         },
       };
       const BRAND_PRICE_DOMAIN = { min: 1.5, max: 3.0 };
+      const APP_TIME_ZONE = "Europe/Berlin";
 
       const state = {
         summary: null,
+        noonDeltaSummary: null,
         fuel: "diesel",
         layout: null,
         brandLayout: null,
@@ -330,13 +332,28 @@
           };
       }
 
+      function displayedHourlyBucket(bucket, viewMode = viewModeForFuel()) {
+        if (
+          viewMode !== "cycle" &&
+          Number(bucket?.hour) === 12 &&
+          state.noonDeltaSummary?.[state.fuel]
+        ) {
+          return {
+            ...bucket,
+            ...state.noonDeltaSummary[state.fuel],
+          };
+        }
+        return bucket;
+      }
+
       function adjustedHourlyRow(bucket, viewMode = viewModeForFuel()) {
+        const displayedBucket = displayedHourlyBucket(bucket, viewMode) || {};
         return {
-          min: sanitizeRelativeValue(bucket?.min),
-          q1: sanitizeRelativeValue(bucket?.q1),
-          median: sanitizeRelativeValue(bucket?.median),
-          q3: sanitizeRelativeValue(bucket?.q3),
-          max: sanitizeRelativeValue(bucket?.max),
+          min: sanitizeRelativeValue(displayedBucket?.min),
+          q1: sanitizeRelativeValue(displayedBucket?.q1),
+          median: sanitizeRelativeValue(displayedBucket?.median),
+          q3: sanitizeRelativeValue(displayedBucket?.q3),
+          max: sanitizeRelativeValue(displayedBucket?.max),
         };
       }
 
@@ -378,35 +395,153 @@
         return state.summary?.brand_distributions?.[state.fuel] || [];
       }
 
+      function berlinDateParts(now = new Date()) {
+        const formatter = new Intl.DateTimeFormat("en-CA", {
+          timeZone: APP_TIME_ZONE,
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        });
+        const parts = Object.create(null);
+        formatter.formatToParts(now).forEach((part) => {
+          if (part.type !== "literal") {
+            parts[part.type] = part.value;
+          }
+        });
+        return {
+          y: parts.year,
+          m: parts.month,
+          d: parts.day,
+        };
+      }
+
+      function berlinToday() {
+        const parts = berlinDateParts();
+        return parseISODate(`${parts.y}-${parts.m}-${parts.d}`);
+      }
+
       function parseISODate(value) {
         const [y, m, d] = value.split("-").map((x) => parseInt(x, 10));
-        return new Date(y, m - 1, d);
+        return new Date(Date.UTC(y, m - 1, d));
       }
 
       function formatISODate(d) {
-        const y = d.getFullYear();
-        const m = String(d.getMonth() + 1).padStart(2, "0");
-        const day = String(d.getDate()).padStart(2, "0");
+        const y = d.getUTCFullYear();
+        const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+        const day = String(d.getUTCDate()).padStart(2, "0");
         return `${y}-${m}-${day}`;
       }
 
       function dateParts(d) {
         return {
-          y: String(d.getFullYear()),
-          m: String(d.getMonth() + 1).padStart(2, "0"),
-          d: String(d.getDate()).padStart(2, "0"),
+          y: String(d.getUTCFullYear()),
+          m: String(d.getUTCMonth() + 1).padStart(2, "0"),
+          d: String(d.getUTCDate()).padStart(2, "0"),
         };
       }
 
       function addDays(d, delta) {
         const copy = new Date(d.getTime());
-        copy.setDate(copy.getDate() + delta);
+        copy.setUTCDate(copy.getUTCDate() + delta);
         return copy;
+      }
+
+      function parseCsv(text) {
+        const lines = text
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean);
+        if (!lines.length) return [];
+        const headers = lines[0].split(",").map((header) => header.trim());
+        return lines.slice(1).map((line) => {
+          const values = line.split(",");
+          const row = {};
+          headers.forEach((header, index) => {
+            row[header] = values[index] ?? "";
+          });
+          return row;
+        });
+      }
+
+      async function fetchCsv(url) {
+        const response = await fetch(url, { cache: "no-store" });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return parseCsv(await response.text());
       }
 
       function urlForDate(d) {
         const p = dateParts(d);
         return `data2/${p.y}/${p.m}/${p.d}/management_boxplots.json`;
+      }
+
+      function urlForNoonDate(d) {
+        const p = dateParts(d);
+        return `data2/${p.y}/${p.m}/${p.d}/noon.csv`;
+      }
+
+      function csvFuelNumber(row, fuel) {
+        const raw = String(row?.[fuel] ?? "").trim();
+        if (!raw) return null;
+        const numeric = Number(raw);
+        return Number.isFinite(numeric) ? numeric : null;
+      }
+
+      function quantile(sortedValues, p) {
+        if (!sortedValues.length) return null;
+        if (sortedValues.length === 1) return sortedValues[0];
+        const index = (sortedValues.length - 1) * p;
+        const lower = Math.floor(index);
+        const upper = Math.ceil(index);
+        if (lower === upper) return sortedValues[lower];
+        const weight = index - lower;
+        return (
+          sortedValues[lower] * (1 - weight) + sortedValues[upper] * weight
+        );
+      }
+
+      function buildNoonDeltaSummary(currentRows, previousRows) {
+        const previousByStation = new Map(
+          previousRows.map((row) => [String(row.station_uuid || "").trim(), row]),
+        );
+        const perFuel = {
+          diesel: [],
+          e5: [],
+          e10: [],
+        };
+        currentRows.forEach((row) => {
+          const stationId = String(row.station_uuid || "").trim();
+          if (!stationId) return;
+          const previousRow = previousByStation.get(stationId);
+          if (!previousRow) return;
+          Object.keys(perFuel).forEach((fuel) => {
+            const currentPrice = csvFuelNumber(row, fuel);
+            const previousPrice = csvFuelNumber(previousRow, fuel);
+            if (
+              Number.isFinite(currentPrice) &&
+              Number.isFinite(previousPrice)
+            ) {
+              perFuel[fuel].push(currentPrice - previousPrice);
+            }
+          });
+        });
+
+        return Object.fromEntries(
+          Object.entries(perFuel).map(([fuel, values]) => {
+            const sorted = [...values].sort((left, right) => left - right);
+            if (!sorted.length) return [fuel, null];
+            return [
+              fuel,
+              {
+                count: sorted.length,
+                min: sorted[0],
+                q1: quantile(sorted, 0.25),
+                median: quantile(sorted, 0.5),
+                q3: quantile(sorted, 0.75),
+                max: sorted[sorted.length - 1],
+              },
+            ];
+          }),
+        );
       }
 
       async function exists(url) {
@@ -534,7 +669,12 @@
           if (Number.isFinite(noonMedian)) {
             const label = `${formatSignedRelativeLabel(noonMedian)} zum Vortag`;
             const noonY = yScale(domain, plot, noonMedian);
-            const labelY = y0 + (noonY - y0) / 2;
+            const labelMidValue = noonMedian / 2 + 0.005;
+            const labelY = clamp(
+              yScale(domain, plot, labelMidValue),
+              plot.top + 10,
+              plot.top + plot.height - 10,
+            );
             const connectorX = noonX + 1.5;
             ctx.strokeStyle = "rgba(37,99,235,0.74)";
             ctx.lineWidth = 2;
@@ -550,12 +690,12 @@
             ctx.arc(connectorX, noonY, 2.5, 0, Math.PI * 2);
             ctx.fill();
             ctx.font = "600 12px Manrope, sans-serif";
-            ctx.textAlign = "left";
+            ctx.textAlign = "right";
             ctx.textBaseline = "middle";
             ctx.strokeStyle = "rgba(255,255,255,0.96)";
             ctx.lineWidth = 4;
-            ctx.strokeText(label, noonX + 8, labelY);
-            ctx.fillText(label, noonX + 8, labelY);
+            ctx.strokeText(label, noonX - 8, labelY);
+            ctx.fillText(label, noonX - 8, labelY);
           }
           ctx.restore();
         }
@@ -749,6 +889,7 @@
         const d = stats[bucketIndex];
         if (!d) return;
         const viewMode = viewModeForFuel();
+        const displayedBucket = displayedHourlyBucket(d, viewMode) || d;
         const adjusted = adjustedHourlyRow(d);
         const referenceMeta = hourlyReferenceMeta(d, viewMode);
         const label =
@@ -756,7 +897,7 @@
             ? `Zyklus ${bucketLabel(d)}`
             : `Stunde ${d.hour}`;
         setStatus(
-          `${state.fuel.toUpperCase()} ${label}: Median ${formatRelativeText(adjusted.median)}, mittlere 50 % ${formatRelativeRangeText(adjusted.q1, adjusted.q3)}, Spannweite ${formatRelativeRangeText(adjusted.min, adjusted.max)} · Zeitraum ${referenceMeta.label} · Referenz: Vortag 12:00 (n=${d.count})`,
+          `${state.fuel.toUpperCase()} ${label}: Median ${formatRelativeText(adjusted.median)}, mittlere 50 % ${formatRelativeRangeText(adjusted.q1, adjusted.q3)}, Spannweite ${formatRelativeRangeText(adjusted.min, adjusted.max)} · Zeitraum ${referenceMeta.label} · Referenz: Vortag 12:00 (n=${displayedBucket.count ?? d.count})`,
         );
       });
 
@@ -794,7 +935,7 @@
 
       async function updateNav() {
         const minDate = parseISODate(MIN_DATE_STR);
-        const maxDate = addDays(new Date(), -1); // yesterday (viewer local)
+        const maxDate = addDays(berlinToday(), -1);
 
         const prevDate = addDays(state.date, -1);
         const nextDate = addDays(state.date, 1);
@@ -818,15 +959,28 @@
         clearStatus();
 
         const url = urlForDate(d);
+        const noonUrl = urlForNoonDate(d);
+        const previousNoonUrl = urlForNoonDate(addDays(d, -1));
         try {
-          const response = await fetch(url, { cache: "no-store" });
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          state.summary = await response.json();
+          const [summary, noonDeltaSummary] = await Promise.all([
+            fetch(url, { cache: "no-store" }).then((response) => {
+              if (!response.ok) throw new Error(`HTTP ${response.status}`);
+              return response.json();
+            }),
+            Promise.all([fetchCsv(noonUrl), fetchCsv(previousNoonUrl)])
+              .then(([currentRows, previousRows]) =>
+                buildNoonDeltaSummary(currentRows, previousRows),
+              )
+              .catch(() => null),
+          ]);
+          state.summary = summary;
+          state.noonDeltaSummary = noonDeltaSummary;
           draw();
           drawBrandChart();
         } catch (e) {
           setStatus("Management-Daten konnten nicht geladen werden.", "error");
           state.summary = null;
+          state.noonDeltaSummary = null;
           state.brandLayout = null;
           brandCtx.clearRect(0, 0, brandCanvas.width, brandCanvas.height);
         }
@@ -869,7 +1023,7 @@
       // Init date picker bounds and initial date
       (() => {
         const minDate = parseISODate(MIN_DATE_STR);
-        const maxDate = addDays(new Date(), -1);
+        const maxDate = addDays(berlinToday(), -1);
         datePicker.min = MIN_DATE_STR;
         datePicker.max = formatISODate(maxDate);
 

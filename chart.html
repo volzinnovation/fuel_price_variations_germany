@@ -10,10 +10,10 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta
-      name="description"
-      content="Mittagspreise und Tagesprofil für eine Tankstelle."
-    />
+      <meta
+        name="description"
+        content="Mittagspreise und Preisänderung zum Vortag 12:00 für eine Tankstelle."
+      />
     <meta name="robots" content="noindex,follow" />
     <title>Tankzeit | Chart</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -34,7 +34,7 @@
       <header>
         <div class="brand">
           <h1>Tankzeit</h1>
-          <p>Mittagspreise seit 1. April und 12:00-11:59-Profil.</p>
+          <p>Mittagspreise seit 1. April und Preisänderung zum Vortag 12:00.</p>
         </div>
       </header>
 
@@ -43,7 +43,7 @@
           <button class="btn primary" id="history-view" type="button">
             Mittagspreise
           </button>
-          <button class="btn" id="profile-view" type="button">Tagesprofil</button>
+          <button class="btn" id="profile-view" type="button">Preisänderung</button>
           <a class="btn" id="maps-link" href="#" target="_blank" rel="noopener"
             >Zur Tankstelle</a
           >
@@ -153,38 +153,44 @@
           ctx.font = "12px Manrope, sans-serif";
           ctx.fillText("12:00", dividerX + 6, chartArea.top + 14);
           const noonValue = Number(options.noonValue);
-          const zeroY = yScale.getPixelForValue(0);
+          const preNoonValue = Number(options.preNoonValue);
           const noonY = yScale.getPixelForValue(noonValue);
+          const preNoonY = yScale.getPixelForValue(preNoonValue);
           if (
             Number.isFinite(noonValue) &&
             noonY >= chartArea.top &&
             noonY <= chartArea.bottom &&
-            zeroY >= chartArea.top &&
-            zeroY <= chartArea.bottom
+            Number.isFinite(preNoonValue) &&
+            preNoonY >= chartArea.top &&
+            preNoonY <= chartArea.bottom
           ) {
             const connectorX = dividerX + 1.5;
             const label = `${formatSignedRelativeLabel(noonValue)} zum Vortag`;
-            const labelY = zeroY + (noonY - zeroY) / 2;
+            const labelMidValue = (preNoonValue + noonValue) / 2 + 0.005;
+            const labelY = Math.max(
+              chartArea.top + 10,
+              Math.min(chartArea.bottom - 10, yScale.getPixelForValue(labelMidValue)),
+            );
             ctx.strokeStyle = "rgba(37, 99, 235, 0.74)";
             ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.moveTo(connectorX, zeroY);
+            ctx.moveTo(connectorX, preNoonY);
             ctx.lineTo(connectorX, noonY);
             ctx.stroke();
             ctx.fillStyle = "rgba(37, 99, 235, 0.88)";
             ctx.beginPath();
-            ctx.arc(connectorX, zeroY, 2.5, 0, Math.PI * 2);
+            ctx.arc(connectorX, preNoonY, 2.5, 0, Math.PI * 2);
             ctx.fill();
             ctx.beginPath();
             ctx.arc(connectorX, noonY, 2.5, 0, Math.PI * 2);
             ctx.fill();
             ctx.font = "600 12px Manrope, sans-serif";
-            ctx.textAlign = "left";
+            ctx.textAlign = "right";
             ctx.textBaseline = "middle";
             ctx.strokeStyle = "rgba(255, 255, 255, 0.96)";
             ctx.lineWidth = 4;
-            ctx.strokeText(label, dividerX + 8, labelY);
-            ctx.fillText(label, dividerX + 8, labelY);
+            ctx.strokeText(label, dividerX - 8, labelY);
+            ctx.fillText(label, dividerX - 8, labelY);
           }
           ctx.restore();
         },
@@ -261,10 +267,11 @@
       function buildReferenceSubtitle(stats) {
         const hourly = Array.isArray(stats?.hourly) ? stats.hourly : [];
         const noonRow = hourly.find((row) => Number(row?.hour) === 12);
-        const noonText = Number.isFinite(Number(noonRow?.price))
-          ? ` · Blau startet um 12:00 mit ${formatSignedRelativeLabel(noonRow.price)} ggü. Vortag 12:00`
+        const noonDelta = Number(noonRow?.price);
+        const noonText = Number.isFinite(noonDelta)
+          ? ` · Blau startet um 12:00 mit ${formatSignedRelativeLabel(noonDelta)} ggü. Vortag 12:00`
           : "";
-        return `Preisverlauf Gestern · Grau = Rabatt vor 12:00 ggü. Vortag 12:00${noonText} · negative Werte = günstiger, positive Werte = teurer`;
+        return `${fuel.toUpperCase()} · Preisänderung zum Vortag 12:00 · Grau = Rabatt vor 12:00 ggü. Vortag 12:00${noonText} · negative Werte = günstiger, positive Werte = teurer`;
       }
 
       function sanitizeRelativeValue(valueInEuro) {
@@ -489,6 +496,7 @@
           index >= 12 ? row.displayValue : null,
         );
         const noonRow = displaySeries.find((row) => row.hour === 12);
+        const preNoonRow = displaySeries.find((row) => row.hour === 11);
         const domain = computeSeriesDomain(
           displaySeries.map((row) => row.displayValue),
           true,
@@ -511,7 +519,7 @@
                 pointHoverRadius: 4,
                 pointBackgroundColor: PRIOR_DAY_COLOR.stroke,
                 pointBorderColor: PRIOR_DAY_COLOR.stroke,
-                stepped: "after",
+                stepped: "before",
                 tension: 0,
                 spanGaps: false,
                 fill: false,
@@ -526,7 +534,7 @@
                 pointHoverRadius: 4,
                 pointBackgroundColor: SAME_DAY_COLOR.stroke,
                 pointBorderColor: SAME_DAY_COLOR.stroke,
-                stepped: "after",
+                stepped: "before",
                 tension: 0,
                 spanGaps: false,
                 fill: false,
@@ -567,7 +575,7 @@
                 },
                 title: {
                   display: true,
-                  text: "Preisänderung seit Vortag 12:00 (€/l)",
+                  text: "Preisänderung zum Vortag 12:00 (€/l)",
                 },
               },
             },
@@ -578,6 +586,7 @@
               noonDivider: {
                 enabled: labels.length >= 24,
                 noonValue: noonRow?.displayValue,
+                preNoonValue: preNoonRow?.displayValue,
               },
               tooltip: {
                 callbacks: {
