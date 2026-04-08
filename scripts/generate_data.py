@@ -878,17 +878,12 @@ def _noon_reference_hourly_variation(
             int(filled.notna().sum()),
         )
 
-    morning_reference_price = (
+    reference_price = (
         filled.get(reference_time)
         if target_day == LAW_RESET_DATE
         else noon_reference_prices.get(target_day - timedelta(days=1))
     )
-    same_day_noon_price = filled.get(_local_dt(target_day, 12, 0))
-    if (
-        morning_reference_price is None
-        or pd.isna(morning_reference_price)
-        or pd.isna(same_day_noon_price)
-    ):
+    if reference_price is None or pd.isna(reference_price):
         return (
             pd.DataFrame(columns=["hour", "price"]),
             pd.DataFrame(columns=["hour", "price"]),
@@ -913,12 +908,7 @@ def _noon_reference_hourly_variation(
         )
 
     delta_frame = hourly_average.to_frame(name="price")
-    delta_frame["reference_price"] = delta_frame.index.map(
-        lambda timestamp: float(morning_reference_price)
-        if timestamp.hour < 12
-        else float(same_day_noon_price)
-    )
-    delta_frame["price"] = delta_frame["price"] - delta_frame["reference_price"]
+    delta_frame["price"] = delta_frame["price"] - float(reference_price)
     delta_frame["hour"] = delta_frame.index.hour
     grouped = delta_frame[["hour", "price"]].copy()
     grouped["price"] = grouped["price"].round(2)

@@ -294,7 +294,7 @@ class DailyNoonResetMetricTests(unittest.TestCase):
         self.assertEqual(cycle_hourly[-1]["label"], "00")
         self.assertEqual(cycle_hourly[-1]["markdown_median"], 0.06)
 
-    def test_hourly_variation_uses_prior_noon_before_noon_and_same_day_noon_after_noon(self) -> None:
+    def test_hourly_variation_uses_noon_reference_before_and_after_noon(self) -> None:
         series = pd.Series(
             [2.00, 1.95, 2.10, 2.05],
             index=pd.DatetimeIndex(
@@ -321,8 +321,8 @@ class DailyNoonResetMetricTests(unittest.TestCase):
 
         self.assertEqual(used_days, 1)
         self.assertEqual(hourly.loc[hourly["hour"] == 0, "price"].item(), -0.05)
-        self.assertEqual(hourly.loc[hourly["hour"] == 12, "price"].item(), 0.0)
-        self.assertEqual(hourly.loc[hourly["hour"] == 13, "price"].item(), -0.05)
+        self.assertEqual(hourly.loc[hourly["hour"] == 12, "price"].item(), 0.1)
+        self.assertEqual(hourly.loc[hourly["hour"] == 13, "price"].item(), 0.05)
         self.assertEqual(best_hourly.loc[best_hourly["hour"] == 0, "price"].item(), 1.95)
         self.assertEqual(best_hourly.loc[best_hourly["hour"] == 12, "price"].item(), 2.1)
 
@@ -357,7 +357,7 @@ class DailyNoonResetMetricTests(unittest.TestCase):
         self.assertEqual(best_hourly.loc[best_hourly["hour"] == 0, "price"].item(), 2.0)
         self.assertEqual(best_hourly.loc[best_hourly["hour"] == 1, "price"].item(), 2.0)
 
-    def test_hourly_variation_resets_to_same_day_noon_reference_after_12_00(self) -> None:
+    def test_hourly_variation_keeps_post_noon_increase_in_hour_12_bucket(self) -> None:
         series = pd.Series(
             [2.00, 1.90, 2.10],
             index=pd.DatetimeIndex(
@@ -385,7 +385,7 @@ class DailyNoonResetMetricTests(unittest.TestCase):
         self.assertEqual(hourly.loc[hourly["hour"] == 9, "price"].item(), -0.1)
         self.assertEqual(hourly.loc[hourly["hour"] == 10, "price"].item(), -0.1)
         self.assertEqual(hourly.loc[hourly["hour"] == 11, "price"].item(), -0.1)
-        self.assertEqual(hourly.loc[hourly["hour"] == 12, "price"].item(), 0.2)
+        self.assertEqual(hourly.loc[hourly["hour"] == 12, "price"].item(), 0.1)
         self.assertEqual(best_hourly.loc[best_hourly["hour"] == 11, "price"].item(), 1.9)
         self.assertEqual(best_hourly.loc[best_hourly["hour"] == 12, "price"].item(), 2.097)
 
@@ -416,7 +416,7 @@ class DailyNoonResetMetricTests(unittest.TestCase):
 
         self.assertEqual(used_days, 1)
         self.assertEqual(hourly.loc[hourly["hour"] == 8, "price"].item(), -0.05)
-        self.assertEqual(hourly.loc[hourly["hour"] == 12, "price"].item(), 0.0)
+        self.assertEqual(hourly.loc[hourly["hour"] == 12, "price"].item(), 0.1)
 
 
 class BrandDistributionSummaryTests(unittest.TestCase):
@@ -570,8 +570,7 @@ class RawNoonReferenceSnapshotTests(unittest.TestCase):
             self.assertTrue(summary["brand_snapshot_timestamp"].startswith("2026-04-02T12:00"))
             diesel_rows = summary["fuels"]["diesel"]
             self.assertEqual(diesel_rows[11]["median"], -0.1)
-            self.assertEqual(diesel_rows[12]["median"], 0.0)
-            self.assertEqual(diesel_rows[13]["median"], 0.2)
+            self.assertEqual(diesel_rows[13]["median"], 0.1)
 
             brand_medians = {
                 row["brand"]: row["median"] for row in summary["brand_distributions"]["diesel"]
@@ -584,8 +583,7 @@ class RawNoonReferenceSnapshotTests(unittest.TestCase):
             station_payload = json.loads(station_path.read_text(encoding="utf-8"))
             station_hourly = {row["hour"]: row["price"] for row in station_payload["hourly"]}
             self.assertEqual(station_hourly[11], -0.1)
-            self.assertEqual(station_hourly[12], 0.0)
-            self.assertEqual(station_hourly[13], 0.2)
+            self.assertEqual(station_hourly[13], 0.1)
 
     @patch("scripts.generate_data._load_prices_with_days")
     @patch("scripts.generate_data.download_stations")
