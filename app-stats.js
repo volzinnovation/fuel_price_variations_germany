@@ -1,7 +1,28 @@
 (() => {
+  const BERLIN_TIME_ZONE = "Europe/Berlin";
+
   function toNumber(value) {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  function berlinTimeParts(date = new Date()) {
+    const formatter = new Intl.DateTimeFormat("en-GB", {
+      timeZone: BERLIN_TIME_ZONE,
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    });
+    const parts = Object.create(null);
+    formatter.formatToParts(date).forEach((part) => {
+      if (part.type !== "literal") {
+        parts[part.type] = part.value;
+      }
+    });
+    return {
+      hour: Number(parts.hour),
+      minute: Number(parts.minute),
+    };
   }
 
   function summaryFromStats(stats) {
@@ -264,7 +285,8 @@
   function isNowInTypicalMinimumWindow(stats, now = new Date()) {
     const window = minimumWindow(stats);
     if (!window || window.durationMinutes <= 0) return false;
-    const minuteOfDay = now.getHours() * 60 + now.getMinutes();
+    const berlinNow = berlinTimeParts(now);
+    const minuteOfDay = berlinNow.hour * 60 + berlinNow.minute;
     const end = window.startMinutes + window.durationMinutes;
     if (end <= 1440) {
       return minuteOfDay >= window.startMinutes && minuteOfDay < end;
@@ -275,7 +297,7 @@
   function isNowInRelativeMinimumWindow(stats, now = new Date()) {
     const hours = relativeMinimumHours(stats);
     if (hours.length) {
-      return hours.includes(now.getHours());
+      return hours.includes(berlinTimeParts(now).hour);
     }
     return isNowInTypicalMinimumWindow(stats, now);
   }

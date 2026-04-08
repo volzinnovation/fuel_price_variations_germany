@@ -8,7 +8,9 @@ const {
   managementFixture,
   managementPath,
   nearbyStationsResponse,
+  noonCsvByPath,
   stationId,
+  stationHistoryCsv,
   stationIdPath,
   stationStatsFixture,
 } = require("./fixtures/noonAlignmentFixtures");
@@ -88,7 +90,33 @@ test("e10.html shows E10 tankzeit ending exactly at noon", async ({ page }) => {
   await expect(page.locator(`#${stationId}-profile`)).toContainText("2.050");
 });
 
-test("management.html keeps the noon increase in hour 12, not 13", async ({ page }) => {
+test("chart.html uses the raw normalized 12:00 bucket with correct step alignment", async ({
+  page,
+}) => {
+  await routeFixtureResponses(page);
+
+  await page.goto(
+    `${baseUrl}/chart.html?view=profile&id=${stationId}&fuel=e10&name=Noon%20Test%20Station`,
+  );
+  await expect(page.locator("#chart-title")).toContainText("Noon Test Station");
+  await expect(page.locator("#chart-sub")).toContainText(
+    "Blau startet um 12:00 mit +5,0 ct/l",
+  );
+
+  const chartState = await page.evaluate(() => {
+    const chart = window.Chart.getChart(document.getElementById("chart"));
+    return {
+      stepped: chart.data.datasets[1].stepped,
+      noon: chart.data.datasets[1].data[12],
+      thirteen: chart.data.datasets[1].data[13],
+    };
+  });
+  expect(chartState.stepped).toBe("before");
+  expect(chartState.noon).toBe(0.05);
+  expect(chartState.thirteen).toBe(0.05);
+});
+
+test("management.html uses the noon-to-noon delta at hour 12", async ({ page }) => {
   await routeFixtureResponses(page);
 
   const managementResponse = page.waitForResponse((response) => {
@@ -112,14 +140,18 @@ test("management.html keeps the noon increase in hour 12, not 13", async ({ page
 
   await clickManagementHour(page, 12);
   await expect(page.locator("#status")).toContainText("DIESEL Stunde 12:");
-  await expect(page.locator("#status")).toContainText("5.0 ct/l teurer");
+  await expect(page.locator("#status")).toContainText("auf Vortag-12:00-Niveau");
   await expect(page.locator("#status")).toContainText("Zeitraum 12:00 - 23:59");
+
+  await clickManagementHour(page, 13);
+  await expect(page.locator("#status")).toContainText("DIESEL Stunde 13:");
+  await expect(page.locator("#status")).toContainText("5.0 ct/l teurer");
 
   await page.getByRole("tab", { name: "E10" }).click();
   await waitForManagementChart(page, "E10");
   await clickManagementHour(page, 12);
   await expect(page.locator("#status")).toContainText("E10 Stunde 12:");
-  await expect(page.locator("#status")).toContainText("5.0 ct/l teurer");
+  await expect(page.locator("#status")).toContainText("auf Vortag-12:00-Niveau");
 });
 
 async function routeFixtureResponses(page) {
@@ -138,6 +170,12 @@ async function routeFixtureResponses(page) {
   });
   await page.route(`**/data2/${stationIdPath}/e10.json`, (route) => {
     route.fulfill(jsonResponse(stationStatsFixture));
+  });
+  await page.route(`**/data2/${stationIdPath}/e5.json`, (route) => {
+    route.fulfill(jsonResponse(stationStatsFixture));
+  });
+  await page.route(`**/data2/${stationIdPath}/**/history.csv`, (route) => {
+    route.fulfill(csvResponse(stationHistoryCsv));
   });
   await page.route("**/data2/**/management_boxplots.json", (route) => {
     const request = route.request();
@@ -158,6 +196,18 @@ async function routeFixtureResponses(page) {
     }
     route.fulfill(jsonResponse(managementFixture));
   });
+  await page.route("**/data2/**/noon.csv", (route) => {
+    const requestUrl = new URL(route.request().url());
+    const body = noonCsvByPath[requestUrl.pathname];
+    if (!body) {
+      route.fulfill({
+        status: 404,
+        body: "",
+      });
+      return;
+    }
+    route.fulfill(csvResponse(body));
+  });
 }
 
 function jsonResponse(payload) {
@@ -165,6 +215,14 @@ function jsonResponse(payload) {
     status: 200,
     contentType: "application/json; charset=utf-8",
     body: JSON.stringify(payload),
+  };
+}
+
+function csvResponse(body) {
+  return {
+    status: 200,
+    contentType: "text/csv; charset=utf-8",
+    body,
   };
 }
 

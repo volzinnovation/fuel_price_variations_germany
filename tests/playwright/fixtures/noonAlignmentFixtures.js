@@ -2,6 +2,7 @@ const stationId = "s0000000-1111-2222-3333-444444444444";
 const stationIdPath = stationId.split("-").join("/");
 const managementDate = "2026-04-06";
 const managementPath = "/data2/2026/04/06/management_boxplots.json";
+const previousManagementDate = "2026-04-05";
 
 function stationHourlyRows() {
   return Array.from({ length: 24 }, (_value, hour) => ({
@@ -154,13 +155,30 @@ const nearbyStationsResponse = {
   ],
 };
 
+const stationHistoryCsv = `date,price,last_update
+2026-04-05,2.050,2026-04-05T12:00:00+02:00
+2026-04-06,2.050,2026-04-06T12:00:00+02:00
+`;
+
+const noonCsvByPath = {
+  "/data2/2026/04/05/noon.csv": `station_uuid,diesel,e5,e10,last_update
+${stationId},2.000,1.950,1.900,2026-04-05T12:00:00+02:00
+`,
+  "/data2/2026/04/06/noon.csv": `station_uuid,diesel,e5,e10,last_update
+${stationId},2.000,1.950,1.900,2026-04-06T12:00:00+02:00
+`,
+};
+
 module.exports = {
   besthours,
   managementDate,
   managementFixture,
   managementPath,
   nearbyStationsResponse,
+  noonCsvByPath,
+  previousManagementDate,
   stationId,
+  stationHistoryCsv,
   stationIdPath,
   stationStatsFixture,
 };

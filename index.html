@@ -141,7 +141,6 @@
     </nav>
 
     <script src="app-stats.js"></script>
-    <script src="fuel-breakdown.js"></script>
     <script>
       const DATA_BASE = "data2/";
       const FUEL = "diesel";
@@ -188,20 +187,6 @@
 
       function chartUrl(stationId, stationName, lat, lng) {
         return `chart.html?id=${stationId}&fuel=${FUEL}&name=${encodeURIComponent(stationName)}&lat=${lat}&lng=${lng}`;
-      }
-
-      function breakdownUrl(station) {
-        return TankzeitFuelBreakdown.buildBreakdownUrl({
-          id: station.id,
-          fuel: FUEL,
-          name: station.name,
-          brand: station.brand || "",
-          price: station[FUEL],
-          lat: station.lat,
-          lng: station.lng,
-          backPath: "index.html",
-          backLabel: "Zurück zu Diesel",
-        });
       }
 
       function setStatus(message, type = "info") {
@@ -382,11 +367,10 @@
               const detailsHref = hrefForHtml(
                 chartUrl(s.id, s.name, s.lat, s.lng),
               );
-              const priceHref = hrefForHtml(breakdownUrl(s));
               return `
             <tr id="${s.id}">
               <td data-label="Name"><a href="${mapsHref}" target="_blank" rel="noopener">${escapeHtml(s.name)} (${escapeHtml(s.brand || "")})</a></td>
-              <td data-label="Preis"><a class="price-link" href="${priceHref}">${s[FUEL]} €/l</a></td>
+              <td data-label="Preis">${s[FUEL]} €/l</td>
               <td data-label="Mittagspreis/Vortag" id="${s.id}-profile"><a href="${detailsHref}">Details</a></td>
               <td data-label="Tankzeit" id="${s.id}-minimum">-</td>
               <td><button class="fav" data-id="${s.id}" ${isSaved ? "disabled" : ""}>${isSaved ? "❤️" : "🤍"}</button></td>
