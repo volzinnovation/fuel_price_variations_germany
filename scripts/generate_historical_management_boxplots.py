@@ -20,6 +20,7 @@ try:
         DateRange,
         _brand_distribution_summary,
         _hourly_variation,
+        _load_midnight_reference_prices,
         _latest_price_snapshot,
         _load_noon_reference_prices,
         _load_prices,
@@ -34,6 +35,7 @@ except ImportError:  # pragma: no cover
         DateRange,
         _brand_distribution_summary,
         _hourly_variation,
+        _load_midnight_reference_prices,
         _latest_price_snapshot,
         _load_noon_reference_prices,
         _load_prices,
@@ -90,11 +92,10 @@ def generate_historical_management_boxplots(
     window_end = datetime.combine(analysis_end, datetime.max.time())
     noon_reference_prices = _load_noon_reference_prices(
         output_root,
-        data,
-        stations_frame,
         FUELS,
         analysis_days,
     )
+    midnight_reference_prices = _load_midnight_reference_prices(output_root, FUELS)
 
     mgmt_hourly_values: Dict[str, Dict[int, List[float]]] = {
         fuel: {hour: [] for hour in range(24)} for fuel in FUELS
@@ -119,12 +120,14 @@ def generate_historical_management_boxplots(
                 reference_day: day_prices.get(fuel, {}).get(str(station_id))
                 for reference_day, day_prices in noon_reference_prices.items()
             }
+            station_midnight_reference = midnight_reference_prices.get(fuel, {}).get(str(station_id))
             hourly, _best_hourly, _minabs, _maxabs, _used_days, _filled_minutes = _hourly_variation(
                 fuel_series,
                 window_start,
                 window_end,
                 analysis_days,
                 noon_reference_prices=station_noon_references,
+                midnight_reference_price=station_midnight_reference,
             )
             if hourly.empty:
                 continue

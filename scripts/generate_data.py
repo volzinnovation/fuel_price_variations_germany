@@ -20,7 +20,6 @@ import requests
 from tqdm import tqdm
 
 try:
-    from .noon_reference import build_noon_reference_snapshot
     from .noon_outputs import (
         build_noon_snapshot,
         collect_history_rows,
@@ -30,7 +29,6 @@ try:
     )
     from .time_utils import parse_timestamps_to_utc
 except ImportError:  # pragma: no cover
-    from noon_reference import build_noon_reference_snapshot
     from noon_outputs import (
         build_noon_snapshot,
         collect_history_rows,
@@ -622,19 +620,37 @@ def _load_noon_snapshot(path: Path) -> pd.DataFrame:
     return pd.read_csv(path, dtype={"station_uuid": "string"})
 
 
-def _raw_noon_snapshot(
-    prices: pd.DataFrame,
-    station_ids: List[str],
-    target_day: date,
+def _snapshot_reference_prices(
+    snapshot: pd.DataFrame,
     fuels: tuple[str, ...],
-) -> pd.DataFrame:
-    return build_noon_reference_snapshot(prices, station_ids, target_day, TZ, fuels=fuels)
+) -> Dict[str, Dict[str, float]]:
+    if "station_uuid" not in snapshot.columns:
+        return {fuel: {} for fuel in fuels}
+
+    snapshot = snapshot.copy()
+    snapshot["station_uuid"] = snapshot["station_uuid"].astype(str)
+    references: Dict[str, Dict[str, float]] = {}
+    for fuel in fuels:
+        if fuel not in snapshot.columns:
+            references[fuel] = {}
+            continue
+        values = pd.to_numeric(
+            snapshot[fuel].astype("string").str.strip().str.replace(",", ".", regex=False),
+            errors="coerce",
+        )
+        valid = values > 0
+        references[fuel] = {
+            station_id: float(price)
+            for station_id, price in zip(
+                snapshot.loc[valid, "station_uuid"].tolist(),
+                values.loc[valid].tolist(),
+            )
+        }
+    return references
 
 
 def _load_noon_reference_prices(
     output_root: Path,
-    prices: pd.DataFrame,
-    stations: pd.DataFrame,
     fuels: tuple[str, ...],
     analysis_days: List[date],
 ) -> Dict[date, Dict[str, Dict[str, float]]]:
@@ -645,9 +661,6 @@ def _load_noon_reference_prices(
     reference_days = sorted(
         {reference_day for day in legal_days for reference_day in (day - timedelta(days=1), day)}
     )
-    station_ids = (
-        stations[_station_id_column(stations)].dropna().astype(str).sort_values().unique().tolist()
-    )
     references: Dict[date, Dict[str, Dict[str, float]]] = {}
 
     for target_day in reference_days:
@@ -655,30 +668,22 @@ def _load_noon_reference_prices(
         snapshot = (
             _load_noon_snapshot(snapshot_path)
             if snapshot_path.exists()
-            else _raw_noon_snapshot(prices, station_ids, target_day, fuels)
+            else pd.DataFrame(columns=["station_uuid", *fuels])
         )
-        if "station_uuid" not in snapshot.columns:
-            references[target_day] = {fuel: {} for fuel in fuels}
-            continue
-
-        snapshot["station_uuid"] = snapshot["station_uuid"].astype(str)
-        day_references: Dict[str, Dict[str, float]] = {}
-        for fuel in fuels:
-            if fuel not in snapshot.columns:
-                day_references[fuel] = {}
-                continue
-            values = pd.to_numeric(snapshot[fuel], errors="coerce")
-            valid = values > 0
-            day_references[fuel] = {
-                station_id: float(price)
-                for station_id, price in zip(
-                    snapshot.loc[valid, "station_uuid"].tolist(),
-                    values.loc[valid].tolist(),
-                )
-            }
-        references[target_day] = day_references
+        references[target_day] = _snapshot_reference_prices(snapshot, fuels)
 
     return references
+
+
+def _load_midnight_reference_prices(
+    output_root: Path,
+    fuels: tuple[str, ...],
+) -> Dict[str, Dict[str, float]]:
+    snapshot_path = output_root / "data" / "midnight.csv"
+    if not snapshot_path.exists():
+        return {fuel: {} for fuel in fuels}
+    snapshot = _load_noon_snapshot(snapshot_path)
+    return _snapshot_reference_prices(snapshot, fuels)
 
 
 def _station_brand_table(stations: pd.DataFrame) -> pd.DataFrame:
@@ -832,6 +837,7 @@ def _noon_reference_hourly_variation(
     series: pd.Series,
     analysis_days: List[date],
     noon_reference_prices: Dict[date, float],
+    midnight_reference_price: float | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, float, float, int, int]:
     legal_days = sorted(day for day in analysis_days if day >= LAW_RESET_DATE)
     if not legal_days:
@@ -879,7 +885,9 @@ def _noon_reference_hourly_variation(
         )
 
     reference_price = (
-        filled.get(reference_time)
+        midnight_reference_price
+        if target_day == LAW_RESET_DATE and midnight_reference_price is not None and not pd.isna(midnight_reference_price)
+        else filled.get(reference_time)
         if target_day == LAW_RESET_DATE
         else noon_reference_prices.get(target_day - timedelta(days=1))
     )
@@ -938,10 +946,16 @@ def _hourly_variation(
     window_end: datetime,
     analysis_days: List[date],
     noon_reference_prices: Dict[date, float] | None = None,
+    midnight_reference_price: float | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, float, float, int, int]:
     if any(day >= LAW_RESET_DATE for day in analysis_days):
         hourly, best_hourly, minabs, maxabs, used_days, filled_minutes = (
-            _noon_reference_hourly_variation(series, analysis_days, noon_reference_prices or {})
+            _noon_reference_hourly_variation(
+                series,
+                analysis_days,
+                noon_reference_prices or {},
+                midnight_reference_price=midnight_reference_price,
+            )
         )
         if not hourly.empty:
             return hourly, best_hourly, minabs, maxabs, used_days, filled_minutes
@@ -1040,11 +1054,10 @@ def generate(
         print(f"Wrote {len(history_paths):,} station fuel noon history files")
     noon_reference_prices = _load_noon_reference_prices(
         output_root,
-        data,
-        stations_frame,
         fuels,
         analysis_days,
     )
+    midnight_reference_prices = _load_midnight_reference_prices(output_root, fuels)
 
     # Collect fast-loading management summaries from station-level noon-anchored hourly deltas.
     mgmt_hourly_values: Dict[str, Dict[int, List[float]]] = {
@@ -1072,12 +1085,14 @@ def generate(
                 reference_day: day_prices.get(fuel, {}).get(str(station_id))
                 for reference_day, day_prices in noon_reference_prices.items()
             }
+            station_midnight_reference = midnight_reference_prices.get(fuel, {}).get(str(station_id))
             hourly, best_hourly, minabs, maxabs, used_days, filled_minutes = _hourly_variation(
                 fuel_series,
                 window_start,
                 window_end,
                 analysis_days,
                 noon_reference_prices=station_noon_references,
+                midnight_reference_price=station_midnight_reference,
             )
             if hourly.empty:
                 continue

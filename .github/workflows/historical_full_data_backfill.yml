@@ -97,7 +97,7 @@ jobs:
 
       - name: Normalize latest tracked files
         if: ${{ inputs.update_latest_files != 'true' }}
-        run: git restore data/noon.csv data/stations.json
+        run: git restore data/noon.csv data/stations.json data/brent.json
 
       - name: Configure git
         run: |
@@ -108,7 +108,7 @@ jobs:
         run: |
           git add data2
           if [ "${{ inputs.update_latest_files }}" = "true" ]; then
-            git add data/noon.csv data/stations.json
+            git add data/noon.csv data/stations.json data/brent.json
           fi
           if git diff --cached --quiet; then
             echo "No changes to commit."
