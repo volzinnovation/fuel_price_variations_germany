@@ -126,9 +126,16 @@
         afterDatasetsDraw(chart, _args, options) {
           if (!options || options.enabled === false) return;
           const xScale = chart.scales?.x;
+          const yScale = chart.scales?.y;
           const chartArea = chart.chartArea;
           const labels = chart.data?.labels;
-          if (!xScale || !chartArea || !Array.isArray(labels) || labels.length < 13) {
+          if (
+            !xScale ||
+            !yScale ||
+            !chartArea ||
+            !Array.isArray(labels) ||
+            labels.length < 13
+          ) {
             return;
           }
           const dividerX = xScale.getPixelForValue(12);
@@ -145,6 +152,40 @@
           ctx.fillStyle = "rgba(37, 99, 235, 0.82)";
           ctx.font = "12px Manrope, sans-serif";
           ctx.fillText("12:00", dividerX + 6, chartArea.top + 14);
+          const noonValue = Number(options.noonValue);
+          const zeroY = yScale.getPixelForValue(0);
+          const noonY = yScale.getPixelForValue(noonValue);
+          if (
+            Number.isFinite(noonValue) &&
+            noonY >= chartArea.top &&
+            noonY <= chartArea.bottom &&
+            zeroY >= chartArea.top &&
+            zeroY <= chartArea.bottom
+          ) {
+            const connectorX = dividerX + 1.5;
+            const label = `${formatSignedRelativeLabel(noonValue)} zum Vortag`;
+            const labelY = zeroY + (noonY - zeroY) / 2;
+            ctx.strokeStyle = "rgba(37, 99, 235, 0.74)";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(connectorX, zeroY);
+            ctx.lineTo(connectorX, noonY);
+            ctx.stroke();
+            ctx.fillStyle = "rgba(37, 99, 235, 0.88)";
+            ctx.beginPath();
+            ctx.arc(connectorX, zeroY, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(connectorX, noonY, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.font = "600 12px Manrope, sans-serif";
+            ctx.textAlign = "left";
+            ctx.textBaseline = "middle";
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.96)";
+            ctx.lineWidth = 4;
+            ctx.strokeText(label, dividerX + 8, labelY);
+            ctx.fillText(label, dividerX + 8, labelY);
+          }
           ctx.restore();
         },
       };
@@ -218,11 +259,12 @@
       updateViewInUrl();
 
       function buildReferenceSubtitle(stats) {
-        const summary = TankzeitStats.summaryFromStats(stats);
-        if (!summary) {
-          return "Preisverlauf Gestern · 0,00 = etablierter Mittagspreis vorgestern um 12:00 · negative Werte = günstiger, positive Werte = teurer";
-        }
-        return "Preisverlauf Gestern · 0,00 = etablierter Mittagspreis vorgestern um 12:00 · negative Werte = günstiger, positive Werte = teurer";
+        const hourly = Array.isArray(stats?.hourly) ? stats.hourly : [];
+        const noonRow = hourly.find((row) => Number(row?.hour) === 12);
+        const noonText = Number.isFinite(Number(noonRow?.price))
+          ? ` · Blau startet um 12:00 mit ${formatSignedRelativeLabel(noonRow.price)} ggü. Vortag 12:00`
+          : "";
+        return `Preisverlauf Gestern · Grau = Rabatt vor 12:00 ggü. Vortag 12:00${noonText} · negative Werte = günstiger, positive Werte = teurer`;
       }
 
       function sanitizeRelativeValue(valueInEuro) {
@@ -238,6 +280,15 @@
         return `${(Math.abs(amount) * 100).toFixed(1)} ct/l ${
           amount > 0 ? "teurer" : "günstiger"
         } als Vortag 12:00`;
+      }
+
+      function formatSignedRelativeLabel(valueInEuro) {
+        const cents = sanitizeRelativeValue(valueInEuro) * 100;
+        if (Math.abs(cents) < 0.05) return "0,0 ct/l";
+        return `${cents > 0 ? "+" : "-"}${new Intl.NumberFormat("de-DE", {
+          minimumFractionDigits: 1,
+          maximumFractionDigits: 1,
+        }).format(Math.abs(cents))} ct/l`;
       }
 
       function formatEuroTick(valueInEuro) {
@@ -258,13 +309,17 @@
         }).format(amount);
       }
 
-      function computeSeriesDomain(values) {
+      function computeSeriesDomain(values, includeZero = false) {
         const finiteValues = values.filter((value) => Number.isFinite(value));
         if (!finiteValues.length) {
           return { min: -0.05, max: 0.05 };
         }
         let min = Math.min(...finiteValues);
         let max = Math.max(...finiteValues);
+        if (includeZero) {
+          min = Math.min(min, 0);
+          max = Math.max(max, 0);
+        }
         if (Math.abs(max - min) < 0.0005) {
           const pad = Math.max(0.01, Math.abs(max || 0.01) * 0.2);
           return { min: min - pad, max: max + pad };
@@ -433,7 +488,11 @@
         const sameDayValues = displaySeries.map((row, index) =>
           index >= 12 ? row.displayValue : null,
         );
-        const domain = computeSeriesDomain(displaySeries.map((row) => row.displayValue));
+        const noonRow = displaySeries.find((row) => row.hour === 12);
+        const domain = computeSeriesDomain(
+          displaySeries.map((row) => row.displayValue),
+          true,
+        );
         const ctx = document.getElementById("chart").getContext("2d");
         if (chartInstance) chartInstance.destroy();
         chartInstance = new Chart(ctx, {
@@ -518,6 +577,7 @@
               },
               noonDivider: {
                 enabled: labels.length >= 24,
+                noonValue: noonRow?.displayValue,
               },
               tooltip: {
                 callbacks: {

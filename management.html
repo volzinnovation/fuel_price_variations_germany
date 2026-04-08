@@ -142,13 +142,12 @@
           <p class="footer-note">
             <strong>Preisänderung seit Vortag 12:00:</strong>
             Referenz ist durchgehend der Mittagspreis des Vortags. Grau zeigt
-            <code>00:00</code> bis <code>11:59</code>, blau zeigt
-            <code>12:00</code> bis <code>23:59</code>; die vertikale Linie
-            markiert <code>12:00</code>. Gezeigt wird eine stufenförmige Linie
-            für die mediane Preisänderung des gewählten Kraftstoffs in
-            <code>Euro / Liter</code>: Positive Werte liegen über der
-            Referenz, negative darunter; die y-Achse passt sich dem
-            sichtbaren Minimum und Maximum an. Antippen zeigt zusätzlich
+            den Rabatt von <code>00:00</code> bis <code>11:59</code> ggü.
+            Vortag <code>12:00</code>. Blau zeigt <code>12:00</code> bis
+            <code>23:59</code> und startet genau beim Mittagsdelta
+            <code>(Preis 12:00 - Preis Vortag 12:00)</code>; die Zahl an der
+            gestrichelten Linie ist genau dieser Wert. Positive Werte liegen
+            über der Referenz, negative darunter. Antippen zeigt zusätzlich
             Quartilspanne und Spannweite.
           </p>
         </div>
@@ -304,6 +303,15 @@
         return `${format(low)} bis ${format(high)}`;
       }
 
+      function formatSignedRelativeLabel(valueInEuro) {
+        const cents = sanitizeRelativeValue(valueInEuro) * 100;
+        if (Math.abs(cents) < 0.05) return "0,0 ct/l";
+        return `${cents > 0 ? "+" : "-"}${new Intl.NumberFormat("de-DE", {
+          minimumFractionDigits: 1,
+          maximumFractionDigits: 1,
+        }).format(Math.abs(cents))} ct/l`;
+      }
+
       function hourlyReferenceMeta(bucket, viewMode) {
         if (viewMode === "cycle") {
           return {
@@ -332,13 +340,17 @@
         };
       }
 
-      function computeSeriesDomain(values) {
+      function computeSeriesDomain(values, includeZero = false) {
         const finiteValues = values.filter((value) => Number.isFinite(value));
         if (!finiteValues.length) {
           return { min: -0.05, max: 0.05 };
         }
         let min = Math.min(...finiteValues);
         let max = Math.max(...finiteValues);
+        if (includeZero) {
+          min = Math.min(min, 0);
+          max = Math.max(max, 0);
+        }
         if (Math.abs(max - min) < 0.0005) {
           const pad = Math.max(0.01, Math.abs(max || 0.01) * 0.2);
           return { min: min - pad, max: max + pad };
@@ -424,6 +436,7 @@
       function computeDomain(stats) {
         return computeSeriesDomain(
           stats.map((bucket) => adjustedHourlyRow(bucket).median),
+          true,
         );
       }
 
@@ -506,6 +519,8 @@
 
         if (viewMode !== "cycle" && stats.length >= 24) {
           const noonX = plot.left + (12 * plot.width) / stats.length;
+          const noonBucket = stats.find((bucket) => Number(bucket?.hour) === 12);
+          const noonMedian = noonBucket ? adjustedHourlyRow(noonBucket).median : null;
           ctx.save();
           ctx.setLineDash([6, 4]);
           ctx.strokeStyle = "rgba(37,99,235,0.35)";
@@ -516,6 +531,32 @@
           ctx.setLineDash([]);
           ctx.fillStyle = "rgba(37,99,235,0.78)";
           ctx.fillText("12:00", noonX + 6, plot.top + 14);
+          if (Number.isFinite(noonMedian)) {
+            const label = `${formatSignedRelativeLabel(noonMedian)} zum Vortag`;
+            const noonY = yScale(domain, plot, noonMedian);
+            const labelY = y0 + (noonY - y0) / 2;
+            const connectorX = noonX + 1.5;
+            ctx.strokeStyle = "rgba(37,99,235,0.74)";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(connectorX, y0);
+            ctx.lineTo(connectorX, noonY);
+            ctx.stroke();
+            ctx.fillStyle = "rgba(37,99,235,0.88)";
+            ctx.beginPath();
+            ctx.arc(connectorX, y0, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(connectorX, noonY, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.font = "600 12px Manrope, sans-serif";
+            ctx.textAlign = "left";
+            ctx.textBaseline = "middle";
+            ctx.strokeStyle = "rgba(255,255,255,0.96)";
+            ctx.lineWidth = 4;
+            ctx.strokeText(label, noonX + 8, labelY);
+            ctx.fillText(label, noonX + 8, labelY);
+          }
           ctx.restore();
         }
 
