@@ -140,15 +140,12 @@
             Gesamtmarkt. Antippen zeigt die genauen Werte.
           </p>
           <p class="footer-note">
-            <strong>Preisänderung seit Vortag 12:00:</strong>
-            Referenz ist durchgehend der Mittagspreis des Vortags. Grau zeigt
-            den Rabatt von <code>00:00</code> bis <code>11:59</code> ggü.
-            Vortag <code>12:00</code>. Blau zeigt <code>12:00</code> bis
-            <code>23:59</code> und startet genau beim Mittagsdelta
-            <code>(Preis 12:00 - Preis Vortag 12:00)</code>; die Zahl an der
-            gestrichelten Linie ist genau dieser Wert. Positive Werte liegen
-            über der Referenz, negative darunter. Antippen zeigt zusätzlich
-            Quartilspanne und Spannweite.
+            <strong>Preisänderung zur 12:00-Referenz:</strong> Grau zeigt den
+            Rabatt von <code>00:00</code> bis <code>11:59</code> ggü. Vortag
+            <code>12:00</code>. Blau zeigt <code>12:00</code> bis
+            <code>23:59</code> ggü. dem Tagespreis um <code>12:00</code>.
+            Vor- und Nachmittag sind damit keine gemeinsame Minimum-Skala.
+            Antippen zeigt zusätzlich Quartilspanne und Spannweite.
           </p>
         </div>
       </section>
@@ -263,6 +260,14 @@
         }).format(v);
       }
 
+      function formatBrandStatusValue(v) {
+        if (typeof v !== "number" || Number.isNaN(v)) return "-";
+        return new Intl.NumberFormat("de-DE", {
+          minimumFractionDigits: 3,
+          maximumFractionDigits: 3,
+        }).format(v);
+      }
+
       function fuelDisplayName(fuel) {
         return (
           {
@@ -279,15 +284,19 @@
         return numeric;
       }
 
-      function formatRelativeText(valueInEuro) {
+      function formatRelativeText(valueInEuro, referenceLabel = "Referenz") {
         const displayValue = sanitizeRelativeValue(valueInEuro);
-        if (Math.abs(displayValue) < 0.0005) return "auf Vortag-12:00-Niveau";
+        if (Math.abs(displayValue) < 0.0005) return `auf ${referenceLabel}-Niveau`;
         return `${(Math.abs(displayValue) * 100).toFixed(1)} ct/l ${
           displayValue > 0 ? "teurer" : "günstiger"
         }`;
       }
 
-      function formatRelativeRangeText(firstValueInEuro, secondValueInEuro) {
+      function formatRelativeRangeText(
+        firstValueInEuro,
+        secondValueInEuro,
+        referenceLabel = "Referenz",
+      ) {
         const clipped = [
           sanitizeRelativeValue(firstValueInEuro),
           sanitizeRelativeValue(secondValueInEuro),
@@ -295,7 +304,7 @@
         const low = clipped[0] * 100;
         const high = clipped[1] * 100;
         if (Math.abs(low) < 0.05 && Math.abs(high) < 0.05) {
-          return "nahe Vortag-12:00-Niveau";
+          return `nahe ${referenceLabel}-Niveau`;
         }
         const format = (value) =>
           `${Math.abs(value).toFixed(1)} ct/l ${value > 0 ? "teurer" : "günstiger"}`;
@@ -318,18 +327,21 @@
         if (viewMode === "cycle") {
           return {
             label: "Referenz: Vortag 12:00",
+            referenceLabel: "Vortag 12:00",
             colors: HOURLY_REFERENCE_COLORS.sameDay,
           };
         }
         return Number(bucket?.hour) < 12
           ? {
               label: "00:00 - 11:59",
+              referenceLabel: "Vortag 12:00",
               colors: HOURLY_REFERENCE_COLORS.priorDay,
             }
           : {
               label: "12:00 - 23:59",
-            colors: HOURLY_REFERENCE_COLORS.sameDay,
-          };
+              referenceLabel: "Tages-12:00",
+              colors: HOURLY_REFERENCE_COLORS.sameDay,
+            };
       }
 
       function displayedHourlyBucket(bucket, viewMode = viewModeForFuel()) {
@@ -606,7 +618,7 @@
         plot.height = h - plot.top - plot.bottom;
         state.layout = { plot, w, h };
         titleEl.textContent =
-          `Preisänderung seit Vortag 12:00 · ${fuelDisplayName(state.fuel)}`;
+          `Preisänderung zur 12:00-Referenz · ${fuelDisplayName(state.fuel)}`;
 
         ctx.clearRect(0, 0, w, h);
 
@@ -667,7 +679,7 @@
           ctx.fillStyle = "rgba(37,99,235,0.78)";
           ctx.fillText("12:00", noonX + 6, plot.top + 14);
           if (Number.isFinite(noonMedian)) {
-            const label = `${formatSignedRelativeLabel(noonMedian)} zum Vortag`;
+            const label = `${formatSignedRelativeLabel(noonMedian)} zum Tages-12:00`;
             const noonY = yScale(domain, plot, noonMedian);
             const labelMidValue = noonMedian / 2 + 0.005;
             const labelY = clamp(
@@ -897,7 +909,7 @@
             ? `Zyklus ${bucketLabel(d)}`
             : `Stunde ${d.hour}`;
         setStatus(
-          `${state.fuel.toUpperCase()} ${label}: Median ${formatRelativeText(adjusted.median)}, mittlere 50 % ${formatRelativeRangeText(adjusted.q1, adjusted.q3)}, Spannweite ${formatRelativeRangeText(adjusted.min, adjusted.max)} · Zeitraum ${referenceMeta.label} · Referenz: Vortag 12:00 (n=${displayedBucket.count ?? d.count})`,
+          `${state.fuel.toUpperCase()} ${label}: Median ${formatRelativeText(adjusted.median, referenceMeta.referenceLabel)}, mittlere 50 % ${formatRelativeRangeText(adjusted.q1, adjusted.q3, referenceMeta.referenceLabel)}, Spannweite ${formatRelativeRangeText(adjusted.min, adjusted.max, referenceMeta.referenceLabel)} · Zeitraum ${referenceMeta.label} · Referenz: ${referenceMeta.referenceLabel} (n=${displayedBucket.count ?? d.count})`,
         );
       });
 
@@ -908,7 +920,7 @@
         const row = rows[index];
         if (!row) return;
         setStatus(
-          `${state.fuel.toUpperCase()} ${row.brand}: Median ${formatBrandAxisValue(row.median)} €/l, q1 ${formatBrandAxisValue(row.q1)}, q3 ${formatBrandAxisValue(row.q3)}, min ${formatBrandAxisValue(row.min)}, max ${formatBrandAxisValue(row.max)} €/l (n=${row.count})`,
+          `${state.fuel.toUpperCase()} ${row.brand}: Median ${formatBrandStatusValue(row.median)} €/l, q1 ${formatBrandStatusValue(row.q1)}, q3 ${formatBrandStatusValue(row.q3)}, min ${formatBrandStatusValue(row.min)}, max ${formatBrandStatusValue(row.max)} €/l (n=${row.count})`,
         );
       });
 
