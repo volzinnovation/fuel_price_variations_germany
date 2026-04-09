@@ -27,6 +27,7 @@ try:
         write_history_files,
         write_snapshot,
     )
+    from .noon_reference import HISTOGRAM_BUCKET_MINUTES, build_noon_reference_histograms
     from .time_utils import parse_timestamps_to_utc
 except ImportError:  # pragma: no cover
     from noon_outputs import (
@@ -36,6 +37,7 @@ except ImportError:  # pragma: no cover
         write_history_files,
         write_snapshot,
     )
+    from noon_reference import HISTOGRAM_BUCKET_MINUTES, build_noon_reference_histograms
     from time_utils import parse_timestamps_to_utc
 
 TZ = pytz.timezone("Europe/Berlin")
@@ -288,12 +290,48 @@ def _range_text(hours: List[int]) -> str:
     return ", ".join(parts)
 
 
+def _cycle_range_text(hours: List[int]) -> str:
+    if not hours:
+        return ""
+    if len(hours) >= 24:
+        return "12 - 12h"
+
+    ordered_hours: list[int] = []
+    for raw_hour in hours:
+        hour = int(raw_hour) % 24
+        if ordered_hours and hour == ordered_hours[-1]:
+            continue
+        ordered_hours.append(hour)
+
+    start = ordered_hours[0]
+    previous = start
+    parts: list[str] = []
+    for hour in ordered_hours[1:]:
+        expected = (previous + 1) % 24
+        if hour == expected:
+            previous = hour
+            continue
+        parts.append(f"{start} - {(previous + 1) % 24}h")
+        start = hour
+        previous = hour
+    parts.append(f"{start} - {(previous + 1) % 24}h")
+    return ", ".join(parts)
+
+
 def _clock_text(minutes: float | int | None) -> str | None:
     if minutes is None:
         return None
     rounded = int(round(float(minutes))) % (24 * 60)
     hours, mins = divmod(rounded, 60)
     return f"{hours:02d}:{mins:02d}"
+
+
+def _latest_noon_cycle_days(target_day: date) -> List[date]:
+    if target_day < LAW_RESET_DATE:
+        return []
+    if target_day == LAW_RESET_DATE:
+        return [LAW_RESET_DATE]
+    return [target_day - timedelta(days=1), target_day]
 
 
 def _duration_text(minutes: float | int | None) -> str | None:
@@ -536,6 +574,8 @@ def _noon_to_noon_markdown_profile(
         return [], summary
 
     markdown_by_hour: Dict[int, List[float]] = {}
+    delta_by_hour: Dict[int, List[float]] = {}
+    price_by_hour: Dict[int, List[float]] = {}
     used_windows: List[dict[str, object]] = []
     max_offset = -1
 
@@ -547,6 +587,8 @@ def _noon_to_noon_markdown_profile(
             continue
 
         cycle_values: List[float] = []
+        delta_values: List[float] = []
+        absolute_values: List[float] = []
         valid_cycle = True
         total_hours = int((cycle_end - cycle_start).total_seconds() // 3600)
         for offset in range(total_hours + 1):
@@ -555,7 +597,11 @@ def _noon_to_noon_markdown_profile(
             if pd.isna(price):
                 valid_cycle = False
                 break
-            markdown = max(0.0, float(anchor_price) - float(price))
+            absolute_price = float(price)
+            delta = absolute_price - float(anchor_price)
+            markdown = max(0.0, float(anchor_price) - absolute_price)
+            absolute_values.append(absolute_price)
+            delta_values.append(delta)
             cycle_values.append(markdown)
 
         if not valid_cycle:
@@ -565,14 +611,18 @@ def _noon_to_noon_markdown_profile(
         max_offset = max(max_offset, total_hours)
         for offset, markdown in enumerate(cycle_values):
             markdown_by_hour.setdefault(offset, []).append(markdown)
+            delta_by_hour.setdefault(offset, []).append(delta_values[offset])
+            price_by_hour.setdefault(offset, []).append(absolute_values[offset])
 
     if not used_windows:
         return [], summary
 
     hourly_rows = []
     for offset in range(max_offset + 1):
-        values = pd.Series(markdown_by_hour.get(offset, []), dtype="float64")
-        if values.empty:
+        markdown_values = pd.Series(markdown_by_hour.get(offset, []), dtype="float64")
+        delta_values = pd.Series(delta_by_hour.get(offset, []), dtype="float64")
+        price_values = pd.Series(price_by_hour.get(offset, []), dtype="float64")
+        if markdown_values.empty or delta_values.empty or price_values.empty:
             continue
         clock_hour = (12 + offset) % 24
         hourly_rows.append(
@@ -580,11 +630,19 @@ def _noon_to_noon_markdown_profile(
                 "cycle_hour": offset,
                 "clock_hour": clock_hour,
                 "label": f"{clock_hour:02d}",
-                "count": int(values.count()),
-                "markdown_min": round(float(values.min()), 3),
-                "markdown_avg": round(float(values.mean()), 3),
-                "markdown_median": round(float(values.median()), 3),
-                "markdown_max": round(float(values.max()), 3),
+                "count": int(price_values.count()),
+                "price_min": round(float(price_values.min()), 3),
+                "price_avg": round(float(price_values.mean()), 3),
+                "price_median": round(float(price_values.median()), 3),
+                "price_max": round(float(price_values.max()), 3),
+                "delta_min": round(float(delta_values.min()), 3),
+                "delta_avg": round(float(delta_values.mean()), 3),
+                "delta_median": round(float(delta_values.median()), 3),
+                "delta_max": round(float(delta_values.max()), 3),
+                "markdown_min": round(float(markdown_values.min()), 3),
+                "markdown_avg": round(float(markdown_values.mean()), 3),
+                "markdown_median": round(float(markdown_values.median()), 3),
+                "markdown_max": round(float(markdown_values.max()), 3),
             }
         )
 
@@ -686,6 +744,15 @@ def _load_midnight_reference_prices(
     return _snapshot_reference_prices(snapshot, fuels)
 
 
+def _raw_noon_snapshot(
+    prices: pd.DataFrame,
+    station_ids: List[str],
+    target_day: date,
+    fuels: tuple[str, ...],
+) -> pd.DataFrame:
+    return build_noon_snapshot(prices, station_ids, target_day, TZ, fuels=fuels)
+
+
 def _station_brand_table(stations: pd.DataFrame) -> pd.DataFrame:
     id_column = _station_id_column(stations)
     brands = stations[[id_column, "brand"]].copy()
@@ -772,10 +839,26 @@ def _write_station_output(
     best_source = best_hourly if not best_hourly.empty else hourly
     best_price = float(best_source["price"].min())
     best = best_source[best_source["price"] == best_price]["hour"].astype(int).tolist()
+    best_text = _range_text(best)
+    cycle_best_rows = [
+        row
+        for row in cycle_hourly
+        if int(row.get("cycle_hour", -1)) < 24 and row.get("price_median") is not None
+    ]
+    if cycle_best_rows:
+        cycle_best_price = min(float(row["price_median"]) for row in cycle_best_rows)
+        cycle_best = [
+            int(row["clock_hour"])
+            for row in cycle_best_rows
+            if abs(float(row["price_median"]) - cycle_best_price) <= 0.0005
+        ]
+        if cycle_best:
+            best = cycle_best
+            best_text = _cycle_range_text(cycle_best)
 
     payload = {
         "hourly": hourly.to_dict(orient="records"),
-        "text": _range_text(best),
+        "text": best_text,
         "besthours": best,
         "min": min_val,
         "max": max_val,
@@ -1024,11 +1107,9 @@ def generate(
         raise SystemExit("--analysis-days must be at least 1.")
     desired_analysis_end = today - timedelta(days=1)
     desired_analysis_start = today - timedelta(days=analysis_days_count)
-    raw_start = (
-        desired_analysis_start
-        if analysis_days_count == 1
-        else desired_analysis_start - timedelta(days=1)
-    )
+    raw_start = desired_analysis_start
+    if analysis_days_count > 1 or desired_analysis_end >= LAW_RESET_DATE:
+        raw_start = desired_analysis_start - timedelta(days=1)
     data_end = desired_analysis_end
     data, available_days = _load_prices_with_days(DateRange(raw_start, data_end))
     if desired_analysis_end not in available_days:
@@ -1069,11 +1150,12 @@ def generate(
     )
     midnight_reference_prices = _load_midnight_reference_prices(output_root, fuels)
 
-    # Collect fast-loading management summaries from station-level noon-anchored hourly deltas.
-    mgmt_hourly_values: Dict[str, Dict[int, List[float]]] = {
-        fuel: {hour: [] for hour in range(24)} for fuel in fuels
-    }
+    # Collect fast-loading management summaries from the latest completed noon cycle.
+    mgmt_hourly_values: Dict[str, Dict[int, List[float]]] = {fuel: {} for fuel in fuels}
+    mgmt_cycle_values: Dict[str, Dict[int, List[float]]] = {fuel: {} for fuel in fuels}
     mgmt_hourly_station_counts: Dict[str, int] = {fuel: 0 for fuel in fuels}
+    mgmt_cycle_station_counts: Dict[str, int] = {fuel: 0 for fuel in fuels}
+    management_cycle_days = _latest_noon_cycle_days(analysis_end)
 
     for station_id in tqdm(data["station_uuid"].unique(), desc="Processing stations", unit="station"):
         station = data[data["station_uuid"] == station_id].copy()
@@ -1106,15 +1188,32 @@ def generate(
             )
             if hourly.empty:
                 continue
-            daily_rows, daily_summary = _daily_noon_reset_metrics(fuel_series, analysis_days)
+            cycle_days = management_cycle_days or analysis_days
+            daily_rows, daily_summary = _daily_noon_reset_metrics(fuel_series, cycle_days)
             cycle_hourly, cycle_summary = _noon_to_noon_markdown_profile(
                 fuel_series,
-                analysis_days,
+                cycle_days,
             )
 
             mgmt_hourly_station_counts[fuel] += 1
             for row in hourly.itertuples(index=False):
-                mgmt_hourly_values[fuel][int(row.hour)].append(float(row.price))
+                if pd.isna(row.price):
+                    continue
+                mgmt_hourly_values[fuel].setdefault(int(row.hour), []).append(float(row.price))
+
+            cycle_rows = [
+                row
+                for row in cycle_hourly
+                if row.get("delta_median") is not None
+            ]
+            if cycle_rows:
+                mgmt_cycle_station_counts[fuel] += 1
+                for row in cycle_rows:
+                    delta_value = row.get("delta_median")
+                    if delta_value is None or pd.isna(delta_value):
+                        continue
+                    cycle_hour = int(row["cycle_hour"])
+                    mgmt_cycle_values[fuel].setdefault(cycle_hour, []).append(float(delta_value))
 
             _write_station_output(
                 out_dir,
@@ -1139,15 +1238,17 @@ def generate(
     # Write management summary (boxplot stats per hour) for fast frontend rendering.
     station_brands = _station_brand_table(stations_frame)
     brand_snapshot_time = _local_dt(analysis_end, 12, 0)
-    brand_snapshot = _latest_price_snapshot(
-        data,
-        pd.Timestamp(brand_snapshot_time.astimezone(pytz.UTC)),
-        fuels,
-    )
+    brand_snapshot = noon_snapshot
     brand_distributions = {
         fuel: _brand_distribution_summary(brand_snapshot, station_brands, fuel)
         for fuel in fuels
     }
+    noon_reference_histograms, noon_reference_summaries = build_noon_reference_histograms(
+        noon_snapshot,
+        TZ,
+        fuels=fuels,
+        bucket_minutes=HISTOGRAM_BUCKET_MINUTES,
+    )
 
     mgmt_summary = {
         "snapshot_date": str(analysis_end),
@@ -1158,24 +1259,35 @@ def generate(
         "view_modes": {},
         "bucket_counts": {},
         "fuels": {},
-        "brand_snapshot_label": "Vortag 12:00",
+        "brand_snapshot_label": "12:00-Referenz",
         "brand_snapshot_date": str(analysis_end),
         "brand_snapshot_timestamp": brand_snapshot_time.isoformat(timespec="minutes"),
         "brand_distributions": brand_distributions,
+        "noon_reference_bucket_minutes": HISTOGRAM_BUCKET_MINUTES,
+        "noon_reference_histograms": noon_reference_histograms,
+        "noon_reference_summaries": noon_reference_summaries,
     }
     for fuel in fuels:
         fuel_stats = []
-        mgmt_summary["view_modes"][fuel] = "hourly"
-        mgmt_summary["station_counts"][fuel] = mgmt_hourly_station_counts[fuel]
-        values_by_bucket = mgmt_hourly_values[fuel]
-        bucket_count = 24
+        fuel_view_mode = "cycle" if management_cycle_days and mgmt_cycle_station_counts[fuel] > 0 else "hourly"
+        mgmt_summary["view_modes"][fuel] = fuel_view_mode
+        if fuel_view_mode == "cycle":
+            mgmt_summary["station_counts"][fuel] = mgmt_cycle_station_counts[fuel]
+            values_by_bucket = mgmt_cycle_values[fuel]
+        else:
+            mgmt_summary["station_counts"][fuel] = mgmt_hourly_station_counts[fuel]
+            values_by_bucket = mgmt_hourly_values[fuel]
+        bucket_count = max(
+            values_by_bucket.keys(),
+            default=(23 if fuel_view_mode == "hourly" else 24),
+        ) + 1
         mgmt_summary["bucket_counts"][fuel] = bucket_count
         for hour in range(bucket_count):
-            values = values_by_bucket[hour]
+            values = values_by_bucket.get(hour, [])
+            clock_hour = (12 + hour) % 24
             if values:
                 s = pd.Series(values, dtype="float64")
-                row = {
-                    "hour": hour,
+                base_row = {
                     "count": int(s.count()),
                     "min": float(s.min()),
                     "q1": float(s.quantile(0.25)),
@@ -1184,14 +1296,25 @@ def generate(
                     "max": float(s.max()),
                 }
             else:
-                row = {
-                    "hour": hour,
+                base_row = {
                     "count": 0,
                     "min": 0.0,
                     "q1": 0.0,
                     "median": 0.0,
                     "q3": 0.0,
                     "max": 0.0,
+                }
+            if fuel_view_mode == "cycle":
+                row = {
+                    "cycle_hour": hour,
+                    "clock_hour": clock_hour,
+                    "label": f"{clock_hour:02d}",
+                    **base_row,
+                }
+            else:
+                row = {
+                    "hour": hour,
+                    **base_row,
                 }
             fuel_stats.append(row)
         mgmt_summary["fuels"][fuel] = fuel_stats

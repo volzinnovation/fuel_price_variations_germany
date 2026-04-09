@@ -18,32 +18,40 @@ try:
     from .generate_data import (
         TZ,
         DateRange,
+        _latest_noon_cycle_days,
         _brand_distribution_summary,
         _hourly_variation,
         _load_midnight_reference_prices,
         _latest_price_snapshot,
         _load_noon_reference_prices,
+        _noon_to_noon_markdown_profile,
         _load_prices,
         _local_dt,
         _parse_dates_utc,
         _station_brand_table,
         download_stations,
     )
+    from .noon_outputs import build_noon_snapshot
+    from .noon_reference import HISTOGRAM_BUCKET_MINUTES, build_noon_reference_histograms
 except ImportError:  # pragma: no cover
     from generate_data import (
         TZ,
         DateRange,
+        _latest_noon_cycle_days,
         _brand_distribution_summary,
         _hourly_variation,
         _load_midnight_reference_prices,
         _latest_price_snapshot,
         _load_noon_reference_prices,
+        _noon_to_noon_markdown_profile,
         _load_prices,
         _local_dt,
         _parse_dates_utc,
         _station_brand_table,
         download_stations,
     )
+    from noon_outputs import build_noon_snapshot
+    from noon_reference import HISTOGRAM_BUCKET_MINUTES, build_noon_reference_histograms
 
 
 FUELS: tuple[str, ...] = ("diesel", "e10", "e5")
@@ -87,6 +95,12 @@ def generate_historical_management_boxplots(
 
     data = _load_prices(DateRange(data_start, analysis_end))
     print(f"Loaded {len(data):,} price rows.")
+    station_ids = (
+        stations_frame["station_uuid"].dropna().astype(str).sort_values().unique().tolist()
+        if "station_uuid" in stations_frame.columns
+        else stations_frame.iloc[:, 0].dropna().astype(str).sort_values().unique().tolist()
+    )
+    noon_snapshot = build_noon_snapshot(data, station_ids, analysis_end, TZ, fuels=FUELS)
 
     window_start = datetime.combine(analysis_start, datetime.min.time())
     window_end = datetime.combine(analysis_end, datetime.max.time())
@@ -97,10 +111,11 @@ def generate_historical_management_boxplots(
     )
     midnight_reference_prices = _load_midnight_reference_prices(output_root, FUELS)
 
-    mgmt_hourly_values: Dict[str, Dict[int, List[float]]] = {
-        fuel: {hour: [] for hour in range(24)} for fuel in FUELS
-    }
+    management_cycle_days = _latest_noon_cycle_days(analysis_end)
+    mgmt_hourly_values: Dict[str, Dict[int, List[float]]] = {fuel: {} for fuel in FUELS}
+    mgmt_cycle_values: Dict[str, Dict[int, List[float]]] = {fuel: {} for fuel in FUELS}
     mgmt_hourly_station_counts: Dict[str, int] = {fuel: 0 for fuel in FUELS}
+    mgmt_cycle_station_counts: Dict[str, int] = {fuel: 0 for fuel in FUELS}
 
     for station_id in tqdm(data["station_uuid"].unique(), desc="Processing stations", unit="station"):
         station = data[data["station_uuid"] == station_id].copy()
@@ -134,18 +149,41 @@ def generate_historical_management_boxplots(
 
             mgmt_hourly_station_counts[fuel] += 1
             for row in hourly.itertuples(index=False):
-                mgmt_hourly_values[fuel][int(row.hour)].append(float(row.price))
+                if pd.isna(row.price):
+                    continue
+                mgmt_hourly_values[fuel].setdefault(int(row.hour), []).append(float(row.price))
+
+            cycle_hourly, _cycle_summary = _noon_to_noon_markdown_profile(
+                fuel_series,
+                management_cycle_days,
+            )
+            cycle_rows = [
+                row
+                for row in cycle_hourly
+                if row.get("delta_median") is not None
+            ]
+            if cycle_rows:
+                mgmt_cycle_station_counts[fuel] += 1
+                for row in cycle_rows:
+                    delta_value = row.get("delta_median")
+                    if delta_value is None or pd.isna(delta_value):
+                        continue
+                    mgmt_cycle_values[fuel].setdefault(int(row["cycle_hour"]), []).append(
+                        float(delta_value)
+                    )
 
     station_brands = _station_brand_table(stations_frame)
     brand_snapshot_time = _local_dt(analysis_end, 12, 0)
-    brand_snapshot = _latest_price_snapshot(
-        data,
-        pd.Timestamp(brand_snapshot_time.astimezone(pytz.UTC)),
-        FUELS,
-    )
+    brand_snapshot = noon_snapshot
     brand_distributions = {
         fuel: _brand_distribution_summary(brand_snapshot, station_brands, fuel) for fuel in FUELS
     }
+    noon_reference_histograms, noon_reference_summaries = build_noon_reference_histograms(
+        noon_snapshot,
+        TZ,
+        fuels=FUELS,
+        bucket_minutes=HISTOGRAM_BUCKET_MINUTES,
+    )
 
     mgmt_summary = {
         "snapshot_date": str(analysis_end),
@@ -156,24 +194,36 @@ def generate_historical_management_boxplots(
         "view_modes": {},
         "bucket_counts": {},
         "fuels": {},
-        "brand_snapshot_label": "Vortag 12:00",
+        "brand_snapshot_label": "12:00-Referenz",
         "brand_snapshot_date": str(analysis_end),
         "brand_snapshot_timestamp": brand_snapshot_time.isoformat(timespec="minutes"),
         "brand_distributions": brand_distributions,
+        "noon_reference_bucket_minutes": HISTOGRAM_BUCKET_MINUTES,
+        "noon_reference_histograms": noon_reference_histograms,
+        "noon_reference_summaries": noon_reference_summaries,
     }
 
     for fuel in FUELS:
         fuel_stats = []
-        mgmt_summary["view_modes"][fuel] = "hourly"
-        mgmt_summary["station_counts"][fuel] = mgmt_hourly_station_counts[fuel]
-        values_by_bucket = mgmt_hourly_values[fuel]
-        mgmt_summary["bucket_counts"][fuel] = 24
-        for hour in range(24):
-            values = values_by_bucket[hour]
+        fuel_view_mode = "cycle" if management_cycle_days and mgmt_cycle_station_counts[fuel] > 0 else "hourly"
+        mgmt_summary["view_modes"][fuel] = fuel_view_mode
+        if fuel_view_mode == "cycle":
+            mgmt_summary["station_counts"][fuel] = mgmt_cycle_station_counts[fuel]
+            values_by_bucket = mgmt_cycle_values[fuel]
+        else:
+            mgmt_summary["station_counts"][fuel] = mgmt_hourly_station_counts[fuel]
+            values_by_bucket = mgmt_hourly_values[fuel]
+        bucket_count = max(
+            values_by_bucket.keys(),
+            default=(23 if fuel_view_mode == "hourly" else 24),
+        ) + 1
+        mgmt_summary["bucket_counts"][fuel] = bucket_count
+        for hour in range(bucket_count):
+            values = values_by_bucket.get(hour, [])
+            clock_hour = (12 + hour) % 24
             if values:
                 series = pd.Series(values, dtype="float64")
-                row = {
-                    "hour": hour,
+                base_row = {
                     "count": int(series.count()),
                     "min": float(series.min()),
                     "q1": float(series.quantile(0.25)),
@@ -182,14 +232,25 @@ def generate_historical_management_boxplots(
                     "max": float(series.max()),
                 }
             else:
-                row = {
-                    "hour": hour,
+                base_row = {
                     "count": 0,
                     "min": 0.0,
                     "q1": 0.0,
                     "median": 0.0,
                     "q3": 0.0,
                     "max": 0.0,
+                }
+            if fuel_view_mode == "cycle":
+                row = {
+                    "cycle_hour": hour,
+                    "clock_hour": clock_hour,
+                    "label": f"{clock_hour:02d}",
+                    **base_row,
+                }
+            else:
+                row = {
+                    "hour": hour,
+                    **base_row,
                 }
             fuel_stats.append(row)
         mgmt_summary["fuels"][fuel] = fuel_stats

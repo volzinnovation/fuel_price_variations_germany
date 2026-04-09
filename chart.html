@@ -195,6 +195,32 @@
           ctx.restore();
         },
       };
+      const midnightDividerPlugin = {
+        id: "midnightDivider",
+        afterDatasetsDraw(chart, _args, options) {
+          if (!options || options.enabled === false) return;
+          const xScale = chart.scales?.x;
+          const chartArea = chart.chartArea;
+          if (!xScale || !chartArea || !Number.isFinite(Number(options.markerIndex))) {
+            return;
+          }
+          const dividerX = xScale.getPixelForValue(Number(options.markerIndex));
+          const { ctx } = chart;
+          ctx.save();
+          ctx.setLineDash([6, 4]);
+          ctx.strokeStyle = "rgba(37, 99, 235, 0.38)";
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(dividerX, chartArea.top);
+          ctx.lineTo(dividerX, chartArea.bottom);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.fillStyle = "rgba(37, 99, 235, 0.82)";
+          ctx.font = "12px Manrope, sans-serif";
+          ctx.fillText("00:00", dividerX + 6, chartArea.top + 14);
+          ctx.restore();
+        },
+      };
       const historyButton = document.getElementById("history-view");
       const profileButton = document.getElementById("profile-view");
 
@@ -278,6 +304,10 @@
 
       function buildReferenceSubtitle() {
         return `${fuel.toUpperCase()} · Preisänderung zur jeweiligen 12:00-Referenz · Grau = 00:00-11:59 ggü. Vortag 12:00 · Blau = 12:00-23:59 ggü. Tages-12:00 · negative Werte = günstiger, positive Werte = teurer`;
+      }
+
+      function buildCycleSubtitle() {
+        return `${fuel.toUpperCase()} · Preisänderung zum etablierten 12:00-Preis im Zyklus 12:00 Vortag → 12:00 Tag · Mitternacht markiert die Tagesgrenze · negative Werte = günstiger, positive Werte = teurer`;
       }
 
       function sanitizeRelativeValue(valueInEuro) {
@@ -616,6 +646,160 @@
         });
       }
 
+      function normalizeCycleRows(stats) {
+        const rows = Array.isArray(stats?.cycle_hourly) ? stats.cycle_hourly : [];
+        return rows
+          .map((row) => {
+            const cycleHour = Number(row?.cycle_hour);
+            const clockHour = Number(
+              row?.clock_hour != null ? row.clock_hour : row?.label,
+            );
+            const deltaCandidates = [
+              row?.delta_median,
+              row?.delta_avg,
+              row?.delta_max,
+              row?.delta_min,
+            ];
+            let deltaValue = null;
+            for (const candidate of deltaCandidates) {
+              const numeric = Number(candidate);
+              if (Number.isFinite(numeric)) {
+                deltaValue = numeric;
+                break;
+              }
+            }
+            if (deltaValue === null) {
+              const markdownCandidates = [
+                row?.markdown_median,
+                row?.markdown_avg,
+                row?.markdown_max,
+                row?.markdown_min,
+              ];
+              for (const candidate of markdownCandidates) {
+                const numeric = Number(candidate);
+                if (Number.isFinite(numeric)) {
+                  deltaValue = -numeric;
+                  break;
+                }
+              }
+            }
+            if (!Number.isFinite(cycleHour) || !Number.isFinite(clockHour) || deltaValue === null) {
+              return null;
+            }
+            return {
+              cycleHour,
+              clockHour: ((Math.round(clockHour) % 24) + 24) % 24,
+              label:
+                typeof row?.label === "string" && row.label.trim()
+                  ? row.label.trim()
+                  : String(((Math.round(clockHour) % 24) + 24) % 24).padStart(2, "0"),
+              displayValue: sanitizeRelativeValue(deltaValue),
+            };
+          })
+          .filter((row) => row !== null)
+          .sort((left, right) => left.cycleHour - right.cycleHour);
+      }
+
+      function renderCycleReferenceChart(stats) {
+        const cycleRows = normalizeCycleRows(stats);
+        const labels = cycleRows.map((row) => `${row.label}:00`);
+        const values = cycleRows.map((row) => row.displayValue);
+        const domain = computeSeriesDomain(values, true);
+        const midnightIndex = cycleRows.findIndex((row) => row.clockHour === 0);
+        const ctx = document.getElementById("chart").getContext("2d");
+        if (chartInstance) chartInstance.destroy();
+        chartInstance = new Chart(ctx, {
+          type: "line",
+          plugins: [midnightDividerPlugin],
+          data: {
+            labels,
+            datasets: [
+              {
+                label: "12:00 Vortag → 12:00 Tag",
+                data: values,
+                borderColor: SAME_DAY_COLOR.stroke,
+                backgroundColor: SAME_DAY_COLOR.stroke,
+                borderWidth: 2.4,
+                pointRadius: 1.8,
+                pointHoverRadius: 4,
+                pointBackgroundColor: SAME_DAY_COLOR.stroke,
+                pointBorderColor: SAME_DAY_COLOR.stroke,
+                stepped: "before",
+                tension: 0,
+                spanGaps: false,
+                fill: false,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+              mode: "index",
+              intersect: false,
+            },
+            scales: {
+              x: {
+                title: {
+                  display: true,
+                  text: "Stunde im 24h-Zyklus (12 Vortag → 12 Tag)",
+                },
+                ticks: {
+                  align: "start",
+                },
+              },
+              y: {
+                min: domain.min,
+                max: domain.max,
+                ticks: {
+                  callback(value) {
+                    return formatEuroTick(value);
+                  },
+                },
+                grid: {
+                  color(context) {
+                    return context.tick.value === 0
+                      ? "rgba(37, 99, 235, 0.28)"
+                      : "rgba(0, 0, 0, 0.08)";
+                  },
+                },
+                title: {
+                  display: true,
+                  text: "Preisänderung zum 12:00-Anker (€/l)",
+                },
+              },
+            },
+            plugins: {
+              legend: {
+                position: "bottom",
+              },
+              midnightDivider: {
+                enabled: midnightIndex >= 0,
+                markerIndex: midnightIndex,
+              },
+              tooltip: {
+                callbacks: {
+                  label(context) {
+                    const row = cycleRows[context.dataIndex];
+                    if (!row) return "";
+                    return formatRelativeChange(row.displayValue, 0);
+                  },
+                  afterBody(context) {
+                    const row = cycleRows[context[0]?.dataIndex];
+                    if (!row) return [];
+                    return [
+                      `Zyklus: 12:00 Vortag → 12:00 Tag`,
+                      `Uhrzeit: ${row.label}:00`,
+                      `Referenz: Vortag 12:00`,
+                    ];
+                  },
+                },
+              },
+            },
+          },
+        });
+      }
+
       function renderLegacyHourlyChart(stats) {
         const hours = stats.hourly.map((row) => row.hour);
         const values = stats.hourly.map((row) => row.price);
@@ -671,6 +855,12 @@
       async function loadProfileChart() {
         const statsUrl = `${DATA_BASE}${stationPath(stationId)}/${fuel}.json`;
         const stats = await fetchJson(statsUrl);
+        if (Array.isArray(stats?.cycle_hourly) && stats.cycle_hourly.length) {
+          document.getElementById("chart-sub").textContent =
+            buildCycleSubtitle();
+          renderCycleReferenceChart(stats);
+          return;
+        }
         if (
           TankzeitStats.summaryFromStats(stats) &&
           Array.isArray(stats.hourly) &&

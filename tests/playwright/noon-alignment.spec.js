@@ -90,7 +90,7 @@ test("e10.html shows E10 tankzeit ending exactly at noon", async ({ page }) => {
   await expect(page.locator(`#${stationId}-profile`)).toContainText("2.050");
 });
 
-test("chart.html uses the raw normalized 12:00 bucket with correct step alignment", async ({
+test("chart.html renders the noon-cycle profile from prior noon to current noon", async ({
   page,
 }) => {
   await routeFixtureResponses(page);
@@ -100,23 +100,27 @@ test("chart.html uses the raw normalized 12:00 bucket with correct step alignmen
   );
   await expect(page.locator("#chart-title")).toContainText("Noon Test Station");
   await expect(page.locator("#chart-sub")).toContainText(
-    "Blau startet um 12:00 mit +5,0 ct/l",
+    "Zyklus 12:00 Vortag → 12:00 Tag",
   );
 
   const chartState = await page.evaluate(() => {
     const chart = window.Chart.getChart(document.getElementById("chart"));
     return {
-      stepped: chart.data.datasets[1].stepped,
-      noon: chart.data.datasets[1].data[12],
-      thirteen: chart.data.datasets[1].data[13],
+      stepped: chart.data.datasets[0].stepped,
+      firstLabel: chart.data.labels[0],
+      midnightLabel: chart.data.labels[12],
+      midnight: chart.data.datasets[0].data[12],
+      nextMorning: chart.data.datasets[0].data[18],
     };
   });
   expect(chartState.stepped).toBe("before");
-  expect(chartState.noon).toBe(0.05);
-  expect(chartState.thirteen).toBe(0.05);
+  expect(chartState.firstLabel).toBe("12:00");
+  expect(chartState.midnightLabel).toBe("00:00");
+  expect(chartState.midnight).toBe(-0.05);
+  expect(chartState.nextMorning).toBe(-0.05);
 });
 
-test("management.html uses the noon-to-noon delta at hour 12", async ({ page }) => {
+test("management.html renders the noon-cycle with midnight in the middle", async ({ page }) => {
   await routeFixtureResponses(page);
 
   const managementResponse = page.waitForResponse((response) => {
@@ -133,25 +137,25 @@ test("management.html uses the noon-to-noon delta at hour 12", async ({ page }) 
   await expect(page.locator("#date-picker")).toHaveValue(managementDate);
   await waitForManagementChart(page, "Diesel");
 
-  await clickManagementHour(page, 11);
-  await expect(page.locator("#status")).toContainText("DIESEL Stunde 11:");
-  await expect(page.locator("#status")).toContainText("5.0 ct/l günstiger");
-  await expect(page.locator("#status")).toContainText("Zeitraum 00:00 - 11:59");
+  await clickManagementHour(page, 0);
+  await expect(page.locator("#status")).toContainText("DIESEL Zyklus 12:00:");
+  await expect(page.locator("#status")).toContainText("auf Vortag 12:00-Niveau");
+  await expect(page.locator("#status")).toContainText("Zeitraum 12:00 Vortag → 12:00 Tag");
 
   await clickManagementHour(page, 12);
-  await expect(page.locator("#status")).toContainText("DIESEL Stunde 12:");
-  await expect(page.locator("#status")).toContainText("auf Vortag-12:00-Niveau");
-  await expect(page.locator("#status")).toContainText("Zeitraum 12:00 - 23:59");
+  await expect(page.locator("#status")).toContainText("DIESEL Zyklus 00:00:");
+  await expect(page.locator("#status")).toContainText("5.0 ct/l günstiger");
+  await expect(page.locator("#status")).toContainText("Zeitraum 12:00 Vortag → 12:00 Tag");
 
-  await clickManagementHour(page, 13);
-  await expect(page.locator("#status")).toContainText("DIESEL Stunde 13:");
-  await expect(page.locator("#status")).toContainText("5.0 ct/l teurer");
+  await clickManagementHour(page, 23);
+  await expect(page.locator("#status")).toContainText("DIESEL Zyklus 11:00:");
+  await expect(page.locator("#status")).toContainText("5.0 ct/l günstiger");
 
   await page.getByRole("tab", { name: "E10" }).click();
   await waitForManagementChart(page, "E10");
   await clickManagementHour(page, 12);
-  await expect(page.locator("#status")).toContainText("E10 Stunde 12:");
-  await expect(page.locator("#status")).toContainText("auf Vortag-12:00-Niveau");
+  await expect(page.locator("#status")).toContainText("E10 Zyklus 00:00:");
+  await expect(page.locator("#status")).toContainText("5.0 ct/l günstiger");
 });
 
 async function routeFixtureResponses(page) {
@@ -279,7 +283,7 @@ async function clickManagementHour(page, hour) {
 
 async function waitForManagementChart(page, fuelLabel) {
   await expect(page.locator("#title")).toHaveText(
-    `Preisänderung seit Vortag 12:00 · ${fuelLabel}`,
+    `Preisänderung zur 12:00-Referenz · ${fuelLabel}`,
   );
   await page.waitForFunction(() => {
     const canvas = document.getElementById("plot");

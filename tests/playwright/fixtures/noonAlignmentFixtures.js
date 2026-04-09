@@ -11,19 +11,48 @@ function stationHourlyRows() {
   }));
 }
 
-function managementHourlyRows() {
-  return Array.from({ length: 24 }, (_value, hour) => ({
-    hour,
+function stationCycleRows() {
+  return Array.from({ length: 25 }, (_value, cycleHour) => {
+    const clockHour = (12 + cycleHour) % 24;
+    const delta = cycleHour >= 12 ? -0.05 : 0.0;
+    const price = 2.05 + delta;
+    const markdown = Math.max(0, -delta);
+    return {
+      cycle_hour: cycleHour,
+      clock_hour: clockHour,
+      label: String(clockHour).padStart(2, "0"),
+      count: 1,
+      price_min: price,
+      price_avg: price,
+      price_median: price,
+      price_max: price,
+      delta_min: delta,
+      delta_avg: delta,
+      delta_median: delta,
+      delta_max: delta,
+      markdown_min: markdown,
+      markdown_avg: markdown,
+      markdown_median: markdown,
+      markdown_max: markdown,
+    };
+  });
+}
+
+function managementCycleRows() {
+  return stationCycleRows().map((row) => ({
+    cycle_hour: row.cycle_hour,
+    clock_hour: row.clock_hour,
+    label: row.label,
     count: 1,
-    min: hour < 12 ? -0.05 : 0.05,
-    q1: hour < 12 ? -0.05 : 0.05,
-    median: hour < 12 ? -0.05 : 0.05,
-    q3: hour < 12 ? -0.05 : 0.05,
-    max: hour < 12 ? -0.05 : 0.05,
+    min: row.delta_median,
+    q1: row.delta_median,
+    median: row.delta_median,
+    q3: row.delta_median,
+    max: row.delta_median,
   }));
 }
 
-const besthours = Array.from({ length: 12 }, (_value, hour) => hour);
+const besthours = Array.from({ length: 12 }, (_value, offset) => offset);
 
 const stationStatsFixture = {
   hourly: stationHourlyRows(),
@@ -59,9 +88,9 @@ const stationStatsFixture = {
   summary: {
     days: 1,
     law_effective_date: "2026-04-01",
-    analysis_start: managementDate,
-    analysis_end: managementDate,
-    analysis_days: 1,
+    analysis_start: "2026-04-05",
+    analysis_end: "2026-04-05",
+    analysis_days: 2,
     partial_cycles: 0,
     full_cycles: 1,
     noon_price_avg: 2.05,
@@ -87,18 +116,18 @@ const stationStatsFixture = {
     min_duration_minutes_median: 720,
     min_duration_text: "12h",
   },
-  cycle_hourly: [],
+  cycle_hourly: stationCycleRows(),
   cycle_summary: {
     days: 1,
-    cycle_start: managementDate,
-    cycle_end: "2026-04-07",
+    cycle_start: "2026-04-05",
+    cycle_end: managementDate,
     partial: false,
     last_label: "12",
   },
   law_effective_date: "2026-04-01",
   analysis_start: managementDate,
   analysis_end: managementDate,
-  analysis_days: 1,
+  analysis_days: 2,
 };
 
 const managementFixture = {
@@ -112,22 +141,95 @@ const managementFixture = {
     e5: 1,
   },
   view_modes: {
-    diesel: "hourly",
-    e10: "hourly",
-    e5: "hourly",
+    diesel: "cycle",
+    e10: "cycle",
+    e5: "cycle",
+  },
+  bucket_counts: {
+    diesel: 25,
+    e10: 25,
+    e5: 25,
   },
   fuels: {
-    diesel: managementHourlyRows(),
-    e10: managementHourlyRows(),
-    e5: managementHourlyRows(),
+    diesel: managementCycleRows(),
+    e10: managementCycleRows(),
+    e5: managementCycleRows(),
   },
-  brand_snapshot_label: "12:00",
+  brand_snapshot_label: "12:00-Referenz",
   brand_snapshot_date: managementDate,
   brand_snapshot_timestamp: "2026-04-06T12:00+02:00",
   brand_distributions: {
     diesel: [],
     e10: [],
     e5: [],
+  },
+  noon_reference_bucket_minutes: 15,
+  noon_reference_histograms: {
+    diesel: [
+      {
+        bucket_minute: 735,
+        bucket_label: "12:15",
+        count: 1,
+        stations: 1,
+        increase_count: 1,
+        fallback_count: 0,
+        share: 1,
+      },
+    ],
+    e10: [
+      {
+        bucket_minute: 720,
+        bucket_label: "12:00",
+        count: 1,
+        stations: 1,
+        increase_count: 0,
+        fallback_count: 1,
+        share: 1,
+      },
+    ],
+    e5: [
+      {
+        bucket_minute: 720,
+        bucket_label: "12:00",
+        count: 1,
+        stations: 1,
+        increase_count: 0,
+        fallback_count: 1,
+        share: 1,
+      },
+    ],
+  },
+  noon_reference_summaries: {
+    diesel: {
+      stations: 1,
+      bucket_minutes: 15,
+      peak_bucket_label: "12:15",
+      peak_bucket_count: 1,
+      peak_bucket_share: 1,
+      increase_stations: 1,
+      fallback_stations: 0,
+      delayed_increase_stations: 1,
+    },
+    e10: {
+      stations: 1,
+      bucket_minutes: 15,
+      peak_bucket_label: "12:00",
+      peak_bucket_count: 1,
+      peak_bucket_share: 1,
+      increase_stations: 0,
+      fallback_stations: 1,
+      delayed_increase_stations: 0,
+    },
+    e5: {
+      stations: 1,
+      bucket_minutes: 15,
+      peak_bucket_label: "12:00",
+      peak_bucket_count: 1,
+      peak_bucket_share: 1,
+      increase_stations: 0,
+      fallback_stations: 1,
+      delayed_increase_stations: 0,
+    },
   },
 };
 

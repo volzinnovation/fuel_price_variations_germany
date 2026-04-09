@@ -416,7 +416,7 @@ class DailyNoonResetMetricTests(unittest.TestCase):
         )
 
         self.assertEqual(used_days, 1)
-        self.assertEqual(hourly.loc[hourly["hour"] == 8, "price"].item(), -0.05)
+        self.assertEqual(hourly.loc[hourly["hour"] == 8, "price"].item(), -0.25)
         self.assertEqual(hourly.loc[hourly["hour"] == 12, "price"].item(), 0.0)
 
 
@@ -488,12 +488,55 @@ class RawNoonReferenceSnapshotTests(unittest.TestCase):
 
         station_2 = snapshot.loc[snapshot["station_uuid"] == "station-2"].iloc[0]
         self.assertEqual(station_2["diesel"], 1.64)
-        self.assertEqual(station_2["last_update"], "2026-04-05T12:00:00+02:00")
+        self.assertEqual(station_2["last_update"], "2026-04-05T11:20:00+02:00")
+
+    def test_raw_noon_snapshot_tracks_mixed_increase_and_fallback_per_fuel(self) -> None:
+        prices = pd.DataFrame(
+            {
+                "station_uuid": [
+                    "station-1",
+                    "station-1",
+                    "station-1",
+                    "station-1",
+                ],
+                "date": pd.to_datetime(
+                    [
+                        "2026-04-04T21:30:00Z",
+                        "2026-04-05T08:55:00Z",
+                        "2026-04-05T10:03:00Z",
+                        "2026-04-05T10:08:00Z",
+                    ],
+                    utc=True,
+                ),
+                "diesel": [1.70, 1.68, 1.74, 1.73],
+                "e10": [1.75, 1.72, 1.72, 1.72],
+                "e5": [1.80, 1.78, 1.78, 1.82],
+            }
+        )
+
+        snapshot = _raw_noon_snapshot(
+            prices,
+            ["station-1"],
+            date(2026, 4, 5),
+            ("diesel", "e10", "e5"),
+        )
+
+        station = snapshot.loc[snapshot["station_uuid"] == "station-1"].iloc[0]
+        self.assertEqual(station["diesel"], 1.74)
+        self.assertEqual(station["diesel_last_update"], "2026-04-05T12:03:00+02:00")
+        self.assertEqual(station["diesel_selection_method"], "increase")
+        self.assertEqual(station["e10"], 1.72)
+        self.assertEqual(station["e10_last_update"], "2026-04-05T10:55:00+02:00")
+        self.assertEqual(station["e10_selection_method"], "fallback")
+        self.assertEqual(station["e5"], 1.82)
+        self.assertEqual(station["e5_last_update"], "2026-04-05T12:08:00+02:00")
+        self.assertEqual(station["e5_selection_method"], "increase")
+        self.assertEqual(station["last_update"], "2026-04-05T12:08:00+02:00")
 
     @patch("scripts.generate_data._load_prices_with_days")
     @patch("scripts.generate_data.download_stations")
     @patch("scripts.generate_data._fetch_brent_crude_snapshot")
-    def test_generate_uses_prior_day_noon_for_management_brand_snapshot(
+    def test_generate_uses_noon_reference_for_management_brand_snapshot(
         self,
         mock_brent_snapshot,
         mock_download_stations,
@@ -564,27 +607,53 @@ class RawNoonReferenceSnapshotTests(unittest.TestCase):
             self.assertEqual(brent_summary["brent_as_of"], "2026-03-30")
             self.assertEqual(brent_summary["brent_eur_per_crude_liter"], 0.667539)
             self.assertEqual(summary["snapshot_date"], "2026-04-02")
-            self.assertEqual(summary["view_modes"]["diesel"], "hourly")
-            self.assertEqual(summary["bucket_counts"]["diesel"], 24)
-            self.assertEqual(summary["brand_snapshot_label"], "Vortag 12:00")
+            self.assertEqual(summary["view_modes"]["diesel"], "cycle")
+            self.assertEqual(summary["bucket_counts"]["diesel"], 25)
+            self.assertEqual(summary["brand_snapshot_label"], "12:00-Referenz")
             self.assertEqual(summary["brand_snapshot_date"], "2026-04-02")
             self.assertTrue(summary["brand_snapshot_timestamp"].startswith("2026-04-02T12:00"))
             diesel_rows = summary["fuels"]["diesel"]
-            self.assertEqual(diesel_rows[11]["median"], -0.1)
-            self.assertEqual(diesel_rows[13]["median"], 0.1)
+            self.assertEqual(diesel_rows[0]["label"], "12")
+            self.assertEqual(diesel_rows[12]["label"], "00")
+            self.assertEqual(diesel_rows[23]["median"], -0.1)
+            self.assertEqual(diesel_rows[24]["median"], -0.1)
 
             brand_medians = {
                 row["brand"]: row["median"] for row in summary["brand_distributions"]["diesel"]
             }
-            self.assertEqual(brand_medians["Gesamtmarkt"], 1.725)
-            self.assertEqual(brand_medians["ARAL"], 1.7)
-            self.assertEqual(brand_medians["SHELL"], 1.75)
+            self.assertAlmostEqual(brand_medians["Gesamtmarkt"], 1.925)
+            self.assertAlmostEqual(brand_medians["ARAL"], 1.9)
+            self.assertAlmostEqual(brand_medians["SHELL"], 1.95)
+            diesel_histogram = summary["noon_reference_histograms"]["diesel"]
+            self.assertEqual(diesel_histogram, [
+                {
+                    "bucket_minute": 780,
+                    "bucket_label": "13:00",
+                    "count": 2,
+                    "stations": 2,
+                    "increase_count": 2,
+                    "fallback_count": 0,
+                    "share": 1.0,
+                }
+            ])
+            self.assertEqual(
+                summary["noon_reference_summaries"]["diesel"]["delayed_increase_stations"],
+                2,
+            )
 
             station_path = Path(tmpdir) / "data2" / "s1" / "diesel.json"
             station_payload = json.loads(station_path.read_text(encoding="utf-8"))
             station_hourly = {row["hour"]: row["price"] for row in station_payload["hourly"]}
-            self.assertEqual(station_hourly[11], -0.1)
-            self.assertEqual(station_hourly[13], 0.1)
+            self.assertEqual(station_hourly[11], -0.06)
+            self.assertEqual(station_hourly[12], -0.08)
+            self.assertEqual(station_hourly[13], 0.02)
+            station_cycle = {row["cycle_hour"]: row for row in station_payload["cycle_hourly"]}
+            self.assertEqual(station_payload["text"], "11 - 12h")
+            self.assertEqual(station_payload["besthours"], [11])
+            self.assertEqual(station_cycle[0]["delta_median"], 0.0)
+            self.assertEqual(station_cycle[23]["delta_median"], -0.1)
+            self.assertEqual(station_cycle[24]["delta_median"], -0.1)
+            self.assertEqual(station_payload["summary"]["min_time_text"], "11:00")
 
     @patch("scripts.generate_data._load_prices_with_days")
     @patch("scripts.generate_data.download_stations")
@@ -656,6 +725,8 @@ class RawNoonReferenceSnapshotTests(unittest.TestCase):
             noon_rows = pd.read_csv(noon_path)
             self.assertEqual(noon_rows.loc[0, "diesel"], 1.76)
             self.assertEqual(noon_rows.loc[0, "last_update"], "2026-04-06T12:01:43+02:00")
+            self.assertEqual(noon_rows.loc[0, "diesel_last_update"], "2026-04-06T12:01:43+02:00")
+            self.assertEqual(noon_rows.loc[0, "diesel_selection_method"], "increase")
 
             dated_noon_rows = pd.read_csv(dated_noon_path)
             self.assertEqual(dated_noon_rows.to_dict(orient="records"), noon_rows.to_dict(orient="records"))
@@ -675,7 +746,7 @@ class RawNoonReferenceSnapshotTests(unittest.TestCase):
     @patch("scripts.generate_data._load_prices_with_days")
     @patch("scripts.generate_data.download_stations")
     @patch("scripts.generate_data._fetch_brent_crude_snapshot")
-    def test_generate_with_one_day_analysis_fetches_only_yesterday(
+    def test_generate_with_one_day_analysis_loads_prior_day_for_cycle_fallback(
         self,
         mock_brent_snapshot,
         mock_download_stations,
@@ -719,8 +790,19 @@ class RawNoonReferenceSnapshotTests(unittest.TestCase):
             generate(Path(tmpdir), analysis_days_count=1, today_override=date(2026, 4, 7))
 
             date_range = mock_load_prices_with_days.call_args.args[0]
-            self.assertEqual(date_range.start, date(2026, 4, 6))
+            self.assertEqual(date_range.start, date(2026, 4, 5))
             self.assertEqual(date_range.end, date(2026, 4, 6))
+
+            summary_path = (
+                Path(tmpdir)
+                / "data2"
+                / "2026"
+                / "04"
+                / "06"
+                / "management_boxplots.json"
+            )
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(summary["view_modes"]["diesel"], "hourly")
 
 
 if __name__ == "__main__":

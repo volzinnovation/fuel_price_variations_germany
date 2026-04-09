@@ -112,7 +112,7 @@
       <section class="card management-chart-card">
         <div class="toolbar">
           <div class="left">
-            <h2 id="brand-title">Mittagspreis nach Marke</h2>
+            <h2 id="brand-title">12:00-Referenzpreis nach Marke</h2>
           </div>
         </div>
         <div class="chart-wrap">
@@ -132,20 +132,46 @@
         </div>
       </section>
 
+      <section class="card management-chart-card">
+        <div class="toolbar">
+          <div class="left">
+            <h2 id="histogram-title">Zeitpunkt der 12:00-Referenz</h2>
+          </div>
+        </div>
+
+        <div class="chart-wrap">
+          <canvas id="histogram-plot"></canvas>
+        </div>
+      </section>
+
       <section class="card management-footer">
         <div class="footer-notes">
           <p class="footer-note">
-            <strong>Mittagspreis nach Marke:</strong> Zeigt die Preise am
-            ausgewählten Tag um <code>12:00</code>. Schwarz steht für den
-            Gesamtmarkt. Antippen zeigt die genauen Werte.
+            <strong>12:00-Referenzpreis nach Marke:</strong> Zeigt je Marke
+            den ausgewählten Referenzpreis. Für jeden Kraftstoff gilt: Die
+            erste Erhöhung des Tages zählt als 12:00-Referenz, auch wenn sie
+            erst nach <code>12:00</code> veröffentlicht wird. Ohne Erhöhung
+            fällt die Referenz auf den letzten bekannten Preis bis
+            <code>12:00</code> zurück.
           </p>
           <p class="footer-note">
             <strong>Preisänderung zur 12:00-Referenz:</strong> Grau zeigt den
-            Rabatt von <code>00:00</code> bis <code>11:59</code> ggü. Vortag
-            <code>12:00</code>. Blau zeigt <code>12:00</code> bis
-            <code>23:59</code> ggü. dem Tagespreis um <code>12:00</code>.
-            Vor- und Nachmittag sind damit keine gemeinsame Minimum-Skala.
-            Antippen zeigt zusätzlich Quartilspanne und Spannweite.
+            im aktuellen Format den Zyklus vom etablierten
+            <code>12:00</code>-Preis des Vortags bis <code>12:00</code> des
+            gewählten Tags. Die gestrichelte Linie markiert Mitternacht. Ein
+            sichtbarer "Noon Dip" kann entstehen, wenn viele Stationen ihre
+            erste Preiserhöhung erst kurz nach Mittag melden. Negative Werte
+            liegen unter dem 12:00-Anker, positive darüber. Antippen zeigt
+            zusätzlich Quartilspanne und Spannweite.
+          </p>
+          <p class="footer-note">
+            <strong>Zeitpunkt der 12:00-Referenz:</strong> Das Histogramm zeigt
+            je Kraftstoff, wann der verwendete Referenzpreis pro Station
+            tatsächlich feststeht. Balken nach <code>12:00</code> bedeuten
+            verzögerte Erhöhungen. Balken bis <code>12:00</code> zeigen
+            Referenzen, die ohne Tageserhöhung auf dem letzten bekannten Preis
+            bis Mittag beruhen oder exakt um <code>12:00</code> gemeldet
+            wurden.
           </p>
         </div>
       </section>
@@ -203,6 +229,9 @@
       const brandTitleEl = document.getElementById("brand-title");
       const brandCanvas = document.getElementById("brand-plot");
       const brandCtx = brandCanvas.getContext("2d");
+      const histogramTitleEl = document.getElementById("histogram-title");
+      const histogramCanvas = document.getElementById("histogram-plot");
+      const histogramCtx = histogramCanvas.getContext("2d");
       const datePicker = document.getElementById("date-picker");
       const prevBtn = document.getElementById("prev-day");
       const nextBtn = document.getElementById("next-day");
@@ -230,6 +259,7 @@
         fuel: "diesel",
         layout: null,
         brandLayout: null,
+        histogramLayout: null,
         date: null,
         nav: { prev: false, next: false },
       };
@@ -326,7 +356,7 @@
       function hourlyReferenceMeta(bucket, viewMode) {
         if (viewMode === "cycle") {
           return {
-            label: "Referenz: Vortag 12:00",
+            label: "12:00 Vortag → 12:00 Tag",
             referenceLabel: "Vortag 12:00",
             colors: HOURLY_REFERENCE_COLORS.sameDay,
           };
@@ -405,6 +435,83 @@
 
       function brandRows() {
         return state.summary?.brand_distributions?.[state.fuel] || [];
+      }
+
+      function histogramRows() {
+        return state.summary?.noon_reference_histograms?.[state.fuel] || [];
+      }
+
+      function histogramSummary() {
+        return state.summary?.noon_reference_summaries?.[state.fuel] || null;
+      }
+
+      function histogramBucketMinutes() {
+        const raw = Number(state.summary?.noon_reference_bucket_minutes);
+        return Number.isFinite(raw) && raw > 0 ? raw : 15;
+      }
+
+      function formatCount(value) {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) return "-";
+        return new Intl.NumberFormat("de-DE", {
+          maximumFractionDigits: 0,
+        }).format(numeric);
+      }
+
+      function formatPercent(value) {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) return "-";
+        return new Intl.NumberFormat("de-DE", {
+          minimumFractionDigits: 1,
+          maximumFractionDigits: 1,
+        }).format(numeric * 100);
+      }
+
+      function formatTimeOfDay(totalMinutes) {
+        const normalized = Math.max(0, Math.min(24 * 60 - 1, Number(totalMinutes) || 0));
+        const hour = Math.floor(normalized / 60);
+        const minute = normalized % 60;
+        return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+      }
+
+      function histogramBucketRangeLabel(row, bucketMinutes = histogramBucketMinutes()) {
+        if (!row) return "";
+        const startMinute = Number(row.bucket_minute) || 0;
+        const endMinute = Math.min(24 * 60 - 1, startMinute + bucketMinutes - 1);
+        return `${formatTimeOfDay(startMinute)} - ${formatTimeOfDay(endMinute)}`;
+      }
+
+      function histogramSeries() {
+        const rows = histogramRows();
+        const summary = histogramSummary();
+        const bucketMinutes = histogramBucketMinutes();
+        const totalStations = Number(summary?.stations) || 0;
+        const totalBuckets = Math.max(1, Math.floor((24 * 60) / bucketMinutes));
+        const rowsByBucket = new Map(
+          rows.map((row) => [Number(row.bucket_minute), row]),
+        );
+
+        return Array.from({ length: totalBuckets }, (_value, index) => {
+          const bucketMinute = index * bucketMinutes;
+          const row = rowsByBucket.get(bucketMinute) || {};
+          const count = Math.max(0, Number(row.count) || 0);
+          const increaseCount = Math.max(0, Number(row.increase_count) || 0);
+          const fallbackCount = Math.max(0, Number(row.fallback_count) || 0);
+          const otherCount = Math.max(0, count - increaseCount - fallbackCount);
+          const share =
+            Number(row.share) ||
+            (totalStations > 0 ? count / totalStations : 0);
+          return {
+            bucket_minute: bucketMinute,
+            bucket_label: row.bucket_label || formatTimeOfDay(bucketMinute),
+            count,
+            stations: Math.max(0, Number(row.stations) || count),
+            increase_count: increaseCount,
+            fallback_count: fallbackCount,
+            other_count: otherCount,
+            share,
+          };
+        });
       }
 
       function berlinDateParts(now = new Date()) {
@@ -664,7 +771,28 @@
         );
         ctx.restore();
 
-        if (viewMode !== "cycle" && stats.length >= 24) {
+        if (viewMode === "cycle" && stats.length >= 13) {
+          const midnightIndex = stats.findIndex((bucket) => {
+            if (Number.isFinite(Number(bucket?.clock_hour))) {
+              return Number(bucket.clock_hour) === 0;
+            }
+            return bucketLabel(bucket) === "00";
+          });
+          if (midnightIndex >= 0) {
+            const midnightX = plot.left + (midnightIndex * plot.width) / stats.length;
+            ctx.save();
+            ctx.setLineDash([6, 4]);
+            ctx.strokeStyle = "rgba(37,99,235,0.35)";
+            ctx.beginPath();
+            ctx.moveTo(midnightX, plot.top);
+            ctx.lineTo(midnightX, plot.top + plot.height);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = "rgba(37,99,235,0.78)";
+            ctx.fillText("00:00", midnightX + 6, plot.top + 14);
+            ctx.restore();
+          }
+        } else if (viewMode !== "cycle" && stats.length >= 24) {
           const noonX = plot.left + (12 * plot.width) / stats.length;
           const noonBucket = stats.find((bucket) => Number(bucket?.hour) === 12);
           const noonMedian = noonBucket ? adjustedHourlyRow(noonBucket).median : null;
@@ -723,7 +851,7 @@
           viewMode === "cycle"
             ? isPartialCycle
               ? "Stunde seit 12:00"
-              : "Stunde im 24h-Zyklus (12 → 12)"
+              : "Stunde im 24h-Zyklus (12 Vortag → 12 Tag)"
             : "Stunde",
           plot.left + plot.width / 2 - (viewMode === "cycle" ? (isPartialCycle ? 52 : 82) : 18),
           plot.top + plot.height + 38,
@@ -788,13 +916,14 @@
       function drawBrandChart() {
         const rows = brandRows();
         if (!rows.length) {
-          brandTitleEl.textContent = "Mittagspreis nach Marke";
+          brandTitleEl.textContent = "12:00-Referenzpreis nach Marke";
           brandCtx.clearRect(0, 0, brandCanvas.width, brandCanvas.height);
           state.brandLayout = null;
           return;
         }
 
-        brandTitleEl.textContent = "Mittagspreis nach Marke";
+        brandTitleEl.textContent =
+          `12:00-Referenzpreis nach Marke · ${fuelDisplayName(state.fuel)}`;
 
         brandCanvas.style.height = `${Math.max(280, rows.length * 42 + 90)}px`;
         resizeCanvas(brandCanvas, brandCtx);
@@ -870,6 +999,138 @@
         });
       }
 
+      function drawHistogramChart() {
+        const rawRows = histogramRows();
+        const summary = histogramSummary();
+        if (!rawRows.length && !(Number(summary?.stations) > 0)) {
+          histogramTitleEl.textContent = "Zeitpunkt der 12:00-Referenz";
+          histogramCtx.clearRect(0, 0, histogramCanvas.width, histogramCanvas.height);
+          state.histogramLayout = null;
+          return;
+        }
+
+        const rows = histogramSeries();
+        histogramTitleEl.textContent =
+          `Zeitpunkt der 12:00-Referenz · ${fuelDisplayName(state.fuel)}`;
+        resizeCanvas(histogramCanvas, histogramCtx);
+        const w = histogramCanvas.getBoundingClientRect().width;
+        const h = histogramCanvas.getBoundingClientRect().height;
+        const plot = { left: 62, right: 18, top: 24, bottom: 46 };
+        plot.width = w - plot.left - plot.right;
+        plot.height = h - plot.top - plot.bottom;
+        const bucketMinutes = histogramBucketMinutes();
+        state.histogramLayout = { plot, w, h, rows, bucketMinutes };
+
+        histogramCtx.clearRect(0, 0, w, h);
+
+        const maxCount = Math.max(1, ...rows.map((row) => Number(row.count) || 0));
+        const domain = { min: 0, max: maxCount };
+        histogramCtx.strokeStyle = "rgba(0,0,0,0.08)";
+        histogramCtx.fillStyle = "rgba(0,0,0,0.55)";
+        histogramCtx.lineWidth = 1;
+        histogramCtx.font = "12px Manrope, sans-serif";
+
+        const tickCount = 5;
+        for (let index = 0; index < tickCount; index += 1) {
+          const value = (index * domain.max) / (tickCount - 1);
+          const roundedValue = Math.round(value);
+          const y = yScale(domain, plot, roundedValue);
+          histogramCtx.beginPath();
+          histogramCtx.moveTo(plot.left, y);
+          histogramCtx.lineTo(plot.left + plot.width, y);
+          histogramCtx.stroke();
+          histogramCtx.fillText(formatCount(roundedValue), 10, y + 4);
+        }
+
+        histogramCtx.save();
+        histogramCtx.translate(18, plot.top + plot.height / 2);
+        histogramCtx.rotate(-Math.PI / 2);
+        histogramCtx.textAlign = "center";
+        histogramCtx.fillStyle = "rgba(0,0,0,0.68)";
+        histogramCtx.fillText("Stationen", 0, 0);
+        histogramCtx.restore();
+
+        const slotWidth = plot.width / rows.length;
+        const barWidth = Math.max(1, slotWidth - 1.5);
+        const fuelColor = FUEL_COLORS[state.fuel] || "#0f766e";
+        const hasBreakdown = rows.some(
+          (row) => row.increase_count > 0 || row.fallback_count > 0,
+        );
+
+        rows.forEach((row, index) => {
+          if (!(row.count > 0)) return;
+          const x = plot.left + index * slotWidth + Math.max(0, (slotWidth - barWidth) / 2);
+          const segments = hasBreakdown
+            ? [
+                { value: row.other_count, color: "rgba(203, 213, 225, 0.7)" },
+                { value: row.fallback_count, color: "rgba(107, 114, 128, 0.72)" },
+                { value: row.increase_count, color: `${fuelColor}cc` },
+              ]
+            : [{ value: row.count, color: `${fuelColor}cc` }];
+          let stackedValue = 0;
+          segments.forEach((segment) => {
+            if (!(segment.value > 0)) return;
+            const startValue = stackedValue;
+            stackedValue += segment.value;
+            const topY = yScale(domain, plot, stackedValue);
+            const bottomY = yScale(domain, plot, startValue);
+            histogramCtx.fillStyle = segment.color;
+            histogramCtx.fillRect(x, topY, barWidth, Math.max(1, bottomY - topY));
+          });
+        });
+
+        const noonIndex = Math.floor((12 * 60) / bucketMinutes);
+        const noonX = plot.left + noonIndex * slotWidth;
+        histogramCtx.save();
+        histogramCtx.setLineDash([6, 4]);
+        histogramCtx.strokeStyle = "rgba(37,99,235,0.35)";
+        histogramCtx.beginPath();
+        histogramCtx.moveTo(noonX, plot.top);
+        histogramCtx.lineTo(noonX, plot.top + plot.height);
+        histogramCtx.stroke();
+        histogramCtx.setLineDash([]);
+        histogramCtx.fillStyle = "rgba(37,99,235,0.78)";
+        histogramCtx.fillText("12:00", noonX + 6, plot.top + 14);
+        histogramCtx.restore();
+
+        const bucketsPerHour = Math.max(1, Math.round(60 / bucketMinutes));
+        const hourStep = plot.width < 540 ? 3 : 2;
+        const labelStep = bucketsPerHour * hourStep;
+        histogramCtx.fillStyle = "rgba(0,0,0,0.6)";
+        rows.forEach((row, index) => {
+          if (index % labelStep !== 0) return;
+          const x = plot.left + (index + 0.5) * slotWidth;
+          histogramCtx.fillText(
+            formatTimeOfDay(row.bucket_minute),
+            x - 14,
+            plot.top + plot.height + 24,
+          );
+        });
+        histogramCtx.fillText(
+          "Lokale Zeit",
+          plot.left + plot.width / 2 - 24,
+          plot.top + plot.height + 38,
+        );
+
+        if (hasBreakdown) {
+          const legendItems = [
+            { label: "Erhöhung", color: `${fuelColor}cc` },
+            { label: "Fallback ≤ 12:00", color: "rgba(107, 114, 128, 0.72)" },
+          ];
+          let legendX = plot.left + plot.width - 180;
+          if (legendX < plot.left) legendX = plot.left;
+          let legendY = plot.top + 6;
+          histogramCtx.font = "11px Manrope, sans-serif";
+          legendItems.forEach((item) => {
+            histogramCtx.fillStyle = item.color;
+            histogramCtx.fillRect(legendX, legendY - 8, 10, 10);
+            histogramCtx.fillStyle = "rgba(0,0,0,0.68)";
+            histogramCtx.fillText(item.label, legendX + 16, legendY);
+            legendY += 16;
+          });
+        }
+      }
+
       function pickHour(clientX) {
         if (!state.layout) return null;
         const { plot } = state.layout;
@@ -893,6 +1154,17 @@
         return index;
       }
 
+      function pickHistogram(clientX) {
+        if (!state.histogramLayout) return null;
+        const { plot, rows } = state.histogramLayout;
+        const rect = histogramCanvas.getBoundingClientRect();
+        const x = clientX - rect.left;
+        if (x < plot.left || x > plot.left + plot.width) return null;
+        const index = Math.floor(((x - plot.left) / plot.width) * rows.length);
+        if (index < 0 || index >= rows.length) return null;
+        return index;
+      }
+
       canvas.addEventListener("click", (e) => {
         if (!state.summary) return;
         const bucketIndex = pickHour(e.clientX);
@@ -906,7 +1178,7 @@
         const referenceMeta = hourlyReferenceMeta(d, viewMode);
         const label =
           viewMode === "cycle"
-            ? `Zyklus ${bucketLabel(d)}`
+            ? `Zyklus ${bucketLabel(d)}:00`
             : `Stunde ${d.hour}`;
         setStatus(
           `${state.fuel.toUpperCase()} ${label}: Median ${formatRelativeText(adjusted.median, referenceMeta.referenceLabel)}, mittlere 50 % ${formatRelativeRangeText(adjusted.q1, adjusted.q3, referenceMeta.referenceLabel)}, Spannweite ${formatRelativeRangeText(adjusted.min, adjusted.max, referenceMeta.referenceLabel)} · Zeitraum ${referenceMeta.label} · Referenz: ${referenceMeta.referenceLabel} (n=${displayedBucket.count ?? d.count})`,
@@ -924,6 +1196,26 @@
         );
       });
 
+      histogramCanvas.addEventListener("click", (e) => {
+        const index = pickHistogram(e.clientX);
+        if (index == null || !state.histogramLayout) return;
+        const row = state.histogramLayout.rows[index];
+        if (!row || !(row.count > 0)) return;
+        const details = [];
+        if (row.increase_count > 0) {
+          details.push(`${formatCount(row.increase_count)} Erhöhungen`);
+        }
+        if (row.fallback_count > 0) {
+          details.push(`${formatCount(row.fallback_count)} Fallbacks ≤ 12:00`);
+        }
+        if (row.other_count > 0) {
+          details.push(`${formatCount(row.other_count)} ohne Detailtyp`);
+        }
+        setStatus(
+          `${state.fuel.toUpperCase()} Referenzzeit ${histogramBucketRangeLabel(row, state.histogramLayout.bucketMinutes)}: ${formatCount(row.stations)} Stationen (${formatPercent(row.share)} %)${details.length ? ` · ${details.join(", ")}` : ""}`,
+        );
+      });
+
       document.querySelectorAll("[data-fuel]").forEach((btn) => {
         btn.addEventListener("click", () => {
           const fuel = btn.getAttribute("data-fuel");
@@ -937,6 +1229,7 @@
           clearStatus();
           draw();
           drawBrandChart();
+          drawHistogramChart();
         });
       });
 
@@ -989,12 +1282,15 @@
           state.noonDeltaSummary = noonDeltaSummary;
           draw();
           drawBrandChart();
+          drawHistogramChart();
         } catch (e) {
           setStatus("Management-Daten konnten nicht geladen werden.", "error");
           state.summary = null;
           state.noonDeltaSummary = null;
           state.brandLayout = null;
+          state.histogramLayout = null;
           brandCtx.clearRect(0, 0, brandCanvas.width, brandCanvas.height);
+          histogramCtx.clearRect(0, 0, histogramCanvas.width, histogramCanvas.height);
         }
         await updateNav();
       }
@@ -1003,6 +1299,7 @@
         if (state.summary) {
           draw();
           drawBrandChart();
+          drawHistogramChart();
         }
       });
 

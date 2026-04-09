@@ -75,7 +75,7 @@ class NoonReferenceSnapshotTests(unittest.TestCase):
         self.assertEqual(snapshot.loc[0, "e10"], 1.82)
         self.assertEqual(snapshot.loc[0, "last_update"], "2026-04-05T12:01:43+02:00")
 
-    def test_build_noon_snapshot_falls_back_to_price_valid_at_noon_and_sets_timestamp_to_1200(self) -> None:
+    def test_build_noon_snapshot_falls_back_to_latest_pre_noon_price_and_timestamp(self) -> None:
         prices = pd.DataFrame(
             {
                 "station_uuid": [
@@ -103,7 +103,45 @@ class NoonReferenceSnapshotTests(unittest.TestCase):
         self.assertEqual(snapshot.loc[0, "diesel"], 1.68)
         self.assertEqual(snapshot.loc[0, "e5"], 1.78)
         self.assertEqual(snapshot.loc[0, "e10"], 1.73)
-        self.assertEqual(snapshot.loc[0, "last_update"], "2026-04-05T12:00:00+02:00")
+        self.assertEqual(snapshot.loc[0, "last_update"], "2026-04-05T11:20:00+02:00")
+
+    def test_build_noon_snapshot_tracks_selection_per_fuel(self) -> None:
+        prices = pd.DataFrame(
+            {
+                "station_uuid": [
+                    "station-1",
+                    "station-1",
+                    "station-1",
+                    "station-1",
+                ],
+                "date": pd.to_datetime(
+                    [
+                        "2026-04-04T21:30:00Z",
+                        "2026-04-05T08:55:00Z",
+                        "2026-04-05T10:03:00Z",
+                        "2026-04-05T10:08:00Z",
+                    ],
+                    utc=True,
+                ),
+                "diesel": [1.70, 1.68, 1.74, 1.73],
+                "e5": [1.80, 1.78, 1.78, 1.82],
+                "e10": [1.75, 1.72, 1.72, 1.72],
+            }
+        )
+
+        snapshot = build_noon_snapshot(prices, ["station-1"], date(2026, 4, 5))
+
+        self.assertEqual(snapshot["station_uuid"].tolist(), ["station-1"])
+        self.assertEqual(snapshot.loc[0, "diesel"], 1.74)
+        self.assertEqual(snapshot.loc[0, "diesel_last_update"], "2026-04-05T12:03:00+02:00")
+        self.assertEqual(snapshot.loc[0, "diesel_selection_method"], "increase")
+        self.assertEqual(snapshot.loc[0, "e5"], 1.82)
+        self.assertEqual(snapshot.loc[0, "e5_last_update"], "2026-04-05T12:08:00+02:00")
+        self.assertEqual(snapshot.loc[0, "e5_selection_method"], "increase")
+        self.assertEqual(snapshot.loc[0, "e10"], 1.72)
+        self.assertEqual(snapshot.loc[0, "e10_last_update"], "2026-04-05T10:55:00+02:00")
+        self.assertEqual(snapshot.loc[0, "e10_selection_method"], "fallback")
+        self.assertEqual(snapshot.loc[0, "last_update"], "2026-04-05T12:08:00+02:00")
 
 
 class NoonHistoryTests(unittest.TestCase):
@@ -116,6 +154,9 @@ class NoonHistoryTests(unittest.TestCase):
                 "e5": [2.229],
                 "e10": [2.169],
                 "last_update": ["2026-04-05T07:47:18+02:00"],
+                "diesel_last_update": ["2026-04-05T07:47:18+02:00"],
+                "e5_last_update": ["2026-04-05T07:48:18+02:00"],
+                "e10_last_update": ["2026-04-05T07:49:18+02:00"],
             }
         )
 
@@ -149,6 +190,49 @@ class NoonHistoryTests(unittest.TestCase):
                     "last_update": "2026-04-05T07:47:18+02:00",
                 }
             ])
+
+    def test_collect_history_rows_prefers_fuel_specific_last_update_columns(self) -> None:
+        rows_by_file: dict[tuple[str, str], list[dict[str, object]]] = {}
+        snapshot = pd.DataFrame(
+            {
+                "station_uuid": ["station-1"],
+                "diesel": [1.74],
+                "e5": [1.82],
+                "e10": [1.72],
+                "last_update": ["2026-04-05T12:08:00+02:00"],
+                "diesel_last_update": ["2026-04-05T12:03:00+02:00"],
+                "e5_last_update": ["2026-04-05T12:08:00+02:00"],
+                "e10_last_update": ["2026-04-05T10:55:00+02:00"],
+            }
+        )
+
+        _collect_history_rows(
+            rows_by_file,
+            snapshot,
+            target_day=date(2026, 4, 5),
+            history_start_date=date(2026, 4, 1),
+        )
+
+        self.assertEqual(
+            rows_by_file[("station-1", "diesel")],
+            [
+                {
+                    "date": "2026-04-05",
+                    "price": 1.74,
+                    "last_update": "2026-04-05T12:03:00+02:00",
+                }
+            ],
+        )
+        self.assertEqual(
+            rows_by_file[("station-1", "e10")],
+            [
+                {
+                    "date": "2026-04-05",
+                    "price": 1.72,
+                    "last_update": "2026-04-05T10:55:00+02:00",
+                }
+            ],
+        )
 
     def test_collect_history_rows_skips_days_before_history_start_date(self) -> None:
         rows_by_file: dict[tuple[str, str], list[dict[str, object]]] = {}

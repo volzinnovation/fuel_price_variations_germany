@@ -11,9 +11,19 @@ import pandas as pd
 import pytz
 
 try:
-    from .noon_reference import FUELS, build_noon_reference_snapshot, filter_valid_snapshot_rows
+    from .noon_reference import (
+        FUELS,
+        build_noon_reference_snapshot,
+        filter_valid_snapshot_rows,
+        fuel_last_update_column,
+    )
 except ImportError:  # pragma: no cover
-    from noon_reference import FUELS, build_noon_reference_snapshot, filter_valid_snapshot_rows
+    from noon_reference import (
+        FUELS,
+        build_noon_reference_snapshot,
+        filter_valid_snapshot_rows,
+        fuel_last_update_column,
+    )
 
 
 HISTORY_COLUMNS: tuple[str, ...] = ("date", "price", "last_update")
@@ -55,15 +65,18 @@ def collect_history_rows(
 
     base = snapshot.copy()
     base["station_uuid"] = base["station_uuid"].astype(str)
-    if "last_update" in base.columns:
-        base["last_update"] = base["last_update"].fillna("").astype(str)
-    else:
+    if "last_update" not in base.columns:
         base["last_update"] = ""
+    base["last_update"] = base["last_update"].fillna("").astype(str)
     day_label = target_day.isoformat()
 
     for fuel in fuels:
         if fuel not in base.columns:
             continue
+        last_update_column = fuel_last_update_column(fuel)
+        if last_update_column not in base.columns:
+            last_update_column = "last_update"
+        base[last_update_column] = base[last_update_column].fillna("").astype(str)
         prices = pd.to_numeric(base[fuel], errors="coerce")
         valid = prices > 0
         if not valid.any():
@@ -71,7 +84,7 @@ def collect_history_rows(
         for station_id, price, last_update in zip(
             base.loc[valid, "station_uuid"].tolist(),
             prices.loc[valid].tolist(),
-            base.loc[valid, "last_update"].tolist(),
+            base.loc[valid, last_update_column].tolist(),
         ):
             rows_by_file.setdefault((str(station_id), fuel), []).append(
                 {

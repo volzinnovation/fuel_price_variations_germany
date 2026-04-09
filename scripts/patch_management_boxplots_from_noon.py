@@ -14,8 +14,10 @@ import pytz
 
 try:
     from .generate_data import TZ, _brand_distribution_summary, _station_brand_table
+    from .noon_reference import HISTOGRAM_BUCKET_MINUTES, build_noon_reference_histograms
 except ImportError:  # pragma: no cover
     from generate_data import TZ, _brand_distribution_summary, _station_brand_table
+    from noon_reference import HISTOGRAM_BUCKET_MINUTES, build_noon_reference_histograms
 
 
 FUELS: tuple[str, ...] = ("diesel", "e10", "e5")
@@ -47,9 +49,7 @@ def _load_stations(stations_json: Path) -> pd.DataFrame:
 
 
 def _load_noon_snapshot(path: Path) -> pd.DataFrame:
-    snapshot = pd.read_csv(path, dtype={"station_uuid": "string"})
-    columns = ["station_uuid", *[fuel for fuel in FUELS if fuel in snapshot.columns]]
-    return snapshot[columns].copy()
+    return pd.read_csv(path, dtype={"station_uuid": "string"})
 
 
 def _brand_timestamp_for(day: date) -> str:
@@ -74,17 +74,26 @@ def patch_management_boxplots_from_noon(
             continue
 
         summary = json.loads(management_json.read_text(encoding="utf-8"))
-        if summary.get("brand_distributions"):
+        if summary.get("brand_distributions") and summary.get("noon_reference_histograms"):
             continue
         snapshot = _load_noon_snapshot(noon_csv)
         brand_distributions = {
             fuel: _brand_distribution_summary(snapshot, station_brands, fuel) for fuel in FUELS
         }
+        histograms, histogram_summaries = build_noon_reference_histograms(
+            snapshot,
+            TZ,
+            fuels=FUELS,
+            bucket_minutes=HISTOGRAM_BUCKET_MINUTES,
+        )
 
-        summary["brand_snapshot_label"] = "12:00"
+        summary["brand_snapshot_label"] = "12:00-Referenz"
         summary["brand_snapshot_date"] = target_day.isoformat()
         summary["brand_snapshot_timestamp"] = _brand_timestamp_for(target_day)
         summary["brand_distributions"] = brand_distributions
+        summary["noon_reference_bucket_minutes"] = HISTOGRAM_BUCKET_MINUTES
+        summary["noon_reference_histograms"] = histograms
+        summary["noon_reference_summaries"] = histogram_summaries
 
         management_json.write_text(
             json.dumps(summary, ensure_ascii=False, separators=(",", ":")),
