@@ -17,6 +17,7 @@ except ImportError:  # pragma: no cover
 
 FUELS: tuple[str, ...] = ("diesel", "e5", "e10")
 HISTOGRAM_BUCKET_MINUTES = 15
+NOON_REFERENCE_GRACE_MINUTES = 15
 
 
 def fuel_last_update_column(fuel: str) -> str:
@@ -41,6 +42,16 @@ OUTPUT_COLUMNS: tuple[str, ...] = snapshot_output_columns()
 
 def _available_fuels(prices: pd.DataFrame, fuels: Sequence[str]) -> list[str]:
     return [fuel for fuel in fuels if fuel in prices.columns]
+
+
+def noon_reference_window(
+    target_day: date,
+    tz: pytz.BaseTzInfo,
+    grace_minutes: int = NOON_REFERENCE_GRACE_MINUTES,
+) -> tuple[pd.Timestamp, pd.Timestamp]:
+    noon_local = tz.localize(datetime.combine(target_day, datetime.min.time()) + timedelta(hours=12))
+    cutoff_local = noon_local + timedelta(minutes=max(0, int(grace_minutes)))
+    return pd.Timestamp(noon_local), pd.Timestamp(cutoff_local)
 
 
 def _normalize_prices(
@@ -109,7 +120,13 @@ def _first_daily_increase_rows(
             & (rows[fuel] > previous + 1e-9)
         )
 
-    increases = rows.loc[(rows["local_day"] == target_day) & increase_mask].copy()
+    noon_local, cutoff_local = noon_reference_window(target_day, tz)
+    increases = rows.loc[
+        (rows["local_day"] == target_day)
+        & rows["date"].dt.tz_convert(tz).ge(noon_local)
+        & rows["date"].dt.tz_convert(tz).le(cutoff_local)
+        & increase_mask
+    ].copy()
     if increases.empty:
         return pd.DataFrame(columns=["station_uuid", *fuels, "last_update"])
 
@@ -132,6 +149,51 @@ def _isoformat_or_na(value: object, tz: pytz.BaseTzInfo) -> object:
     else:
         timestamp = timestamp.tz_convert("UTC")
     return timestamp.tz_convert(tz).isoformat()
+
+
+def select_noon_reference_from_series(
+    series: pd.Series,
+    target_day: date,
+    tz: pytz.BaseTzInfo,
+    grace_minutes: int = NOON_REFERENCE_GRACE_MINUTES,
+) -> tuple[pd.Timestamp | None, float | None, str | None]:
+    if series.empty:
+        return None, None, None
+
+    values = pd.to_numeric(series.copy(), errors="coerce").dropna()
+    if values.empty:
+        return None, None, None
+
+    values = values.sort_index()
+    values = values[~values.index.duplicated(keep="last")]
+    if values.empty:
+        return None, None, None
+
+    if values.index.tz is None:
+        values.index = values.index.tz_localize(tz)
+    else:
+        values.index = values.index.tz_convert(tz)
+
+    noon_local, cutoff_local = noon_reference_window(target_day, tz, grace_minutes=grace_minutes)
+    previous = values.shift(1)
+    qualifying_increase_mask = (
+        previous.notna()
+        & values.index.to_series().dt.date.eq(target_day)
+        & values.index.to_series().ge(noon_local)
+        & values.index.to_series().le(cutoff_local)
+        & values.gt(previous + 1e-9)
+    )
+    qualifying_increases = values.loc[qualifying_increase_mask]
+    if not qualifying_increases.empty:
+        reference_time = pd.Timestamp(qualifying_increases.index[0])
+        return reference_time, float(qualifying_increases.iloc[0]), "increase"
+
+    fallback = values.loc[values.index <= noon_local]
+    if fallback.empty:
+        return None, None, None
+
+    reference_time = pd.Timestamp(fallback.index[-1])
+    return reference_time, float(fallback.iloc[-1]), "fallback"
 
 
 def _bucket_label(bucket_minute: int) -> str:
@@ -157,7 +219,7 @@ def build_noon_reference_snapshot(
     if snapshot.empty:
         return snapshot[list(snapshot_output_columns(fuels))]
 
-    noon_local = tz.localize(datetime.combine(target_day, datetime.min.time()) + timedelta(hours=12))
+    noon_local, _ = noon_reference_window(target_day, tz)
     cutoff = pd.Timestamp(noon_local.astimezone(pytz.UTC))
     fallback_rows = _latest_station_rows(normalized, cutoff, fuels)
     if not fallback_rows.empty:

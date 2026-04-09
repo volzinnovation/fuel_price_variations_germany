@@ -12,7 +12,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
       <meta
         name="description"
-        content="Mittagspreise und Preisänderung mit geteilter 12:00-Referenz für eine Tankstelle."
+        content="Mittagspreise und Preisänderung zur ausgewählten 12:00-Referenz für eine Tankstelle."
       />
     <meta name="robots" content="noindex,follow" />
     <title>Tankzeit | Chart</title>
@@ -34,7 +34,7 @@
       <header>
         <div class="brand">
           <h1>Tankzeit</h1>
-          <p>Mittagspreise seit 1. April und Preisänderung mit geteilter 12:00-Referenz.</p>
+          <p>Mittagspreise seit 1. April und Preisänderung zur ausgewählten 12:00-Referenz.</p>
         </div>
       </header>
 
@@ -307,7 +307,7 @@
       }
 
       function buildCycleSubtitle() {
-        return `${fuel.toUpperCase()} · Preisänderung zum etablierten 12:00-Preis im Zyklus 12:00 Vortag → 12:00 Tag · Mitternacht markiert die Tagesgrenze · negative Werte = günstiger, positive Werte = teurer`;
+        return `${fuel.toUpperCase()} · Preisänderung zur ausgewählten 12:00-Referenz im Zyklus 12:00 Vortag → 12:00 Tag · Erhöhungen bis 12:15 zählen noch zum Noon-Anker, spätere nicht · Mitternacht markiert die Tagesgrenze`;
       }
 
       function sanitizeRelativeValue(valueInEuro) {

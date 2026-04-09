@@ -27,7 +27,11 @@ try:
         write_history_files,
         write_snapshot,
     )
-    from .noon_reference import HISTOGRAM_BUCKET_MINUTES, build_noon_reference_histograms
+    from .noon_reference import (
+        HISTOGRAM_BUCKET_MINUTES,
+        build_noon_reference_histograms,
+        select_noon_reference_from_series,
+    )
     from .time_utils import parse_timestamps_to_utc
 except ImportError:  # pragma: no cover
     from noon_outputs import (
@@ -37,7 +41,11 @@ except ImportError:  # pragma: no cover
         write_history_files,
         write_snapshot,
     )
-    from noon_reference import HISTOGRAM_BUCKET_MINUTES, build_noon_reference_histograms
+    from noon_reference import (
+        HISTOGRAM_BUCKET_MINUTES,
+        build_noon_reference_histograms,
+        select_noon_reference_from_series,
+    )
     from time_utils import parse_timestamps_to_utc
 
 TZ = pytz.timezone("Europe/Berlin")
@@ -490,6 +498,13 @@ def _daily_noon_reset_metrics(
         anchor_time = window["anchor_time"]
         metric_end_time = window["metric_end_time"]
         prior_reference_time = window["prior_reference_time"]
+        reference_time, reference_price, reference_method = select_noon_reference_from_series(
+            normalized,
+            window["start_day"],
+            TZ,
+        )
+        if reference_time is None or reference_price is None:
+            continue
 
         observed_series = filled.loc[anchor_time:metric_end_time]
         if observed_series.empty:
@@ -498,9 +513,8 @@ def _daily_noon_reset_metrics(
         if observed_series.empty:
             continue
 
-        noon_price = filled.get(anchor_time)
         prior_reference_price = filled.get(prior_reference_time)
-        if pd.isna(noon_price) or pd.isna(prior_reference_price):
+        if pd.isna(prior_reference_price):
             continue
 
         max_price = float(observed_series.max())
@@ -512,9 +526,9 @@ def _daily_noon_reset_metrics(
 
         post_noon_decreases = 0
         post_noon_increases = 0
-        previous_value = float(noon_price)
+        previous_value = float(reference_price)
         post_noon_events = normalized.loc[
-            (normalized.index > anchor_time) & (normalized.index <= metric_end_time)
+            (normalized.index > reference_time) & (normalized.index <= metric_end_time)
         ]
         for value in post_noon_events.tolist():
             current_value = float(value)
@@ -530,9 +544,10 @@ def _daily_noon_reset_metrics(
             {
                 "date": str(window["date"]),
                 "window_kind": window["kind"],
-                "window_start_timestamp": anchor_time.isoformat(timespec="minutes"),
+                "window_start_timestamp": reference_time.isoformat(timespec="minutes"),
                 "window_end_timestamp": metric_end_time.isoformat(timespec="minutes"),
-                "noon_price": round(float(noon_price), 3),
+                "noon_price": round(float(reference_price), 3),
+                "noon_reference_method": str(reference_method or ""),
                 "max_price": round(max_price, 3),
                 "prior_reference_price": round(float(prior_reference_price), 3),
                 "prior_reference_label": str(window["prior_reference_label"]),
@@ -570,7 +585,8 @@ def _noon_to_noon_markdown_profile(
     window_start = min(window["anchor_time"] for window in windows)
     window_end = max(window["profile_end_time"] for window in windows)
     filled = _filled_minute_series(series, window_start.replace(tzinfo=None), window_end.replace(tzinfo=None))
-    if filled.empty or filled.dropna().empty:
+    normalized = _normalize_station_series(series)
+    if filled.empty or filled.dropna().empty or normalized.empty:
         return [], summary
 
     markdown_by_hour: Dict[int, List[float]] = {}
@@ -582,9 +598,21 @@ def _noon_to_noon_markdown_profile(
     for window in windows:
         cycle_start = window["anchor_time"]
         cycle_end = window["profile_end_time"]
-        anchor_price = filled.get(cycle_start)
-        if pd.isna(anchor_price):
+        reference_time, reference_price, _reference_method = select_noon_reference_from_series(
+            normalized,
+            window["start_day"],
+            TZ,
+        )
+        if reference_time is None or reference_price is None:
             continue
+        closing_reference_price = None
+        closing_day = window["start_day"] + timedelta(days=1)
+        if window.get("kind") == "full":
+            _closing_time, closing_reference_price, _closing_method = select_noon_reference_from_series(
+                normalized,
+                closing_day,
+                TZ,
+            )
 
         cycle_values: List[float] = []
         delta_values: List[float] = []
@@ -593,13 +621,18 @@ def _noon_to_noon_markdown_profile(
         total_hours = int((cycle_end - cycle_start).total_seconds() // 3600)
         for offset in range(total_hours + 1):
             ts = cycle_start + timedelta(hours=offset)
-            price = filled.get(ts)
-            if pd.isna(price):
-                valid_cycle = False
-                break
-            absolute_price = float(price)
-            delta = absolute_price - float(anchor_price)
-            markdown = max(0.0, float(anchor_price) - absolute_price)
+            if offset == 0:
+                absolute_price = float(reference_price)
+            elif offset == total_hours and closing_reference_price is not None:
+                absolute_price = float(closing_reference_price)
+            else:
+                price = filled.get(ts)
+                if pd.isna(price):
+                    valid_cycle = False
+                    break
+                absolute_price = float(price)
+            delta = absolute_price - float(reference_price)
+            markdown = max(0.0, float(reference_price) - absolute_price)
             absolute_values.append(absolute_price)
             delta_values.append(delta)
             cycle_values.append(markdown)

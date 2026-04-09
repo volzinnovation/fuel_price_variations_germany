@@ -105,6 +105,36 @@ class NoonReferenceSnapshotTests(unittest.TestCase):
         self.assertEqual(snapshot.loc[0, "e10"], 1.73)
         self.assertEqual(snapshot.loc[0, "last_update"], "2026-04-05T11:20:00+02:00")
 
+    def test_build_noon_snapshot_ignores_late_post_noon_increase_for_reference(self) -> None:
+        prices = pd.DataFrame(
+            {
+                "station_uuid": [
+                    "station-1",
+                    "station-1",
+                    "station-1",
+                ],
+                "date": pd.to_datetime(
+                    [
+                        "2026-04-04T21:30:00Z",
+                        "2026-04-05T09:20:00Z",
+                        "2026-04-05T11:00:00Z",
+                    ],
+                    utc=True,
+                ),
+                "diesel": [1.70, 1.66, 1.76],
+                "e5": [1.80, 1.76, 1.86],
+                "e10": [1.75, 1.71, 1.81],
+            }
+        )
+
+        snapshot = build_noon_snapshot(prices, ["station-1"], date(2026, 4, 5))
+
+        self.assertEqual(snapshot["station_uuid"].tolist(), ["station-1"])
+        self.assertEqual(snapshot.loc[0, "diesel"], 1.66)
+        self.assertEqual(snapshot.loc[0, "e5"], 1.76)
+        self.assertEqual(snapshot.loc[0, "e10"], 1.71)
+        self.assertEqual(snapshot.loc[0, "last_update"], "2026-04-05T11:20:00+02:00")
+
     def test_build_noon_snapshot_tracks_selection_per_fuel(self) -> None:
         prices = pd.DataFrame(
             {

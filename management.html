@@ -148,30 +148,30 @@
         <div class="footer-notes">
           <p class="footer-note">
             <strong>12:00-Referenzpreis nach Marke:</strong> Zeigt je Marke
-            den ausgewählten Referenzpreis. Für jeden Kraftstoff gilt: Die
-            erste Erhöhung des Tages zählt als 12:00-Referenz, auch wenn sie
-            erst nach <code>12:00</code> veröffentlicht wird. Ohne Erhöhung
-            fällt die Referenz auf den letzten bekannten Preis bis
-            <code>12:00</code> zurück.
+            den ausgewählten Referenzpreis. Für jeden Kraftstoff gilt: Eine
+            positive Preisänderung zwischen <code>12:00</code> und
+            <code>12:15</code> zählt noch als 12:00-Referenz. Ohne solche
+            Erhöhung bleibt der bis <code>12:00</code> etablierte Preis
+            maßgeblich.
           </p>
           <p class="footer-note">
             <strong>Preisänderung zur 12:00-Referenz:</strong> Grau zeigt den
-            im aktuellen Format den Zyklus vom etablierten
-            <code>12:00</code>-Preis des Vortags bis <code>12:00</code> des
-            gewählten Tags. Die gestrichelte Linie markiert Mitternacht. Ein
-            sichtbarer "Noon Dip" kann entstehen, wenn viele Stationen ihre
-            erste Preiserhöhung erst kurz nach Mittag melden. Negative Werte
-            liegen unter dem 12:00-Anker, positive darüber. Antippen zeigt
-            zusätzlich Quartilspanne und Spannweite.
+            Zyklus von <code>12:00</code> Vortag bis <code>12:00</code> des
+            gewählten Tags relativ zur ausgewählten Noon-Referenz. Die
+            gestrichelte Linie markiert Mitternacht. Ein sichtbarer "Noon Dip"
+            kann entstehen, wenn viele Stationen ihre Referenzerhöhung erst
+            kurz nach Mittag melden. Später als <code>12:15</code> gemeldete
+            Erhöhungen verschieben den Noon-Anker dagegen nicht mehr. Antippen
+            zeigt zusätzlich Quartilspanne und Spannweite.
           </p>
           <p class="footer-note">
             <strong>Zeitpunkt der 12:00-Referenz:</strong> Das Histogramm zeigt
             je Kraftstoff, wann der verwendete Referenzpreis pro Station
             tatsächlich feststeht. Balken nach <code>12:00</code> bedeuten
-            verzögerte Erhöhungen. Balken bis <code>12:00</code> zeigen
-            Referenzen, die ohne Tageserhöhung auf dem letzten bekannten Preis
-            bis Mittag beruhen oder exakt um <code>12:00</code> gemeldet
-            wurden.
+            qualifizierte Verzögerungen bis <code>12:15</code>. Balken bis
+            <code>12:00</code> zeigen Referenzen, die ohne passende
+            Mittagserhöhung auf dem letzten bekannten Preis bis Mittag beruhen
+            oder exakt um <code>12:00</code> gemeldet wurden.
           </p>
         </div>
       </section>
@@ -1114,7 +1114,7 @@
 
         if (hasBreakdown) {
           const legendItems = [
-            { label: "Erhöhung", color: `${fuelColor}cc` },
+            { label: "Erhöhung 12:00-12:15", color: `${fuelColor}cc` },
             { label: "Fallback ≤ 12:00", color: "rgba(107, 114, 128, 0.72)" },
           ];
           let legendX = plot.left + plot.width - 180;
@@ -1203,7 +1203,7 @@
         if (!row || !(row.count > 0)) return;
         const details = [];
         if (row.increase_count > 0) {
-          details.push(`${formatCount(row.increase_count)} Erhöhungen`);
+          details.push(`${formatCount(row.increase_count)} Erhöhungen 12:00-12:15`);
         }
         if (row.fallback_count > 0) {
           details.push(`${formatCount(row.fallback_count)} Fallbacks ≤ 12:00`);

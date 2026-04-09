@@ -249,6 +249,34 @@ class DailyNoonResetMetricTests(unittest.TestCase):
         self.assertEqual(summary["max_price_avg"], 1.78)
         self.assertEqual(summary["post_noon_increases_avg"], 1.0)
 
+    def test_daily_metrics_use_selected_noon_reference_with_short_delay(self) -> None:
+        series = pd.Series(
+            [1.70, 1.70, 1.88, 1.84, 1.78],
+            index=pd.DatetimeIndex(
+                [
+                    "2026-03-31 12:00",
+                    "2026-04-01 12:00",
+                    "2026-04-01 12:08",
+                    "2026-04-01 13:00",
+                    "2026-04-02 10:00",
+                ],
+                tz="Europe/Berlin",
+            ),
+        )
+
+        daily, summary = _daily_noon_reset_metrics(
+            series,
+            [date(2026, 4, 1), date(2026, 4, 2)],
+        )
+
+        self.assertEqual(len(daily), 1)
+        self.assertEqual(daily[0]["window_start_timestamp"], "2026-04-01T12:08+02:00")
+        self.assertEqual(daily[0]["noon_price"], 1.88)
+        self.assertEqual(daily[0]["noon_reference_method"], "increase")
+        self.assertEqual(daily[0]["post_noon_decreases"], 2)
+        self.assertEqual(daily[0]["post_noon_increases"], 0)
+        self.assertEqual(summary["noon_price_avg"], 1.88)
+
     def test_cycle_profile_tracks_markdown_from_previous_noon_across_24_hours(self) -> None:
         cycle_hourly, cycle_summary = _noon_to_noon_markdown_profile(
             self.build_series(),
@@ -277,6 +305,31 @@ class DailyNoonResetMetricTests(unittest.TestCase):
         self.assertEqual(next_morning["markdown_median"], 0.08)
         self.assertEqual(next_noon["label"], "12")
         self.assertEqual(next_noon["markdown_median"], 0.01)
+
+    def test_cycle_profile_uses_selected_noon_reference_with_short_delay(self) -> None:
+        series = pd.Series(
+            [1.80, 1.88, 1.84, 1.78],
+            index=pd.DatetimeIndex(
+                [
+                    "2026-04-01 12:00",
+                    "2026-04-01 12:08",
+                    "2026-04-01 13:00",
+                    "2026-04-02 12:00",
+                ],
+                tz="Europe/Berlin",
+            ),
+        )
+
+        cycle_hourly, cycle_summary = _noon_to_noon_markdown_profile(
+            series,
+            [date(2026, 4, 1), date(2026, 4, 2)],
+        )
+
+        self.assertEqual(cycle_summary["days"], 1)
+        self.assertEqual(cycle_hourly[0]["delta_median"], 0.0)
+        self.assertEqual(cycle_hourly[0]["markdown_median"], 0.0)
+        self.assertEqual(cycle_hourly[1]["delta_median"], -0.04)
+        self.assertEqual(cycle_hourly[24]["delta_median"], -0.1)
 
     def test_cycle_profile_exposes_partial_interim_window_until_midnight(self) -> None:
         cycle_hourly, cycle_summary = _noon_to_noon_markdown_profile(
@@ -621,24 +674,24 @@ class RawNoonReferenceSnapshotTests(unittest.TestCase):
             brand_medians = {
                 row["brand"]: row["median"] for row in summary["brand_distributions"]["diesel"]
             }
-            self.assertAlmostEqual(brand_medians["Gesamtmarkt"], 1.925)
-            self.assertAlmostEqual(brand_medians["ARAL"], 1.9)
-            self.assertAlmostEqual(brand_medians["SHELL"], 1.95)
+            self.assertAlmostEqual(brand_medians["Gesamtmarkt"], 1.725)
+            self.assertAlmostEqual(brand_medians["ARAL"], 1.7)
+            self.assertAlmostEqual(brand_medians["SHELL"], 1.75)
             diesel_histogram = summary["noon_reference_histograms"]["diesel"]
             self.assertEqual(diesel_histogram, [
                 {
-                    "bucket_minute": 780,
-                    "bucket_label": "13:00",
+                    "bucket_minute": 660,
+                    "bucket_label": "11:00",
                     "count": 2,
                     "stations": 2,
-                    "increase_count": 2,
-                    "fallback_count": 0,
+                    "increase_count": 0,
+                    "fallback_count": 2,
                     "share": 1.0,
                 }
             ])
             self.assertEqual(
                 summary["noon_reference_summaries"]["diesel"]["delayed_increase_stations"],
-                2,
+                0,
             )
 
             station_path = Path(tmpdir) / "data2" / "s1" / "diesel.json"
@@ -651,6 +704,7 @@ class RawNoonReferenceSnapshotTests(unittest.TestCase):
             self.assertEqual(station_payload["text"], "11 - 12h")
             self.assertEqual(station_payload["besthours"], [11])
             self.assertEqual(station_cycle[0]["delta_median"], 0.0)
+            self.assertEqual(station_cycle[1]["delta_median"], 0.0)
             self.assertEqual(station_cycle[23]["delta_median"], -0.1)
             self.assertEqual(station_cycle[24]["delta_median"], -0.1)
             self.assertEqual(station_payload["summary"]["min_time_text"], "11:00")
