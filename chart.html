@@ -12,7 +12,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
       <meta
         name="description"
-        content="Mittagspreise und Preisänderung zum Vortag 12:00 für eine Tankstelle."
+        content="Mittagspreise und Preisänderung mit geteilter 12:00-Referenz für eine Tankstelle."
       />
     <meta name="robots" content="noindex,follow" />
     <title>Tankzeit | Chart</title>
@@ -34,7 +34,7 @@
       <header>
         <div class="brand">
           <h1>Tankzeit</h1>
-          <p>Mittagspreise seit 1. April und Preisänderung zum Vortag 12:00.</p>
+          <p>Mittagspreise seit 1. April und Preisänderung mit geteilter 12:00-Referenz.</p>
         </div>
       </header>
 
@@ -264,14 +264,20 @@
       setButtonState();
       updateViewInUrl();
 
-      function buildReferenceSubtitle(stats) {
-        const hourly = Array.isArray(stats?.hourly) ? stats.hourly : [];
-        const noonRow = hourly.find((row) => Number(row?.hour) === 12);
-        const noonDelta = Number(noonRow?.price);
-        const noonText = Number.isFinite(noonDelta)
-          ? ` · Blau startet um 12:00 mit ${formatSignedRelativeLabel(noonDelta)} ggü. Vortag 12:00`
-          : "";
-        return `${fuel.toUpperCase()} · Preisänderung zum Vortag 12:00 · Grau = Rabatt vor 12:00 ggü. Vortag 12:00${noonText} · negative Werte = günstiger, positive Werte = teurer`;
+      function referenceMetaForHour(hour) {
+        return Number(hour) < 12
+          ? {
+              label: "Vortag 12:00",
+              period: "00:00 - 11:59",
+            }
+          : {
+              label: "Tages-12:00",
+              period: "12:00 - 23:59",
+            };
+      }
+
+      function buildReferenceSubtitle() {
+        return `${fuel.toUpperCase()} · Preisänderung zur jeweiligen 12:00-Referenz · Grau = 00:00-11:59 ggü. Vortag 12:00 · Blau = 12:00-23:59 ggü. Tages-12:00 · negative Werte = günstiger, positive Werte = teurer`;
       }
 
       function sanitizeRelativeValue(valueInEuro) {
@@ -280,13 +286,14 @@
         return amount;
       }
 
-      function formatRelativeChange(valueInEuro) {
+      function formatRelativeChange(valueInEuro, hour) {
         const amount = sanitizeRelativeValue(valueInEuro);
+        const referenceMeta = referenceMetaForHour(hour);
         if (!Number.isFinite(amount)) return "-";
-        if (Math.abs(amount) < 0.0005) return "auf Vortag-12:00-Niveau";
+        if (Math.abs(amount) < 0.0005) return `auf ${referenceMeta.label}-Niveau`;
         return `${(Math.abs(amount) * 100).toFixed(1)} ct/l ${
           amount > 0 ? "teurer" : "günstiger"
-        } als Vortag 12:00`;
+        } als ${referenceMeta.label}`;
       }
 
       function formatSignedRelativeLabel(valueInEuro) {
@@ -335,8 +342,12 @@
         return { min: min - pad, max: max + pad };
       }
 
-      function referenceTooltipLines() {
-        return ["Referenz: Vortag 12:00"];
+      function referenceTooltipLines(row) {
+        const referenceMeta = referenceMetaForHour(row?.hour);
+        return [
+          `Zeitraum: ${referenceMeta.period}`,
+          `Referenz: ${referenceMeta.label}`,
+        ];
       }
 
       function formatHistoryDay(day) {
@@ -575,7 +586,7 @@
                 },
                 title: {
                   display: true,
-                  text: "Preisänderung zum Vortag 12:00 (€/l)",
+                  text: "Preisänderung zur jeweiligen 12:00-Referenz (€/l)",
                 },
               },
             },
@@ -593,10 +604,10 @@
                   label(context) {
                     const row = displaySeries[context.dataIndex];
                     if (!row) return "";
-                    return formatRelativeChange(row.displayValue);
+                    return formatRelativeChange(row.displayValue, row.hour);
                   },
-                  afterBody() {
-                    return referenceTooltipLines();
+                  afterBody(context) {
+                    return referenceTooltipLines(displaySeries[context[0]?.dataIndex]);
                   },
                 },
               },

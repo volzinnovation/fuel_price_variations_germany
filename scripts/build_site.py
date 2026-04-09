@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from datetime import date
 import html
 import json
 import re
@@ -34,6 +35,13 @@ ROOT_URLS = [
     "privacy.html",
     "imprint.html",
 ]
+LAW_RESET_DATE = date(2026, 4, 1)
+POST_LAW_DAY_PROFILE_SHORT = (
+    "00:00-11:59 ggü. Vortag 12:00, 12:00-23:59 ggü. Tages-12:00"
+)
+POST_LAW_DAY_PROFILE_LONG = (
+    "00:00-11:59 relativ zu Vortag 12:00, 12:00-23:59 relativ zum Tagespreis um 12:00"
+)
 TOKEN_RE = re.compile(r"[A-Za-zÄÖÜäöüß]+")
 EXACT_TOKEN_FALLBACKS = {
     "aeuussere": "äußere",
@@ -278,6 +286,47 @@ def fuel_summary(stats: dict[str, object] | None) -> dict[str, object] | None:
     return summary if isinstance(summary, dict) else None
 
 
+def has_noon_reset_stats(stats: dict[str, object] | None) -> bool:
+    summary = fuel_summary(stats)
+    if not summary:
+        return False
+    for key in (
+        "noon_price_avg",
+        "noon_price_median",
+        "post_noon_decreases_avg",
+        "post_noon_decreases_median",
+        "post_noon_increases_avg",
+        "post_noon_increases_median",
+        "min_time_text",
+        "min_duration_text",
+    ):
+        if key not in summary:
+            continue
+        value = summary.get(key)
+        if isinstance(value, str):
+            if value.strip():
+                return True
+            continue
+        if value is not None:
+            return True
+    return False
+
+
+def has_noon_reference_day_profile(stats: dict[str, object] | None) -> bool:
+    if not stats or has_noon_reset_stats(stats):
+        return False
+    for key in ("analysis_end", "analysis_start"):
+        value = stats.get(key)
+        if not isinstance(value, str) or not value.strip():
+            continue
+        try:
+            if date.fromisoformat(value) >= LAW_RESET_DATE:
+                return True
+        except ValueError:
+            continue
+    return False
+
+
 def fuel_profile_text(stats: dict[str, object] | None) -> str:
     summary = fuel_summary(stats)
     if not summary:
@@ -321,7 +370,7 @@ def fuel_minimum_text(stats: dict[str, object] | None) -> str:
 
 def fuel_chip_text(stats: dict[str, object] | None) -> str:
     summary = fuel_summary(stats)
-    if summary and summary.get("min_time_text"):
+    if has_noon_reset_stats(stats) and summary and summary.get("min_time_text"):
         return f"Minimum meist {fuel_minimum_text(stats)}"
     return fuel_best_text(stats)
 
@@ -338,12 +387,15 @@ def build_station_description(
         if not stats:
             continue
         fuel_label = FUEL_LABELS[fuel]
-        summary = fuel_summary(stats)
-        if summary:
+        if has_noon_reset_stats(stats):
             profile = fuel_profile_text(stats)
             minimum = fuel_minimum_text(stats)
             snippets.append(
                 f"{fuel_label}: {profile}, Minimum im 12:00-11:59-Fenster meist {minimum}"
+            )
+        elif has_noon_reference_day_profile(stats):
+            snippets.append(
+                f"{fuel_label}: beste Stunden im Tagesprofil {fuel_best_text(stats)} ({POST_LAW_DAY_PROFILE_SHORT})"
             )
         else:
             snippets.append(f"{fuel_label}: beste Tankzeit {fuel_best_text(stats)}")
@@ -407,12 +459,23 @@ def build_fuel_cards(
         chart_url = attribute_url(
             fuel_chart_url(station_id, fuel, name, latitude, longitude)
         )
-        if fuel_summary(stats):
+        if has_noon_reset_stats(stats):
             cards.append(
                 "<article class=\"station-fuel-card\">"
                 f"<h3>{FUEL_LABELS[fuel]}</h3>"
                 f"<p><strong>12:00-Referenz:</strong> {format_text(fuel_profile_text(stats))}</p>"
                 f"<p><strong>Minimum 12:00-11:59:</strong> {format_text(fuel_minimum_text(stats))}</p>"
+                f"<p><strong>Historische Spanne:</strong> {format_text(fuel_range_text(stats))}</p>"
+                f"<a class=\"link-btn secondary-link\" href=\"{chart_url}\">Chart öffnen</a>"
+                "</article>"
+            )
+            continue
+        if has_noon_reference_day_profile(stats):
+            cards.append(
+                "<article class=\"station-fuel-card\">"
+                f"<h3>{FUEL_LABELS[fuel]}</h3>"
+                f"<p><strong>Beste Zeit im Tagesprofil:</strong> {format_text(fuel_best_text(stats))}</p>"
+                f"<p><strong>Referenz:</strong> {POST_LAW_DAY_PROFILE_LONG}</p>"
                 f"<p><strong>Historische Spanne:</strong> {format_text(fuel_range_text(stats))}</p>"
                 f"<a class=\"link-btn secondary-link\" href=\"{chart_url}\">Chart öffnen</a>"
                 "</article>"
@@ -457,7 +520,6 @@ def build_station_page(
     canonical_href = attribute_url(canonical_url)
     google_maps_href = attribute_url(google_maps_url)
     stats_by_fuel = load_station_stats(station_id)
-    has_noon_reset_stats = any(fuel_summary(stats_by_fuel.get(fuel)) for fuel in FUELS)
     description = build_station_description(name, city, street, stats_by_fuel)
     brand_line = f"{brand} · " if brand else ""
     city_line = " ".join(part for part in (postcode, city) if part).strip()
@@ -494,6 +556,12 @@ def build_station_page(
         "url": canonical_url,
     }
     structured_data = {key: value for key, value in structured_data.items() if value}
+    has_noon_reset_station_stats = any(
+        has_noon_reset_stats(stats_by_fuel.get(fuel)) for fuel in FUELS
+    )
+    has_noon_reference_day_station_stats = any(
+        has_noon_reference_day_profile(stats_by_fuel.get(fuel)) for fuel in FUELS
+    )
 
     page_html = f"""<!doctype html>
 <html lang="de">
@@ -529,7 +597,7 @@ def build_station_page(
           <span class="station-chip">E5: {format_text(fuel_chip_text(stats_by_fuel.get("e5")))}</span>
         </div>
         <p class="station-summary">
-          {"Tankzeit zeigt für diese Tankstelle den 12:00-Referenzpreis, die Preisbewegungen im 12:00-11:59-Fenster und das dortige Minimum auf Basis der veröffentlichten Tankerkönig-Daten." if has_noon_reset_stats else "Tankzeit zeigt für diese Tankstelle historische Tagesprofile aus den veröffentlichten Tankerkönig-Daten. So findest du schneller die typischen Zeitfenster mit günstigeren Preisen."}
+          {"Tankzeit zeigt für diese Tankstelle den 12:00-Referenzpreis, die Preisbewegungen im 12:00-11:59-Fenster und das dortige Minimum auf Basis der veröffentlichten Tankerkönig-Daten." if has_noon_reset_station_stats else "Tankzeit zeigt für diese Tankstelle das Tagesprofil mit geteilter 12:00-Referenz: 00:00-11:59 relativ zu Vortag 12:00, 12:00-23:59 relativ zum Tagespreis um 12:00. Vor- und Nachmittag sind daher nicht direkt als ein gemeinsames Minimum vergleichbar." if has_noon_reference_day_station_stats else "Tankzeit zeigt für diese Tankstelle historische Tagesprofile aus den veröffentlichten Tankerkönig-Daten. So findest du schneller die typischen Zeitfenster mit günstigeren Preisen."}
         </p>
         <div class="station-actions">
           <a class="link-btn" href="{diesel_chart_url}">Diesel-Chart</a>

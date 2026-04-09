@@ -1,5 +1,6 @@
 (() => {
   const BERLIN_TIME_ZONE = "Europe/Berlin";
+  const LAW_RESET_DATE = "2026-04-01";
 
   function toNumber(value) {
     const parsed = Number(value);
@@ -29,6 +30,39 @@
     if (!stats || typeof stats !== "object") return null;
     const summary = stats.summary;
     return summary && typeof summary === "object" ? summary : null;
+  }
+
+  function hasNoonResetSummary(stats) {
+    const summary = summaryFromStats(stats);
+    if (!summary) return false;
+    return [
+      "noon_price_avg",
+      "noon_price_median",
+      "post_noon_decreases_avg",
+      "post_noon_decreases_median",
+      "post_noon_increases_avg",
+      "post_noon_increases_median",
+      "min_time_text",
+      "min_duration_text",
+    ].some((key) => {
+      const value = summary[key];
+      if (typeof value === "string") return value.trim().length > 0;
+      return value !== null && value !== undefined;
+    });
+  }
+
+  function isPostLawProfile(stats) {
+    if (!stats || typeof stats !== "object") return false;
+    const summary = summaryFromStats(stats);
+    const values = [
+      stats.analysis_end,
+      stats.analysis_start,
+      summary?.analysis_end,
+      summary?.analysis_start,
+    ];
+    return values.some(
+      (value) => typeof value === "string" && value.trim() >= LAW_RESET_DATE,
+    );
   }
 
   function pickNumber(...values) {
@@ -184,6 +218,9 @@
   }
 
   function relativeMinimumHours(stats) {
+    if (isPostLawProfile(stats)) {
+      return bestHours(stats);
+    }
     const { rows } = tankzeitSeries(stats);
     if (!rows.length) {
       const storedBestHours = bestHours(stats);
@@ -221,6 +258,21 @@
   }
 
   function relativeMinimumText(stats, fallback = "-") {
+    if (hasNoonResetSummary(stats)) {
+      const minimum = minimumText(stats, "");
+      if (minimum) return minimum;
+    }
+    if (isPostLawProfile(stats)) {
+      const storedBestHours = bestHours(stats);
+      if (storedBestHours.length) {
+        const text = relativeMinimumRangesText(storedBestHours);
+        if (text) return text;
+      }
+      if (stats && typeof stats === "object" && typeof stats.text === "string" && stats.text.trim()) {
+        return stats.text.trim();
+      }
+      return fallback;
+    }
     const series = tankzeitSeries(stats);
     if (series.rows.length) {
       const minimumValue = Math.min(...series.rows.map((row) => row.displayValue));
@@ -295,6 +347,9 @@
   }
 
   function isNowInRelativeMinimumWindow(stats, now = new Date()) {
+    if (hasNoonResetSummary(stats)) {
+      return isNowInTypicalMinimumWindow(stats, now);
+    }
     const hours = relativeMinimumHours(stats);
     if (hours.length) {
       return hours.includes(berlinTimeParts(now).hour);

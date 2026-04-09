@@ -851,7 +851,7 @@ def _noon_reference_hourly_variation(
         )
 
     target_day = max(legal_days)
-    reference_time = (
+    fill_start = (
         _local_dt(target_day, 0, 0)
         if target_day == LAW_RESET_DATE
         else _local_dt(target_day - timedelta(days=1), 12, 0)
@@ -860,7 +860,7 @@ def _noon_reference_hourly_variation(
     day_end = _local_dt(target_day, 23, 59)
     filled = _filled_minute_series(
         series,
-        reference_time.replace(tzinfo=None),
+        fill_start.replace(tzinfo=None),
         day_end.replace(tzinfo=None),
     )
     if filled.empty or filled.dropna().empty:
@@ -884,14 +884,18 @@ def _noon_reference_hourly_variation(
             int(filled.notna().sum()),
         )
 
-    reference_price = (
+    prior_day_reference_price = (
         midnight_reference_price
         if target_day == LAW_RESET_DATE and midnight_reference_price is not None and not pd.isna(midnight_reference_price)
-        else filled.get(reference_time)
-        if target_day == LAW_RESET_DATE
         else noon_reference_prices.get(target_day - timedelta(days=1))
     )
-    if reference_price is None or pd.isna(reference_price):
+    same_day_reference_price = noon_reference_prices.get(target_day)
+    if (
+        prior_day_reference_price is None
+        or pd.isna(prior_day_reference_price)
+        or same_day_reference_price is None
+        or pd.isna(same_day_reference_price)
+    ):
         return (
             pd.DataFrame(columns=["hour", "price"]),
             pd.DataFrame(columns=["hour", "price"]),
@@ -904,6 +908,9 @@ def _noon_reference_hourly_variation(
     # The minute-filled series represents the observable price state for every
     # minute. Aggregate that to hourly averages so shortly-after-noon changes are
     # attributed to hour 12 in proportion to how much of the hour they affect.
+    # Post-law hours switch reference at noon: before noon against the previous
+    # day's noon (or midnight on the first legal day), after noon against the
+    # same day's noon reference.
     hourly_average = day_series.resample("1h").mean().dropna()
     if hourly_average.empty:
         return (
@@ -916,8 +923,11 @@ def _noon_reference_hourly_variation(
         )
 
     delta_frame = hourly_average.to_frame(name="price")
-    delta_frame["price"] = delta_frame["price"] - float(reference_price)
     delta_frame["hour"] = delta_frame.index.hour
+    delta_frame["reference_price"] = delta_frame["hour"].map(
+        lambda hour: float(prior_day_reference_price) if hour < 12 else float(same_day_reference_price)
+    )
+    delta_frame["price"] = delta_frame["price"] - delta_frame["reference_price"]
     grouped = delta_frame[["hour", "price"]].copy()
     grouped["price"] = grouped["price"].round(2)
     grouped = grouped.set_index("hour").reindex(range(24), fill_value=0).reset_index()

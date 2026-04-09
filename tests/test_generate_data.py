@@ -294,7 +294,7 @@ class DailyNoonResetMetricTests(unittest.TestCase):
         self.assertEqual(cycle_hourly[-1]["label"], "00")
         self.assertEqual(cycle_hourly[-1]["markdown_median"], 0.06)
 
-    def test_hourly_variation_uses_noon_reference_before_and_after_noon(self) -> None:
+    def test_hourly_variation_switches_reference_at_noon(self) -> None:
         series = pd.Series(
             [2.00, 1.95, 2.10, 2.05],
             index=pd.DatetimeIndex(
@@ -321,8 +321,9 @@ class DailyNoonResetMetricTests(unittest.TestCase):
 
         self.assertEqual(used_days, 1)
         self.assertEqual(hourly.loc[hourly["hour"] == 0, "price"].item(), -0.05)
-        self.assertEqual(hourly.loc[hourly["hour"] == 12, "price"].item(), 0.1)
-        self.assertEqual(hourly.loc[hourly["hour"] == 13, "price"].item(), 0.05)
+        self.assertEqual(hourly.loc[hourly["hour"] == 11, "price"].item(), -0.05)
+        self.assertEqual(hourly.loc[hourly["hour"] == 12, "price"].item(), 0.0)
+        self.assertEqual(hourly.loc[hourly["hour"] == 13, "price"].item(), -0.05)
         self.assertEqual(best_hourly.loc[best_hourly["hour"] == 0, "price"].item(), 1.95)
         self.assertEqual(best_hourly.loc[best_hourly["hour"] == 12, "price"].item(), 2.1)
 
@@ -385,7 +386,7 @@ class DailyNoonResetMetricTests(unittest.TestCase):
         self.assertEqual(hourly.loc[hourly["hour"] == 9, "price"].item(), -0.1)
         self.assertEqual(hourly.loc[hourly["hour"] == 10, "price"].item(), -0.1)
         self.assertEqual(hourly.loc[hourly["hour"] == 11, "price"].item(), -0.1)
-        self.assertEqual(hourly.loc[hourly["hour"] == 12, "price"].item(), 0.1)
+        self.assertEqual(hourly.loc[hourly["hour"] == 12, "price"].item(), -0.0)
         self.assertEqual(best_hourly.loc[best_hourly["hour"] == 11, "price"].item(), 1.9)
         self.assertEqual(best_hourly.loc[best_hourly["hour"] == 12, "price"].item(), 2.097)
 
@@ -416,7 +417,7 @@ class DailyNoonResetMetricTests(unittest.TestCase):
 
         self.assertEqual(used_days, 1)
         self.assertEqual(hourly.loc[hourly["hour"] == 8, "price"].item(), -0.05)
-        self.assertEqual(hourly.loc[hourly["hour"] == 12, "price"].item(), 0.1)
+        self.assertEqual(hourly.loc[hourly["hour"] == 12, "price"].item(), 0.0)
 
 
 class BrandDistributionSummaryTests(unittest.TestCase):
