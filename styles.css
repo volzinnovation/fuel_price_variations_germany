@@ -246,6 +246,159 @@ p {
   padding-top: 4px;
 }
 
+/* ========== App Install Promo ========== */
+.app-install-promo {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background:
+    linear-gradient(135deg, rgba(255, 243, 191, 0.98), rgba(255, 236, 179, 0.94)),
+    var(--card);
+  border: 1px solid rgba(217, 119, 6, 0.22);
+  box-shadow: 0 18px 40px rgba(191, 138, 0, 0.16);
+  display: grid;
+  gap: 12px;
+}
+
+.app-install-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.app-install-copy {
+  min-width: 0;
+}
+
+.app-install-kicker {
+  margin: 0 0 2px;
+  color: #9a6700;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.app-install-copy h2 {
+  margin: 0 0 2px;
+  font-size: clamp(1rem, 2vw, 1.28rem);
+  line-height: 1.1;
+}
+
+.app-install-copy p {
+  margin: 0;
+  max-width: 30rem;
+  font-size: 0.95rem;
+  color: #755b1c;
+  line-height: 1.25;
+}
+
+.app-install-copy-link {
+  color: inherit;
+  font-weight: 700;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 0.12em;
+}
+
+.app-install-copy-link:hover {
+  text-decoration-color: currentColor;
+}
+
+.app-install-dismiss {
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(217, 119, 6, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.55);
+  color: #8a5b00;
+  font: inherit;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.app-install-dismiss:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: var(--shadow-sm);
+}
+
+.app-install-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.app-install-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 121px;
+  height: 40px;
+  flex: 0 0 121px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: #000000;
+  overflow: hidden;
+  text-decoration: none;
+  box-shadow: 0 6px 14px rgba(17, 17, 17, 0.14);
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.app-install-link:hover {
+  transform: translateY(-1px);
+  opacity: 0.92;
+}
+
+.app-install-store-badge {
+  display: block;
+  width: auto;
+  max-width: none;
+  height: 40px;
+  object-fit: contain;
+  flex: 0 0 auto;
+  clip-path: inset(1px round 7px);
+}
+
+.app-install-store-badge--google {
+  clip-path: inset(4px round 7px);
+}
+
+@media (prefers-color-scheme: dark) {
+  .app-install-promo {
+    background: linear-gradient(135deg, rgba(78, 58, 8, 0.96), rgba(53, 39, 7, 0.94));
+    border-color: rgba(255, 213, 79, 0.2);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+  }
+
+  .app-install-kicker {
+    color: #ffd666;
+  }
+
+  .app-install-copy p {
+    color: #f4ddb0;
+  }
+
+  .app-install-dismiss {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 213, 79, 0.16);
+    color: #ffe08a;
+  }
+
+  .app-install-dismiss:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .app-install-link {
+    opacity: 1;
+  }
+}
+
 /* ========== Status ========== */
 .status {
   margin: 14px 0;
@@ -988,6 +1141,20 @@ canvas {
   .station-shell,
   .legal-shell {
     padding: 18px 14px 42px;
+  }
+  .app-install-promo {
+    padding: 12px;
+  }
+  .app-install-head {
+    grid-template-columns: 1fr auto;
+    align-items: start;
+  }
+  .app-install-links {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+  .app-install-link {
+    width: 121px;
   }
   .station-hero,
   .legal-card {
