@@ -85,13 +85,15 @@ jobs:
           PY
       - name: Generate data
         run: python scripts/generate_data.py --analysis-days 1
+      - name: Rebuild station pages
+        run: python scripts/build_site.py
       - name: Configure git
         run: |
           git config user.name "GitHub Actions Bot"
           git config user.email "<>"
       - name: Commit data changes
         run: |
-          git add data data2
+          git add data data2 station sitemap.xml robots.txt
           if git diff --cached --quiet; then
             echo "No changes to commit."
             exit 0
