@@ -20,6 +20,8 @@ STATION_DIR = ROOT / "station"
 SITEMAP_PATH = ROOT / "sitemap.xml"
 ROBOTS_PATH = ROOT / "robots.txt"
 SITE_ORIGIN = "https://tankzeit.de"
+SITE_NAME = "tankzeit.de"
+SITE_LOGO_URL = f"{SITE_ORIGIN}/favicon-512.png"
 
 FUELS = ("diesel", "e10", "e5")
 FUEL_LABELS = {
@@ -556,6 +558,7 @@ def build_station_page(
         "url": canonical_url,
     }
     structured_data = {key: value for key, value in structured_data.items() if value}
+    structured_data["image"] = SITE_LOGO_URL
     has_noon_reset_station_stats = any(
         has_noon_reset_stats(stats_by_fuel.get(fuel)) for fuel in FUELS
     )
@@ -568,17 +571,31 @@ def build_station_page(
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
+    <meta name="application-name" content="{SITE_NAME}" />
+    <meta name="apple-mobile-web-app-title" content="Tankzeit" />
     <meta name="mobile-web-app-capable" content="yes" />
     <title>{format_text(name)} in {format_text(city_title)} | Tagesprofile für Diesel, E10 und E5 | tankzeit.de</title>
     <meta name="description" content="{format_text(description)}" />
     <link rel="canonical" href="{canonical_href}" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="de_DE" />
-    <meta property="og:site_name" content="tankzeit.de" />
+    <meta property="og:site_name" content="{SITE_NAME}" />
     <meta property="og:title" content="{format_text(name)} in {format_text(city_title)} | tankzeit.de" />
     <meta property="og:description" content="{format_text(description)}" />
     <meta property="og:url" content="{canonical_href}" />
+    <meta property="og:image" content="{SITE_LOGO_URL}" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
+    <meta property="og:image:alt" content="Tankzeit Logo" />
     <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="{format_text(name)} in {format_text(city_title)} | tankzeit.de" />
+    <meta name="twitter:description" content="{format_text(description)}" />
+    <meta name="twitter:image" content="{SITE_LOGO_URL}" />
     <meta name="theme-color" content="#0f766e" />
     <link rel="stylesheet" href="/styles.css" />
     <script type="application/ld+json">{json.dumps(structured_data, ensure_ascii=False)}</script>
