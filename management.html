@@ -13,7 +13,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta
       name="description"
-      content="Management View: Mittagspreise nach Marke und untertägige Preissenkungen am Tankstellenmarkt."
+      content="Management View: Mittagspreise nach Marke und untertägige Preissenkungen für Diesel, E10 und E5."
     />
     <link rel="canonical" href="https://tankzeit.de/management.html" />
     <meta property="og:type" content="website" />
@@ -22,7 +22,7 @@
     <meta property="og:title" content="Tankzeit | Management" />
     <meta
       property="og:description"
-      content="Management View: Mittagspreise nach Marke und untertägige Preissenkungen am Tankstellenmarkt."
+      content="Management View: Mittagspreise nach Marke und untertägige Preissenkungen für Diesel, E10 und E5."
     />
     <meta property="og:url" content="https://tankzeit.de/management.html" />
     <meta name="twitter:card" content="summary" />
@@ -41,7 +41,10 @@
       <header>
         <div class="brand">
           <h1>Tankzeit</h1>
-          <p>Preisabweichungen am deutschen Tankstellenmarkt.</p>
+          <p>
+            Spritpreise im Vergleich: Preisunterschiede für Diesel, E10, E5 in
+            Deutschland“
+          </p>
         </div>
       </header>
 
@@ -148,9 +151,9 @@
       <section class="card management-footer">
         <div class="footer-notes">
           <p class="footer-note">
-            <strong>12:00-Referenzpreis nach Marke:</strong> Zeigt je Marke
-            den ausgewählten Referenzpreis. Für jeden Kraftstoff gilt: Eine
-            positive Preisänderung zwischen <code>12:00</code> und
+            <strong>12:00-Referenzpreis nach Marke:</strong> Zeigt je Marke den
+            ausgewählten Referenzpreis. Für jeden Kraftstoff gilt: Eine positive
+            Preisänderung zwischen <code>12:00</code> und
             <code>12:15</code> zählt noch als 12:00-Referenz. Ohne solche
             Erhöhung bleibt der bis <code>12:00</code> etablierte Preis
             maßgeblich.
@@ -160,8 +163,8 @@
             Zyklus von <code>12:00</code> Vortag bis <code>12:00</code> des
             gewählten Tags relativ zur ausgewählten Noon-Referenz. Die
             gestrichelte Linie markiert Mitternacht. Ein sichtbarer "Noon Dip"
-            kann entstehen, wenn viele Stationen ihre Referenzerhöhung erst
-            kurz nach Mittag melden. Später als <code>12:15</code> gemeldete
+            kann entstehen, wenn viele Stationen ihre Referenzerhöhung erst kurz
+            nach Mittag melden. Später als <code>12:15</code> gemeldete
             Erhöhungen verschieben den Noon-Anker dagegen nicht mehr. Antippen
             zeigt zusätzlich Quartilspanne und Spannweite.
           </p>
@@ -317,7 +320,8 @@
 
       function formatRelativeText(valueInEuro, referenceLabel = "Referenz") {
         const displayValue = sanitizeRelativeValue(valueInEuro);
-        if (Math.abs(displayValue) < 0.0005) return `auf ${referenceLabel}-Niveau`;
+        if (Math.abs(displayValue) < 0.0005)
+          return `auf ${referenceLabel}-Niveau`;
         return `${(Math.abs(displayValue) * 100).toFixed(1)} ct/l ${
           displayValue > 0 ? "teurer" : "günstiger"
         }`;
@@ -469,16 +473,25 @@
       }
 
       function formatTimeOfDay(totalMinutes) {
-        const normalized = Math.max(0, Math.min(24 * 60 - 1, Number(totalMinutes) || 0));
+        const normalized = Math.max(
+          0,
+          Math.min(24 * 60 - 1, Number(totalMinutes) || 0),
+        );
         const hour = Math.floor(normalized / 60);
         const minute = normalized % 60;
         return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
       }
 
-      function histogramBucketRangeLabel(row, bucketMinutes = histogramBucketMinutes()) {
+      function histogramBucketRangeLabel(
+        row,
+        bucketMinutes = histogramBucketMinutes(),
+      ) {
         if (!row) return "";
         const startMinute = Number(row.bucket_minute) || 0;
-        const endMinute = Math.min(24 * 60 - 1, startMinute + bucketMinutes - 1);
+        const endMinute = Math.min(
+          24 * 60 - 1,
+          startMinute + bucketMinutes - 1,
+        );
         return `${formatTimeOfDay(startMinute)} - ${formatTimeOfDay(endMinute)}`;
       }
 
@@ -621,7 +634,10 @@
 
       function buildNoonDeltaSummary(currentRows, previousRows) {
         const previousByStation = new Map(
-          previousRows.map((row) => [String(row.station_uuid || "").trim(), row]),
+          previousRows.map((row) => [
+            String(row.station_uuid || "").trim(),
+            row,
+          ]),
         );
         const perFuel = {
           diesel: [],
@@ -725,8 +741,7 @@
         plot.width = w - plot.left - plot.right;
         plot.height = h - plot.top - plot.bottom;
         state.layout = { plot, w, h };
-        titleEl.textContent =
-          `Preisänderung zur 12:00-Referenz · ${fuelDisplayName(state.fuel)}`;
+        titleEl.textContent = `Preisänderung zur 12:00-Referenz · ${fuelDisplayName(state.fuel)}`;
 
         ctx.clearRect(0, 0, w, h);
 
@@ -740,7 +755,8 @@
 
         const tickCount = 5;
         for (let i = 0; i < tickCount; i++) {
-          const v = domain.min + (i * (domain.max - domain.min)) / (tickCount - 1);
+          const v =
+            domain.min + (i * (domain.max - domain.min)) / (tickCount - 1);
           const y = yScale(domain, plot, v);
           ctx.beginPath();
           ctx.moveTo(plot.left, y);
@@ -780,7 +796,8 @@
             return bucketLabel(bucket) === "00";
           });
           if (midnightIndex >= 0) {
-            const midnightX = plot.left + (midnightIndex * plot.width) / stats.length;
+            const midnightX =
+              plot.left + (midnightIndex * plot.width) / stats.length;
             ctx.save();
             ctx.setLineDash([6, 4]);
             ctx.strokeStyle = "rgba(37,99,235,0.35)";
@@ -795,8 +812,12 @@
           }
         } else if (viewMode !== "cycle" && stats.length >= 24) {
           const noonX = plot.left + (12 * plot.width) / stats.length;
-          const noonBucket = stats.find((bucket) => Number(bucket?.hour) === 12);
-          const noonMedian = noonBucket ? adjustedHourlyRow(noonBucket).median : null;
+          const noonBucket = stats.find(
+            (bucket) => Number(bucket?.hour) === 12,
+          );
+          const noonMedian = noonBucket
+            ? adjustedHourlyRow(noonBucket).median
+            : null;
           ctx.save();
           ctx.setLineDash([6, 4]);
           ctx.strokeStyle = "rgba(37,99,235,0.35)";
@@ -846,7 +867,11 @@
         ctx.fillStyle = "rgba(0,0,0,0.6)";
         for (let index = 0; index < stats.length; index += step) {
           const x = plot.left + ((index + 0.5) * plot.width) / stats.length;
-          ctx.fillText(bucketLabel(stats[index]), x - 6, plot.top + plot.height + 26);
+          ctx.fillText(
+            bucketLabel(stats[index]),
+            x - 6,
+            plot.top + plot.height + 26,
+          );
         }
         ctx.fillText(
           viewMode === "cycle"
@@ -854,7 +879,9 @@
               ? "Stunde seit 12:00"
               : "Stunde im 24h-Zyklus (12 Vortag → 12 Tag)"
             : "Stunde",
-          plot.left + plot.width / 2 - (viewMode === "cycle" ? (isPartialCycle ? 52 : 82) : 18),
+          plot.left +
+            plot.width / 2 -
+            (viewMode === "cycle" ? (isPartialCycle ? 52 : 82) : 18),
           plot.top + plot.height + 38,
         );
 
@@ -877,7 +904,11 @@
           viewMode === "cycle"
             ? [[0, points.length - 1, HOURLY_REFERENCE_COLORS.sameDay]]
             : [
-                [0, Math.min(11, points.length - 1), HOURLY_REFERENCE_COLORS.priorDay],
+                [
+                  0,
+                  Math.min(11, points.length - 1),
+                  HOURLY_REFERENCE_COLORS.priorDay,
+                ],
                 [12, points.length - 1, HOURLY_REFERENCE_COLORS.sameDay],
               ];
 
@@ -923,8 +954,7 @@
           return;
         }
 
-        brandTitleEl.textContent =
-          `12:00-Referenzpreis nach Marke · ${fuelDisplayName(state.fuel)}`;
+        brandTitleEl.textContent = `12:00-Referenzpreis nach Marke · ${fuelDisplayName(state.fuel)}`;
 
         brandCanvas.style.height = `${Math.max(280, rows.length * 42 + 90)}px`;
         resizeCanvas(brandCanvas, brandCtx);
@@ -944,13 +974,18 @@
 
         const tickCount = 4;
         for (let i = 0; i < tickCount; i++) {
-          const value = domain.min + (i * (domain.max - domain.min)) / (tickCount - 1);
+          const value =
+            domain.min + (i * (domain.max - domain.min)) / (tickCount - 1);
           const x = xScale(domain, plot, value);
           brandCtx.beginPath();
           brandCtx.moveTo(x, plot.top);
           brandCtx.lineTo(x, plot.top + plot.height);
           brandCtx.stroke();
-          brandCtx.fillText(formatBrandAxisValue(value), x - 12, plot.top + plot.height + 24);
+          brandCtx.fillText(
+            formatBrandAxisValue(value),
+            x - 12,
+            plot.top + plot.height + 24,
+          );
         }
 
         brandCtx.fillText(
@@ -975,11 +1010,31 @@
           brandCtx.fillStyle = "rgba(0,0,0,0.72)";
           brandCtx.fillText(row.brand, 12, y + 4);
 
-          const minX = xScale(domain, plot, clamp(row.min, domain.min, domain.max));
-          const q1X = xScale(domain, plot, clamp(row.q1, domain.min, domain.max));
-          const medianX = xScale(domain, plot, clamp(row.median, domain.min, domain.max));
-          const q3X = xScale(domain, plot, clamp(row.q3, domain.min, domain.max));
-          const maxX = xScale(domain, plot, clamp(row.max, domain.min, domain.max));
+          const minX = xScale(
+            domain,
+            plot,
+            clamp(row.min, domain.min, domain.max),
+          );
+          const q1X = xScale(
+            domain,
+            plot,
+            clamp(row.q1, domain.min, domain.max),
+          );
+          const medianX = xScale(
+            domain,
+            plot,
+            clamp(row.median, domain.min, domain.max),
+          );
+          const q3X = xScale(
+            domain,
+            plot,
+            clamp(row.q3, domain.min, domain.max),
+          );
+          const maxX = xScale(
+            domain,
+            plot,
+            clamp(row.max, domain.min, domain.max),
+          );
 
           brandCtx.strokeStyle = isOverall ? "#111827" : fuelColor;
           brandCtx.lineWidth = isOverall ? 2.4 : 2;
@@ -989,9 +1044,21 @@
           brandCtx.stroke();
 
           const boxHeight = Math.min(22, rowHeight * 0.52);
-          brandCtx.fillStyle = isOverall ? "rgba(17, 24, 39, 0.14)" : `${fuelColor}33`;
-          brandCtx.fillRect(q1X, y - boxHeight / 2, Math.max(1, q3X - q1X), boxHeight);
-          brandCtx.strokeRect(q1X, y - boxHeight / 2, Math.max(1, q3X - q1X), boxHeight);
+          brandCtx.fillStyle = isOverall
+            ? "rgba(17, 24, 39, 0.14)"
+            : `${fuelColor}33`;
+          brandCtx.fillRect(
+            q1X,
+            y - boxHeight / 2,
+            Math.max(1, q3X - q1X),
+            boxHeight,
+          );
+          brandCtx.strokeRect(
+            q1X,
+            y - boxHeight / 2,
+            Math.max(1, q3X - q1X),
+            boxHeight,
+          );
 
           brandCtx.beginPath();
           brandCtx.moveTo(medianX, y - boxHeight / 2 - 3);
@@ -1005,14 +1072,18 @@
         const summary = histogramSummary();
         if (!rawRows.length && !(Number(summary?.stations) > 0)) {
           histogramTitleEl.textContent = "Zeitpunkt der 12:00-Referenz";
-          histogramCtx.clearRect(0, 0, histogramCanvas.width, histogramCanvas.height);
+          histogramCtx.clearRect(
+            0,
+            0,
+            histogramCanvas.width,
+            histogramCanvas.height,
+          );
           state.histogramLayout = null;
           return;
         }
 
         const rows = histogramSeries();
-        histogramTitleEl.textContent =
-          `Zeitpunkt der 12:00-Referenz · ${fuelDisplayName(state.fuel)}`;
+        histogramTitleEl.textContent = `Zeitpunkt der 12:00-Referenz · ${fuelDisplayName(state.fuel)}`;
         resizeCanvas(histogramCanvas, histogramCtx);
         const w = histogramCanvas.getBoundingClientRect().width;
         const h = histogramCanvas.getBoundingClientRect().height;
@@ -1024,7 +1095,10 @@
 
         histogramCtx.clearRect(0, 0, w, h);
 
-        const maxCount = Math.max(1, ...rows.map((row) => Number(row.count) || 0));
+        const maxCount = Math.max(
+          1,
+          ...rows.map((row) => Number(row.count) || 0),
+        );
         const domain = { min: 0, max: maxCount };
         histogramCtx.strokeStyle = "rgba(0,0,0,0.08)";
         histogramCtx.fillStyle = "rgba(0,0,0,0.55)";
@@ -1060,11 +1134,17 @@
 
         rows.forEach((row, index) => {
           if (!(row.count > 0)) return;
-          const x = plot.left + index * slotWidth + Math.max(0, (slotWidth - barWidth) / 2);
+          const x =
+            plot.left +
+            index * slotWidth +
+            Math.max(0, (slotWidth - barWidth) / 2);
           const segments = hasBreakdown
             ? [
                 { value: row.other_count, color: "rgba(203, 213, 225, 0.7)" },
-                { value: row.fallback_count, color: "rgba(107, 114, 128, 0.72)" },
+                {
+                  value: row.fallback_count,
+                  color: "rgba(107, 114, 128, 0.72)",
+                },
                 { value: row.increase_count, color: `${fuelColor}cc` },
               ]
             : [{ value: row.count, color: `${fuelColor}cc` }];
@@ -1076,7 +1156,12 @@
             const topY = yScale(domain, plot, stackedValue);
             const bottomY = yScale(domain, plot, startValue);
             histogramCtx.fillStyle = segment.color;
-            histogramCtx.fillRect(x, topY, barWidth, Math.max(1, bottomY - topY));
+            histogramCtx.fillRect(
+              x,
+              topY,
+              barWidth,
+              Math.max(1, bottomY - topY),
+            );
           });
         });
 
@@ -1139,7 +1224,9 @@
         const x = clientX - rect.left;
         if (x < plot.left || x > plot.left + plot.width) return null;
         const stats = state.summary?.fuels?.[state.fuel] || [];
-        const bucket = Math.floor(((x - plot.left) / plot.width) * stats.length);
+        const bucket = Math.floor(
+          ((x - plot.left) / plot.width) * stats.length,
+        );
         if (bucket < 0 || bucket >= stats.length) return null;
         return bucket;
       }
@@ -1204,7 +1291,9 @@
         if (!row || !(row.count > 0)) return;
         const details = [];
         if (row.increase_count > 0) {
-          details.push(`${formatCount(row.increase_count)} Erhöhungen 12:00-12:15`);
+          details.push(
+            `${formatCount(row.increase_count)} Erhöhungen 12:00-12:15`,
+          );
         }
         if (row.fallback_count > 0) {
           details.push(`${formatCount(row.fallback_count)} Fallbacks ≤ 12:00`);
@@ -1291,7 +1380,12 @@
           state.brandLayout = null;
           state.histogramLayout = null;
           brandCtx.clearRect(0, 0, brandCanvas.width, brandCanvas.height);
-          histogramCtx.clearRect(0, 0, histogramCanvas.width, histogramCanvas.height);
+          histogramCtx.clearRect(
+            0,
+            0,
+            histogramCanvas.width,
+            histogramCanvas.height,
+          );
         }
         await updateNav();
       }
