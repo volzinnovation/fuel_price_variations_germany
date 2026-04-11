@@ -71,7 +71,7 @@ test("index.html shows Diesel tankzeit ending exactly at noon", async ({ page })
   });
 
   await expect(page.locator(`#${stationId}-minimum`)).toHaveText(
-    expectedTankzeitText(stationStatsFixture.hourly),
+    expectedTankzeitText(stationStatsFixture),
   );
   await expect(page.locator(`#${stationId}-profile`)).toContainText("2.050");
 });
@@ -85,8 +85,57 @@ test("e10.html shows E10 tankzeit ending exactly at noon", async ({ page }) => {
   });
 
   await expect(page.locator(`#${stationId}-minimum`)).toHaveText(
-    expectedTankzeitText(stationStatsFixture.hourly),
+    expectedTankzeitText(stationStatsFixture),
   );
+  await expect(page.locator(`#${stationId}-profile`)).toContainText("2.050");
+});
+
+test("index.html falls back to the local station catalog when live prices are unavailable", async ({
+  page,
+}) => {
+  await routeFailureFallbackResponses(page);
+
+  await page.goto(`${baseUrl}/index.html`);
+  await page.evaluate(() => {
+    handleLocation({ coords: { latitude: 52.52, longitude: 13.405 } });
+  });
+
+  await expect(page.locator("#status")).toContainText(
+    "Livepreise sind derzeit nicht verfügbar.",
+  );
+  await expect(page.locator(`#${stationId}`)).toContainText("Livepreis nicht verfügbar");
+  await expect(page.locator(`#${stationId}-minimum`)).toHaveText(
+    expectedTankzeitText(stationStatsFixture),
+  );
+  await expect(page.locator(`#${stationId}-profile`)).toContainText("2.050");
+});
+
+test("favoriten.html hides live prices when the live price endpoint is unavailable", async ({
+  page,
+}) => {
+  await routeFavoriteFailureResponses(page);
+  await page.addInitScript(({ favoriteId }) => {
+    localStorage.setItem("ids", JSON.stringify([favoriteId]));
+    localStorage.setItem(
+      "fav",
+      JSON.stringify([
+        {
+          id: favoriteId,
+          name: "Noon Test Station",
+          lat: 52.52,
+          lng: 13.405,
+        },
+      ]),
+    );
+  }, { favoriteId: stationId });
+
+  await page.goto(`${baseUrl}/favoriten.html`);
+
+  await expect(page.locator("#status")).toContainText(
+    "Tankzeit und Detailansichten bleiben verfügbar.",
+  );
+  await expect(page.locator(`#${stationId}-e10`)).toHaveText("Livepreis nicht verfügbar");
+  await expect(page.locator(`#${stationId}-diesel`)).toHaveText("Livepreis nicht verfügbar");
   await expect(page.locator(`#${stationId}-profile`)).toContainText("2.050");
 });
 
@@ -214,6 +263,67 @@ async function routeFixtureResponses(page) {
   });
 }
 
+async function routeFailureFallbackResponses(page) {
+  await routeCommonResponses(page);
+  await page.route("https://creativecommons.tankerkoenig.de/json/list.php**", (route) => {
+    route.fulfill({
+      status: 200,
+      contentType: "application/json; charset=utf-8",
+      body: JSON.stringify({
+        ok: false,
+        status: "error",
+        message: "Key existiert nicht oder ist deaktiviert",
+      }),
+    });
+  });
+  await page.route("**/data/stations.json", (route) => {
+    route.fulfill(
+      jsonResponse([
+        {
+          uuid: stationId,
+          name: "Noon Test Station",
+          brand: "Fallback",
+          latitude: 52.5202,
+          longitude: 13.4052,
+        },
+      ]),
+    );
+  });
+}
+
+async function routeFavoriteFailureResponses(page) {
+  await routeCommonResponses(page);
+  await page.route("https://creativecommons.tankerkoenig.de/json/prices.php**", (route) => {
+    route.fulfill({
+      status: 200,
+      contentType: "application/json; charset=utf-8",
+      body: JSON.stringify({
+        ok: false,
+        status: "error",
+        message: "Key existiert nicht oder ist deaktiviert",
+      }),
+    });
+  });
+}
+
+async function routeCommonResponses(page) {
+  await page.route("https://fonts.googleapis.com/**", (route) => route.abort());
+  await page.route("https://fonts.gstatic.com/**", (route) => route.abort());
+  await page.route("https://cdnjs.cloudflare.com/**", (route) => route.abort());
+  await page.route(`**/data2/${stationIdPath}/diesel.json`, (route) => {
+    route.fulfill(jsonResponse(stationStatsFixture));
+  });
+  await page.route(`**/data2/${stationIdPath}/e10.json`, (route) => {
+    route.fulfill(jsonResponse(stationStatsFixture));
+  });
+  await page.route(`**/data2/${stationIdPath}/e5.json`, (route) => {
+    route.fulfill(jsonResponse(stationStatsFixture));
+  });
+  await page.route(`**/data2/${stationIdPath}/**/history.csv`, (route) => {
+    route.fulfill(csvResponse(stationHistoryCsv));
+  });
+}
+
 function jsonResponse(payload) {
   return {
     status: 200,
@@ -230,7 +340,19 @@ function csvResponse(body) {
   };
 }
 
-function expectedTankzeitText(hourlyRows) {
+function expectedTankzeitText(stats) {
+  const summary = stats && stats.summary;
+  if (summary && (summary.min_time_text || summary.min_duration_text)) {
+    if (summary.min_time_text && summary.min_duration_text) {
+      return `${summary.min_time_text} Uhr · ${summary.min_duration_text}`;
+    }
+    if (summary.min_time_text) {
+      return `${summary.min_time_text} Uhr`;
+    }
+    return summary.min_duration_text;
+  }
+
+  const hourlyRows = (stats && stats.hourly) || [];
   const minimum = Math.min(...hourlyRows.map((row) => Number(row.price)));
   const hours = hourlyRows
     .filter((row) => Number(row.price) === minimum)

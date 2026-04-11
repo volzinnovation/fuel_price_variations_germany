@@ -42,8 +42,8 @@
           <thead>
             <tr>
               <th>Name</th>
-              <th>E10 €/l</th>
-              <th>Diesel €/l</th>
+              <th id="e10-price-heading">E10 €/l</th>
+              <th id="diesel-price-heading">Diesel €/l</th>
               <th>E10 Mittag / Senkungen</th>
               <th>Tankzeit</th>
               <th></th>
@@ -106,10 +106,18 @@
       const DATA_BASE = "data2/";
       const TANKERKOENIG_APOLOGY =
         "Entschuldigung, Tankerkönig ist derzeit nicht erreichbar. Bitte versuche es später erneut.";
+      const NO_LIVE_PRICE_TEXT = "Livepreis nicht verfügbar";
+      const FALLBACK_STATUS_MESSAGE =
+        "Livepreise sind derzeit nicht verfügbar. Tankzeit und Detailansichten bleiben verfügbar.";
       const statusEl = document.getElementById("status");
       const favoritesEl = document.getElementById("favorites");
+      const e10PriceHeadingEl = document.getElementById("e10-price-heading");
+      const dieselPriceHeadingEl = document.getElementById(
+        "diesel-price-heading",
+      );
       const ids = JSON.parse(localStorage.getItem("ids")) || [];
       const fav = JSON.parse(localStorage.getItem("fav")) || [];
+      let livePricesAvailable = true;
 
       function escapeHtml(value) {
         return String(value ?? "")
@@ -160,6 +168,18 @@
         statusEl.style.display = "none";
       }
 
+      function setLivePriceAvailability(isAvailable) {
+        livePricesAvailable = isAvailable;
+        if (e10PriceHeadingEl) {
+          e10PriceHeadingEl.textContent = isAvailable ? "E10 €/l" : "E10";
+        }
+        if (dieselPriceHeadingEl) {
+          dieselPriceHeadingEl.textContent = isAvailable
+            ? "Diesel €/l"
+            : "Diesel";
+        }
+      }
+
       function removeAndStore(id) {
         const index = ids.indexOf(id);
         if (index >= 0) {
@@ -191,7 +211,20 @@
           }
           throw new Error(`Request failed: ${response.status}`);
         }
-        return response.json();
+        const payload = await response.json();
+        if (isTankerkoenigRequest(url) && payload && payload.ok === false) {
+          throw new Error(TANKERKOENIG_APOLOGY);
+        }
+        return payload;
+      }
+
+      function renderUnavailableFavoritePrices() {
+        ids.forEach((id) => {
+          const e10 = document.getElementById(`${id}-e10`);
+          const diesel = document.getElementById(`${id}-diesel`);
+          if (e10) e10.textContent = NO_LIVE_PRICE_TEXT;
+          if (diesel) diesel.textContent = NO_LIVE_PRICE_TEXT;
+        });
       }
 
       async function loadPrices() {
@@ -205,34 +238,39 @@
         }
 
         const url = `https://creativecommons.tankerkoenig.de/json/prices.php?ids=${ids.join(",")}&apikey=fe8673d1-47be-1156-77e4-040e06cb785c`;
+        await Promise.allSettled(
+          ids.map(async (id) => {
+            const statsUrl = `${DATA_BASE}${id.split("-").join("/")}/e10.json`;
+            const stats = await fetchJson(statsUrl);
+            const profile = document.getElementById(`${id}-profile`);
+            const minimum = document.getElementById(`${id}-minimum`);
+            if (profile) {
+              const station = fav.find((f) => f.id === id) || {};
+              const stationName = station.name || "Tankstelle";
+              const detailsHref = hrefForHtml(
+                chartUrl(id, stationName, station.lat || "", station.lng || ""),
+              );
+              profile.innerHTML = `<a href="${detailsHref}">${escapeHtml(TankzeitStats.profileText(stats, "Details"))}</a>`;
+            }
+            if (minimum) {
+              minimum.textContent = TankzeitStats.relativeMinimumText(
+                stats,
+                stats.text || "-",
+              );
+            }
+          }),
+        );
+
         try {
           const prices = await fetchJson(url);
-          await Promise.allSettled(
-            ids.map(async (id) => {
-              const statsUrl = `${DATA_BASE}${id.split("-").join("/")}/e10.json`;
-              const stats = await fetchJson(statsUrl);
-              const profile = document.getElementById(`${id}-profile`);
-              const minimum = document.getElementById(`${id}-minimum`);
-              if (profile) {
-                const station = fav.find((f) => f.id === id) || {};
-                const stationName = station.name || "Tankstelle";
-                const detailsHref = hrefForHtml(
-                  chartUrl(id, stationName, station.lat || "", station.lng || ""),
-                );
-                profile.innerHTML = `<a href="${detailsHref}">${escapeHtml(TankzeitStats.profileText(stats, "Details"))}</a>`;
-              }
-              if (minimum) {
-                minimum.textContent = TankzeitStats.relativeMinimumText(
-                  stats,
-                  stats.text || "-",
-                );
-              }
-            }),
-          );
+          setLivePriceAvailability(true);
 
           ids.forEach((id) => {
             const e10 = document.getElementById(`${id}-e10`);
             const diesel = document.getElementById(`${id}-diesel`);
+            if (!e10 || !diesel) return;
+            e10.textContent = NO_LIVE_PRICE_TEXT;
+            diesel.textContent = NO_LIVE_PRICE_TEXT;
             if (!prices.prices || !prices.prices[id]) return;
             const entry = prices.prices[id];
             const station = favoriteById(id);
@@ -250,11 +288,13 @@
           });
           clearStatus();
         } catch (err) {
-          const message =
-            err && err.message === TANKERKOENIG_APOLOGY
-              ? TANKERKOENIG_APOLOGY
-              : "Fehler beim Laden der Favoriten.";
-          setStatus(message, "error");
+          if (err && err.message === TANKERKOENIG_APOLOGY) {
+            setLivePriceAvailability(false);
+            renderUnavailableFavoritePrices();
+            setStatus(FALLBACK_STATUS_MESSAGE);
+            return;
+          }
+          setStatus("Fehler beim Laden der Favoriten.", "error");
         }
       }
 
@@ -292,6 +332,7 @@
         loadPrices();
       }
 
+      setLivePriceAvailability(true);
       render();
     </script>
     <script src="app-install-promo.js?v=20260409-app-promo-v12"></script>

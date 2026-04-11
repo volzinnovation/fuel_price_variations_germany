@@ -162,7 +162,7 @@
           <thead>
             <tr>
               <th>Name</th>
-              <th>Preis €/l</th>
+              <th id="price-heading">Preis €/l</th>
               <th>Mittagspreis/Vortag</th>
               <th>Tankzeit</th>
               <th></th>
@@ -220,22 +220,29 @@
     </nav>
 
     <script src="app-stats.js"></script>
+    <script src="station-catalog.js"></script>
     <script>
       const DATA_BASE = "data2/";
       const FUEL = "diesel";
       const TANKERKOENIG_APOLOGY =
         "Entschuldigung, Tankerkönig ist derzeit nicht erreichbar. Bitte versuche es später erneut.";
+      const NO_LIVE_PRICE_TEXT = "Livepreis nicht verfügbar";
+      const FALLBACK_STATUS_MESSAGE =
+        "Livepreise sind derzeit nicht verfügbar. Wir zeigen nahe Tankstellen aus dem lokalen Verzeichnis.";
+      const SEARCH_RADIUS_KM = 10;
 
       const statusEl = document.getElementById("status");
       const stationsEl = document.getElementById("stations");
       const sortModeEl = document.getElementById("sort-mode");
       const locationRequestBtn = document.getElementById("location-request-btn");
+      const priceHeadingEl = document.getElementById("price-heading");
       const ids = JSON.parse(localStorage.getItem("ids")) || [];
       const fav = JSON.parse(localStorage.getItem("fav")) || [];
       const SORT_STORAGE_KEY = `tankzeit_sort_${FUEL}`;
       const LOCATION_OPTIONS = { enableHighAccuracy: false, maximumAge: 300000 };
       const LOCATION_DEADLINE_MS = 25000;
       let currentCenter = null;
+      let livePricesAvailable = true;
       let locationWatchId = null;
       let locationDeadlineId = null;
 
@@ -276,6 +283,21 @@
 
       function clearStatus() {
         statusEl.style.display = "none";
+      }
+
+      function setLivePriceAvailability(isAvailable) {
+        livePricesAvailable = isAvailable;
+        const priceOption = sortModeEl.querySelector('option[value="price"]');
+        if (priceOption) {
+          priceOption.disabled = !isAvailable;
+        }
+        if (!isAvailable && sortModeEl.value === "price") {
+          sortModeEl.value = "distance";
+          localStorage.setItem(SORT_STORAGE_KEY, "distance");
+        }
+        if (priceHeadingEl) {
+          priceHeadingEl.textContent = isAvailable ? "Preis €/l" : "Livepreis";
+        }
       }
 
       function addAndStore(id, name, lat, lng) {
@@ -388,7 +410,11 @@
           }
           throw new Error(`Request failed: ${response.status}`);
         }
-        return response.json();
+        const payload = await response.json();
+        if (isTankerkoenigRequest(url) && payload && payload.ok === false) {
+          throw new Error(TANKERKOENIG_APOLOGY);
+        }
+        return payload;
       }
 
       function compareNullableNumbers(left, right) {
@@ -401,7 +427,10 @@
       }
 
       function sortStations(stations) {
-        const sortMode = sortModeEl.value;
+        const sortMode =
+          !livePricesAvailable && sortModeEl.value === "price"
+            ? "distance"
+            : sortModeEl.value;
         return [...stations].sort((left, right) => {
           const primary =
             sortMode === "price"
@@ -423,12 +452,85 @@
         });
       }
 
+      function formatStationName(station) {
+        return station.brand
+          ? `${escapeHtml(station.name)} (${escapeHtml(station.brand)})`
+          : escapeHtml(station.name);
+      }
+
+      async function loadFallbackStations(lat, lng) {
+        const catalog = await TankzeitStationCatalog.loadCatalog();
+        return TankzeitStationCatalog.findNearbyStations(catalog, lat, lng, {
+          limit: 50,
+          radiusKm: SEARCH_RADIUS_KM,
+        });
+      }
+
+      async function renderStations(stations) {
+        const limited = stations.slice(0, 10);
+        stationsEl.innerHTML = limited
+          .map((s) => {
+            const isSaved = ids.includes(s.id);
+            const mapsHref = hrefForHtml(mapsUrl(s.lat, s.lng));
+            const detailsHref = hrefForHtml(
+              chartUrl(s.id, s.name, s.lat, s.lng),
+            );
+            return `
+            <tr id="${s.id}">
+              <td data-label="Name"><a href="${mapsHref}" target="_blank" rel="noopener">${formatStationName(s)}</a></td>
+              <td data-label="Preis">${livePricesAvailable ? `${s[FUEL]} €/l` : NO_LIVE_PRICE_TEXT}</td>
+              <td data-label="Mittagspreis/Vortag" id="${s.id}-profile"><a href="${detailsHref}">Details</a></td>
+              <td data-label="Tankzeit" id="${s.id}-minimum">-</td>
+              <td><button class="fav" data-id="${s.id}" ${isSaved ? "disabled" : ""}>${isSaved ? "❤️" : "🤍"}</button></td>
+            </tr>
+          `;
+          })
+          .join("");
+
+        document.querySelectorAll(".fav:not([disabled])").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const station = limited.find((s) => s.id === btn.dataset.id);
+            addAndStore(
+              station.id,
+              station.brand || station.name,
+              station.lat,
+              station.lng,
+            );
+            btn.textContent = "❤️";
+            btn.disabled = true;
+          });
+        });
+
+        await Promise.allSettled(
+          limited.map(async (s) => {
+            const statsUrl = `${DATA_BASE}${s.id.split("-").join("/")}/${FUEL}.json`;
+            const stats = await fetchJson(statsUrl);
+            const profileEl = document.getElementById(`${s.id}-profile`);
+            const minimumEl = document.getElementById(`${s.id}-minimum`);
+            const detailsHref = hrefForHtml(
+              chartUrl(s.id, s.name, s.lat, s.lng),
+            );
+            profileEl.innerHTML = `<a href="${detailsHref}">${escapeHtml(TankzeitStats.profileText(stats, "Details"))}</a>`;
+            minimumEl.textContent = TankzeitStats.relativeMinimumText(
+              stats,
+              stats.text || "-",
+            );
+
+            if (TankzeitStats.isNowInRelativeMinimumWindow(stats)) {
+              const row = document.getElementById(s.id);
+              row.classList.add("row-highlight");
+            }
+          }),
+        );
+      }
+
       async function loadStations(lat, lng) {
         currentCenter = { lat, lng };
         setStatus("Stationen werden geladen...");
         const url = `https://creativecommons.tankerkoenig.de/json/list.php?rad=10&type=all&sort=dist&lat=${lat}&lng=${lng}&apikey=fe8673d1-47be-1156-77e4-040e06cb785c`;
         try {
           const prices = await fetchJson(url);
+          setLivePriceAvailability(true);
           const stations = sortStations(
             (prices.stations || []).filter((s) => s.isOpen && s[FUEL] != null),
           );
@@ -438,73 +540,45 @@
             setStatus("Keine Stationen im Umkreis.");
             return;
           }
-          const limited = stations.slice(0, 10);
-          stationsEl.innerHTML = limited
-            .map((s) => {
-              const isSaved = ids.includes(s.id);
-              const mapsHref = hrefForHtml(mapsUrl(s.lat, s.lng));
-              const detailsHref = hrefForHtml(
-                chartUrl(s.id, s.name, s.lat, s.lng),
-              );
-              return `
-            <tr id="${s.id}">
-              <td data-label="Name"><a href="${mapsHref}" target="_blank" rel="noopener">${escapeHtml(s.name)} (${escapeHtml(s.brand || "")})</a></td>
-              <td data-label="Preis">${s[FUEL]} €/l</td>
-              <td data-label="Mittagspreis/Vortag" id="${s.id}-profile"><a href="${detailsHref}">Details</a></td>
-              <td data-label="Tankzeit" id="${s.id}-minimum">-</td>
-              <td><button class="fav" data-id="${s.id}" ${isSaved ? "disabled" : ""}>${isSaved ? "❤️" : "🤍"}</button></td>
-            </tr>
-          `;
-            })
-            .join("");
-
-          document.querySelectorAll(".fav:not([disabled])").forEach((btn) => {
-            btn.addEventListener("click", () => {
-              const station = limited.find((s) => s.id === btn.dataset.id);
-              addAndStore(
-                station.id,
-                station.brand || station.name,
-                station.lat,
-                station.lng,
-              );
-              btn.textContent = "❤️";
-              btn.disabled = true;
-            });
-          });
-
-          await Promise.allSettled(
-            limited.map(async (s) => {
-              const statsUrl = `${DATA_BASE}${s.id.split("-").join("/")}/${FUEL}.json`;
-              const stats = await fetchJson(statsUrl);
-              const profileEl = document.getElementById(`${s.id}-profile`);
-              const minimumEl = document.getElementById(`${s.id}-minimum`);
-              const detailsHref = hrefForHtml(
-                chartUrl(s.id, s.name, s.lat, s.lng),
-              );
-              profileEl.innerHTML = `<a href="${detailsHref}">${escapeHtml(TankzeitStats.profileText(stats, "Details"))}</a>`;
-              minimumEl.textContent = TankzeitStats.relativeMinimumText(
-                stats,
-                stats.text || "-",
-              );
-
-              if (TankzeitStats.isNowInRelativeMinimumWindow(stats)) {
-                const row = document.getElementById(s.id);
-                row.classList.add("row-highlight");
-              }
-            }),
-          );
-
+          await renderStations(stations);
           clearStatus();
         } catch (err) {
+          if (err && err.message === TANKERKOENIG_APOLOGY) {
+            try {
+              setLivePriceAvailability(false);
+              const fallbackStations = sortStations(
+                await loadFallbackStations(lat, lng),
+              );
+              if (!fallbackStations.length) {
+                stationsEl.innerHTML =
+                  "<tr><td colspan='5'>Keine Stationen im Umkreis gefunden.</td></tr>";
+                setStatus(
+                  "Livepreise sind derzeit nicht verfügbar. Im lokalen Verzeichnis wurden keine Stationen im Umkreis gefunden.",
+                );
+                return;
+              }
+              await renderStations(fallbackStations);
+              setStatus(FALLBACK_STATUS_MESSAGE);
+              return;
+            } catch (fallbackErr) {
+              console.warn("Local station fallback failed", fallbackErr);
+              stationsEl.innerHTML =
+                "<tr><td colspan='5'>Livepreise und lokales Stationsverzeichnis sind derzeit nicht verfügbar.</td></tr>";
+              setStatus(
+                "Livepreise sind derzeit nicht verfügbar und das lokale Stationsverzeichnis konnte nicht geladen werden.",
+                "error",
+              );
+              return;
+            }
+          }
           const message =
-            err && err.message === TANKERKOENIG_APOLOGY
-              ? TANKERKOENIG_APOLOGY
-              : "Fehler beim Laden der Daten. Bitte später erneut versuchen.";
+            "Fehler beim Laden der Daten. Bitte später erneut versuchen.";
           stationsEl.innerHTML = `<tr><td colspan='5'>${message}</td></tr>`;
           setStatus(message, "error");
         }
       }
 
+      setLivePriceAvailability(true);
       locationRequestBtn.addEventListener("click", requestLocation);
       requestLocation();
     </script>
