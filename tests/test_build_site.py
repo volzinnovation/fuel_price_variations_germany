@@ -66,6 +66,24 @@ def _noon_reset_stats() -> dict[str, object]:
 
 
 class BuildSiteTests(unittest.TestCase):
+    def test_station_page_uses_large_social_card_metadata(self) -> None:
+        stats_by_fuel = {
+            "diesel": _generic_stats(),
+            "e10": _generic_stats(),
+            "e5": _generic_stats(),
+        }
+
+        with patch("scripts.build_site.load_station_stats", return_value=stats_by_fuel):
+            _path, html = build_station_page(_station(), {})
+
+        self.assertIn('<meta name="twitter:card" content="summary_large_image" />', html)
+        self.assertIn('content="https://tankzeit.de/img/social-card.png"', html)
+        self.assertIn(
+            'content="Diesel im Tagesprofil meist günstig: 18 - 24h. Direktlinks zu Diesel-, E10- und E5-Charts auf tankzeit.de."',
+            html,
+        )
+        self.assertIn('name="twitter:image:alt"', html)
+
     def test_metadata_only_summary_does_not_enable_noon_reset_copy(self) -> None:
         stats_by_fuel = {
             "diesel": _generic_stats(),

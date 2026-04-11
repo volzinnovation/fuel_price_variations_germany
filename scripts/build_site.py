@@ -22,6 +22,12 @@ ROBOTS_PATH = ROOT / "robots.txt"
 SITE_ORIGIN = "https://tankzeit.de"
 SITE_NAME = "tankzeit.de"
 SITE_LOGO_URL = f"{SITE_ORIGIN}/favicon-512.png"
+SITE_SOCIAL_IMAGE_URL = f"{SITE_ORIGIN}/img/social-card.png"
+SITE_SOCIAL_IMAGE_ALT = (
+    "Tankzeit Vorschaugrafik mit Logo und Hinweis auf beste Tankzeiten für Diesel, E10 und E5"
+)
+SITE_SOCIAL_IMAGE_WIDTH = 1200
+SITE_SOCIAL_IMAGE_HEIGHT = 630
 
 FUELS = ("diesel", "e10", "e5")
 FUEL_LABELS = {
@@ -95,6 +101,13 @@ TOKEN_FRAGMENT_FALLBACKS = (
 
 def format_text(value: object) -> str:
     return html.escape(str(value or "").strip())
+
+
+def truncate_text(value: object, limit: int) -> str:
+    text = re.sub(r"\s+", " ", str(value or "").strip())
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 1)].rstrip() + "…"
 
 
 def normalize_german_token(token: str) -> str:
@@ -410,6 +423,45 @@ def build_station_description(
     return f"{name}. {best_summary}. Direktlinks für Diesel, E10 und E5 auf tankzeit.de."
 
 
+def build_station_social_title(name: str, city: str) -> str:
+    place = city.strip() or "Deutschland"
+    return truncate_text(f"{name} in {place} | Tankzeit", 70)
+
+
+def build_station_social_description(
+    stats_by_fuel: dict[str, dict[str, object]],
+) -> str:
+    lead = "Historische Preisprofile verfügbar."
+    for fuel in FUELS:
+        stats = stats_by_fuel.get(fuel)
+        if not stats:
+            continue
+        label = FUEL_LABELS[fuel]
+        best = fuel_best_text(stats)
+        if has_noon_reset_stats(stats):
+            minimum = fuel_minimum_text(stats)
+            if minimum != "Kein Minimum im 12:00-11:59-Fenster hinterlegt.":
+                lead = f"{label}-Minimum meist {minimum}."
+            else:
+                lead = f"{label}: Tagesprofil mit 12:00-Referenz."
+            break
+        if has_noon_reference_day_profile(stats):
+            if best != "Keine Bestzeit hinterlegt.":
+                lead = f"{label} im Tagesprofil meist günstig: {best}."
+            else:
+                lead = f"{label}: Tagesprofil mit 12:00-Referenz."
+            break
+        if best != "Keine Bestzeit hinterlegt.":
+            lead = f"{label} meist günstig: {best}."
+        else:
+            lead = f"{label}: historisches Preisprofil verfügbar."
+        break
+    return truncate_text(
+        f"{lead} Direktlinks zu Diesel-, E10- und E5-Charts auf tankzeit.de.",
+        180,
+    )
+
+
 def fuel_chart_url(station_id: str, fuel: str, name: str, latitude: object, longitude: object) -> str:
     return (
         f"/chart.html?id={quote(station_id)}"
@@ -523,6 +575,8 @@ def build_station_page(
     google_maps_href = attribute_url(google_maps_url)
     stats_by_fuel = load_station_stats(station_id)
     description = build_station_description(name, city, street, stats_by_fuel)
+    social_title = build_station_social_title(name, city or postcode or "Deutschland")
+    social_description = build_station_social_description(stats_by_fuel)
     brand_line = f"{brand} · " if brand else ""
     city_line = " ".join(part for part in (postcode, city) if part).strip()
     address_html = "<br />".join(
@@ -585,17 +639,19 @@ def build_station_page(
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="de_DE" />
     <meta property="og:site_name" content="{SITE_NAME}" />
-    <meta property="og:title" content="{format_text(name)} in {format_text(city_title)} | tankzeit.de" />
-    <meta property="og:description" content="{format_text(description)}" />
+    <meta property="og:title" content="{format_text(social_title)}" />
+    <meta property="og:description" content="{format_text(social_description)}" />
     <meta property="og:url" content="{canonical_href}" />
-    <meta property="og:image" content="{SITE_LOGO_URL}" />
-    <meta property="og:image:width" content="512" />
-    <meta property="og:image:height" content="512" />
-    <meta property="og:image:alt" content="Tankzeit Logo" />
-    <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content="{format_text(name)} in {format_text(city_title)} | tankzeit.de" />
-    <meta name="twitter:description" content="{format_text(description)}" />
-    <meta name="twitter:image" content="{SITE_LOGO_URL}" />
+    <meta property="og:image" content="{SITE_SOCIAL_IMAGE_URL}" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="{SITE_SOCIAL_IMAGE_WIDTH}" />
+    <meta property="og:image:height" content="{SITE_SOCIAL_IMAGE_HEIGHT}" />
+    <meta property="og:image:alt" content="{format_text(SITE_SOCIAL_IMAGE_ALT)}" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="{format_text(social_title)}" />
+    <meta name="twitter:description" content="{format_text(social_description)}" />
+    <meta name="twitter:image" content="{SITE_SOCIAL_IMAGE_URL}" />
+    <meta name="twitter:image:alt" content="{format_text(SITE_SOCIAL_IMAGE_ALT)}" />
     <meta name="theme-color" content="#0f766e" />
     <link rel="stylesheet" href="/styles.css" />
     <script type="application/ld+json">{json.dumps(structured_data, ensure_ascii=False)}</script>
