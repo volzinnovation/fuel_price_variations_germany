@@ -1,4 +1,5 @@
 :root {
+  color-scheme: light dark;
   --bg: #f7f4ef;
   --ink: #121212;
   --muted: #606060;
@@ -7,6 +8,13 @@
   --accent-2: #f59e0b;
   --card: #ffffff;
   --card-glass: rgba(255, 255, 255, 0.85);
+  --panel: rgba(255, 255, 255, 0.74);
+  --panel-strong: rgba(255, 255, 255, 0.92);
+  --line-soft: rgba(128, 128, 128, 0.14);
+  --line-strong: rgba(128, 128, 128, 0.22);
+  --secondary-btn-bg: rgba(255, 255, 255, 0.82);
+  --secondary-btn-hover-bg: rgba(255, 255, 255, 0.96);
+  --secondary-btn-border: rgba(15, 118, 110, 0.14);
   --shadow: 0 22px 60px rgba(10, 10, 10, 0.14);
   --shadow-sm: 0 10px 22px rgba(10, 10, 10, 0.08);
   --radius: 22px;
@@ -16,13 +24,20 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0a0a0a;
-    --ink: #f5f5f5;
-    --muted: #a0a0a0;
-    --card: #141414;
-    --card-glass: rgba(20, 20, 20, 0.9);
-    --shadow: 0 22px 60px rgba(0, 0, 0, 0.5);
-    --shadow-sm: 0 10px 22px rgba(0, 0, 0, 0.3);
+    --bg: #06090b;
+    --ink: #edf4f3;
+    --muted: #9aa7a6;
+    --card: #0f1517;
+    --card-glass: rgba(14, 21, 24, 0.88);
+    --panel: rgba(13, 19, 22, 0.84);
+    --panel-strong: rgba(18, 26, 30, 0.96);
+    --line-soft: rgba(112, 146, 140, 0.16);
+    --line-strong: rgba(126, 165, 158, 0.24);
+    --secondary-btn-bg: rgba(255, 255, 255, 0.04);
+    --secondary-btn-hover-bg: rgba(255, 255, 255, 0.08);
+    --secondary-btn-border: rgba(126, 165, 158, 0.18);
+    --shadow: 0 30px 90px rgba(0, 0, 0, 0.52);
+    --shadow-sm: 0 14px 32px rgba(0, 0, 0, 0.32);
   }
 }
 
@@ -53,9 +68,10 @@ body {
 @media (prefers-color-scheme: dark) {
   body {
     background: 
-      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(15, 118, 110, 0.2) 0%, transparent 50%),
-      radial-gradient(ellipse 60% 40% at 100% 0%, rgba(245, 158, 11, 0.08) 0%, transparent 40%),
-      linear-gradient(180deg, #0f0f0f 0%, #0a0a0a 100%);
+      radial-gradient(ellipse 72% 48% at 50% -18%, rgba(20, 184, 166, 0.24) 0%, transparent 52%),
+      radial-gradient(ellipse 40% 30% at 100% 0%, rgba(245, 158, 11, 0.1) 0%, transparent 42%),
+      radial-gradient(ellipse 38% 32% at 0% 100%, rgba(56, 189, 248, 0.08) 0%, transparent 50%),
+      linear-gradient(180deg, #0c1417 0%, #070a0c 52%, #050608 100%);
     background-attachment: fixed;
   }
 }
@@ -208,9 +224,14 @@ p {
 }
 
 .link-btn.secondary-link {
-  background: var(--card);
+  background: var(--secondary-btn-bg);
   color: var(--ink);
-  border-color: rgba(128, 128, 128, 0.2);
+  border-color: var(--secondary-btn-border);
+}
+
+.link-btn.secondary-link:hover {
+  background: var(--secondary-btn-hover-bg);
+  border-color: rgba(20, 184, 166, 0.28);
 }
 
 /* ========== Hero / Tips ========== */
@@ -890,7 +911,7 @@ canvas {
 .legal-shell {
   max-width: 860px;
   margin: 0 auto;
-  padding: 24px 18px 56px;
+  padding: 28px 18px 60px;
 }
 
 .legal-back {
@@ -905,17 +926,29 @@ canvas {
 
 .station-hero,
 .legal-card {
-  background: var(--card-glass);
+  background: linear-gradient(180deg, var(--panel-strong) 0%, var(--card-glass) 100%);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(128, 128, 128, 0.12);
+  border: 1px solid var(--line-soft);
   border-radius: 24px;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, 0.22);
   padding: 28px 22px;
 }
 
 .station-hero {
-  margin-bottom: 20px;
+  margin-bottom: 22px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .station-hero,
+  .legal-card {
+    background:
+      linear-gradient(180deg, rgba(18, 28, 31, 0.98) 0%, rgba(10, 15, 18, 0.94) 100%);
+    box-shadow:
+      var(--shadow),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05),
+      inset 0 -1px 0 rgba(20, 184, 166, 0.06);
+  }
 }
 
 .legal-kicker {
@@ -938,7 +971,8 @@ canvas {
 .station-summary {
   margin: 0 0 18px;
   color: var(--muted);
-  line-height: 1.7;
+  line-height: 1.72;
+  max-width: 62ch;
 }
 
 .legal-card h2 {
@@ -995,9 +1029,20 @@ canvas {
   gap: 8px;
   padding: 10px 14px;
   border-radius: 999px;
-  background: rgba(15, 118, 110, 0.1);
+  background: linear-gradient(135deg, rgba(15, 118, 110, 0.12), rgba(20, 184, 166, 0.06));
+  border: 1px solid rgba(15, 118, 110, 0.14);
   color: var(--accent);
   font-weight: 700;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+@media (prefers-color-scheme: dark) {
+  .station-chip {
+    background: linear-gradient(135deg, rgba(15, 118, 110, 0.2), rgba(20, 184, 166, 0.08));
+    border-color: rgba(20, 184, 166, 0.18);
+    color: #8ef0e2;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
 }
 
 .station-actions {
@@ -1009,31 +1054,56 @@ canvas {
 .station-fuel-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 14px;
-  margin-top: 14px;
+  gap: 16px;
+  margin-top: 16px;
 }
 
 .station-fuel-card {
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(128, 128, 128, 0.14);
-  padding: 16px;
-  display: grid;
-  gap: 10px;
+  background: linear-gradient(180deg, var(--panel-strong) 0%, var(--panel) 100%);
+  border: 1px solid var(--line-soft);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 100%;
+  box-shadow: 0 18px 34px rgba(10, 10, 10, 0.08);
+}
+
+@media (prefers-color-scheme: dark) {
+  .station-fuel-card {
+    background: linear-gradient(180deg, rgba(16, 24, 27, 0.98) 0%, rgba(9, 14, 17, 0.96) 100%);
+    border-color: rgba(126, 165, 158, 0.2);
+    box-shadow:
+      0 22px 42px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
 }
 
 .station-fuel-card h3 {
   margin: 0;
-  font-size: 1rem;
+  font-size: 1.05rem;
+  letter-spacing: 0.01em;
 }
 
 .station-fuel-card p {
   margin: 0;
   line-height: 1.6;
+  color: var(--muted);
+}
+
+.station-fuel-card strong {
+  color: var(--ink);
+}
+
+.station-fuel-card .link-btn {
+  margin-top: auto;
 }
 
 .station-note {
-  margin-top: 18px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line-soft);
   color: var(--muted);
   line-height: 1.6;
 }
@@ -1064,8 +1134,9 @@ canvas {
   gap: 14px;
   padding: 18px 20px;
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(128, 128, 128, 0.14);
+  background: linear-gradient(180deg, var(--panel-strong) 0%, var(--panel) 100%);
+  border: 1px solid var(--line-soft);
+  box-shadow: 0 16px 30px rgba(10, 10, 10, 0.08);
 }
 
 .breakdown-step span {
@@ -1110,8 +1181,11 @@ canvas {
 
 @media (prefers-color-scheme: dark) {
   .breakdown-step {
-    background: rgba(20, 20, 20, 0.78);
-    border-color: rgba(255, 255, 255, 0.08);
+    background: linear-gradient(180deg, rgba(16, 24, 27, 0.98) 0%, rgba(9, 14, 17, 0.96) 100%);
+    border-color: rgba(126, 165, 158, 0.2);
+    box-shadow:
+      0 22px 42px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
   }
   .breakdown-step-emphasis,
   .breakdown-step-result {
