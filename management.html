@@ -262,6 +262,9 @@
         e10: "#ea580c",
         e5: "#7c2d12",
       };
+      const DARK_MODE_MEDIA_QUERY = window.matchMedia(
+        "(prefers-color-scheme: dark)",
+      );
       const HOURLY_REFERENCE_COLORS = {
         priorDay: {
           fill: "rgba(107, 114, 128, 0.2)",
@@ -274,6 +277,33 @@
       };
       const BRAND_PRICE_DOMAIN = { min: 1.5, max: 3.0 };
       const APP_TIME_ZONE = "Europe/Berlin";
+
+      function currentChartTheme() {
+        if (DARK_MODE_MEDIA_QUERY.matches) {
+          return {
+            grid: "rgba(148, 163, 184, 0.18)",
+            axisText: "rgba(237, 244, 243, 0.74)",
+            axisTitle: "rgba(237, 244, 243, 0.9)",
+            tickText: "rgba(237, 244, 243, 0.8)",
+            rowLabel: "rgba(237, 244, 243, 0.88)",
+            rowSeparator: "rgba(148, 163, 184, 0.12)",
+            overallStroke: "#e2e8f0",
+            overallFill: "rgba(226, 232, 240, 0.16)",
+            legendText: "rgba(237, 244, 243, 0.86)",
+          };
+        }
+        return {
+          grid: "rgba(0, 0, 0, 0.08)",
+          axisText: "rgba(0, 0, 0, 0.55)",
+          axisTitle: "rgba(0, 0, 0, 0.68)",
+          tickText: "rgba(0, 0, 0, 0.6)",
+          rowLabel: "rgba(0, 0, 0, 0.72)",
+          rowSeparator: "rgba(0, 0, 0, 0.06)",
+          overallStroke: "#111827",
+          overallFill: "rgba(17, 24, 39, 0.14)",
+          legendText: "rgba(0, 0, 0, 0.68)",
+        };
+      }
 
       const state = {
         summary: null,
@@ -749,6 +779,7 @@
         if (!stats.length) return;
         const viewMode = viewModeForFuel();
         const isPartialCycle = viewMode === "cycle" && stats.length < 25;
+        const theme = currentChartTheme();
 
         resizeCanvas(canvas, ctx);
         const w = canvas.getBoundingClientRect().width;
@@ -766,8 +797,8 @@
         const domain = computeDomain(stats);
 
         // Grid + axis labels (Euro / Liter)
-        ctx.strokeStyle = "rgba(0,0,0,0.08)";
-        ctx.fillStyle = "rgba(0,0,0,0.55)";
+        ctx.strokeStyle = theme.grid;
+        ctx.fillStyle = theme.axisText;
         ctx.lineWidth = 1;
         ctx.font = "12px Manrope, sans-serif";
 
@@ -791,14 +822,14 @@
           ctx.moveTo(plot.left, y0);
           ctx.lineTo(plot.left + plot.width, y0);
           ctx.stroke();
-          ctx.strokeStyle = "rgba(0,0,0,0.08)";
+          ctx.strokeStyle = theme.grid;
         }
 
         ctx.save();
         ctx.translate(18, plot.top + plot.height / 2);
         ctx.rotate(-Math.PI / 2);
         ctx.textAlign = "center";
-        ctx.fillStyle = "rgba(0,0,0,0.68)";
+        ctx.fillStyle = theme.axisTitle;
         ctx.fillText(
           `Preisänderung ${fuelDisplayName(state.fuel)} (Euro / Liter)`,
           0,
@@ -882,7 +913,7 @@
 
         // X labels
         const step = w < 600 ? 2 : 1;
-        ctx.fillStyle = "rgba(0,0,0,0.6)";
+        ctx.fillStyle = theme.tickText;
         for (let index = 0; index < stats.length; index += step) {
           const x = plot.left + ((index + 0.5) * plot.width) / stats.length;
           ctx.fillText(
@@ -978,6 +1009,7 @@
         resizeCanvas(brandCanvas, brandCtx);
         const w = brandCanvas.getBoundingClientRect().width;
         const h = brandCanvas.getBoundingClientRect().height;
+        const theme = currentChartTheme();
         const plot = { left: 110, right: 18, top: 18, bottom: 38 };
         plot.width = w - plot.left - plot.right;
         plot.height = h - plot.top - plot.bottom;
@@ -985,8 +1017,8 @@
 
         brandCtx.clearRect(0, 0, w, h);
         const domain = computeBrandDomain(rows);
-        brandCtx.strokeStyle = "rgba(0,0,0,0.08)";
-        brandCtx.fillStyle = "rgba(0,0,0,0.55)";
+        brandCtx.strokeStyle = theme.grid;
+        brandCtx.fillStyle = theme.axisText;
         brandCtx.lineWidth = 1;
         brandCtx.font = "12px Manrope, sans-serif";
 
@@ -1006,6 +1038,7 @@
           );
         }
 
+        brandCtx.fillStyle = theme.axisTitle;
         brandCtx.fillText(
           "Preis (EUR/l)",
           plot.left + plot.width / 2 - 28,
@@ -1019,13 +1052,13 @@
           const y = plot.top + (index + 0.5) * rowHeight;
           const rowTop = plot.top + index * rowHeight;
           const isOverall = row.brand === "Gesamtmarkt";
-          brandCtx.strokeStyle = "rgba(0,0,0,0.06)";
+          brandCtx.strokeStyle = theme.rowSeparator;
           brandCtx.beginPath();
           brandCtx.moveTo(plot.left, rowTop);
           brandCtx.lineTo(plot.left + plot.width, rowTop);
           brandCtx.stroke();
 
-          brandCtx.fillStyle = "rgba(0,0,0,0.72)";
+          brandCtx.fillStyle = theme.rowLabel;
           brandCtx.fillText(row.brand, 12, y + 4);
 
           const minX = xScale(
@@ -1054,7 +1087,7 @@
             clamp(row.max, domain.min, domain.max),
           );
 
-          brandCtx.strokeStyle = isOverall ? "#111827" : fuelColor;
+          brandCtx.strokeStyle = isOverall ? theme.overallStroke : fuelColor;
           brandCtx.lineWidth = isOverall ? 2.4 : 2;
           brandCtx.beginPath();
           brandCtx.moveTo(minX, y);
@@ -1063,7 +1096,7 @@
 
           const boxHeight = Math.min(22, rowHeight * 0.52);
           brandCtx.fillStyle = isOverall
-            ? "rgba(17, 24, 39, 0.14)"
+            ? theme.overallFill
             : `${fuelColor}33`;
           brandCtx.fillRect(
             q1X,
@@ -1105,6 +1138,7 @@
         resizeCanvas(histogramCanvas, histogramCtx);
         const w = histogramCanvas.getBoundingClientRect().width;
         const h = histogramCanvas.getBoundingClientRect().height;
+        const theme = currentChartTheme();
         const plot = { left: 62, right: 18, top: 24, bottom: 46 };
         plot.width = w - plot.left - plot.right;
         plot.height = h - plot.top - plot.bottom;
@@ -1118,8 +1152,8 @@
           ...rows.map((row) => Number(row.count) || 0),
         );
         const domain = { min: 0, max: maxCount };
-        histogramCtx.strokeStyle = "rgba(0,0,0,0.08)";
-        histogramCtx.fillStyle = "rgba(0,0,0,0.55)";
+        histogramCtx.strokeStyle = theme.grid;
+        histogramCtx.fillStyle = theme.axisText;
         histogramCtx.lineWidth = 1;
         histogramCtx.font = "12px Manrope, sans-serif";
 
@@ -1139,7 +1173,7 @@
         histogramCtx.translate(18, plot.top + plot.height / 2);
         histogramCtx.rotate(-Math.PI / 2);
         histogramCtx.textAlign = "center";
-        histogramCtx.fillStyle = "rgba(0,0,0,0.68)";
+        histogramCtx.fillStyle = theme.axisTitle;
         histogramCtx.fillText("Stationen", 0, 0);
         histogramCtx.restore();
 
@@ -1200,7 +1234,7 @@
         const bucketsPerHour = Math.max(1, Math.round(60 / bucketMinutes));
         const hourStep = plot.width < 540 ? 3 : 2;
         const labelStep = bucketsPerHour * hourStep;
-        histogramCtx.fillStyle = "rgba(0,0,0,0.6)";
+        histogramCtx.fillStyle = theme.tickText;
         rows.forEach((row, index) => {
           if (index % labelStep !== 0) return;
           const x = plot.left + (index + 0.5) * slotWidth;
@@ -1228,7 +1262,7 @@
           legendItems.forEach((item) => {
             histogramCtx.fillStyle = item.color;
             histogramCtx.fillRect(legendX, legendY - 8, 10, 10);
-            histogramCtx.fillStyle = "rgba(0,0,0,0.68)";
+            histogramCtx.fillStyle = theme.legendText;
             histogramCtx.fillText(item.label, legendX + 16, legendY);
             legendY += 16;
           });
@@ -1414,6 +1448,13 @@
           drawBrandChart();
           drawHistogramChart();
         }
+      });
+
+      DARK_MODE_MEDIA_QUERY.addEventListener?.("change", () => {
+        if (!state.summary) return;
+        draw();
+        drawBrandChart();
+        drawHistogramChart();
       });
 
       prevBtn.addEventListener("click", () => {

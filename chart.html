@@ -110,6 +110,9 @@
       const HISTORY_START = "2026-04-01";
       let chartInstance = null;
       let activeView = params.get("view") === "profile" ? "profile" : "history";
+      const DARK_MODE_MEDIA_QUERY = window.matchMedia(
+        "(prefers-color-scheme: dark)",
+      );
       const PRIOR_DAY_COLOR = {
         fill: "rgba(107, 114, 128, 0.2)",
         stroke: "#6b7280",
@@ -122,6 +125,96 @@
         stroke: "#0f766e",
         fill: "rgba(15, 118, 110, 0.16)",
       };
+
+      function currentChartTheme() {
+        if (DARK_MODE_MEDIA_QUERY.matches) {
+          return {
+            axisLabel: "rgba(237, 244, 243, 0.82)",
+            axisTitle: "rgba(237, 244, 243, 0.92)",
+            grid: "rgba(148, 163, 184, 0.18)",
+            border: "rgba(148, 163, 184, 0.3)",
+            tooltipBackground: "rgba(9, 14, 17, 0.96)",
+            tooltipBorder: "rgba(126, 165, 158, 0.2)",
+            tooltipText: "#edf4f3",
+          };
+        }
+        return {
+          axisLabel: "rgba(17, 24, 39, 0.72)",
+          axisTitle: "rgba(17, 24, 39, 0.88)",
+          grid: "rgba(0, 0, 0, 0.08)",
+          border: "rgba(17, 24, 39, 0.16)",
+          tooltipBackground: "rgba(255, 255, 255, 0.96)",
+          tooltipBorder: "rgba(15, 23, 42, 0.1)",
+          tooltipText: "#111827",
+        };
+      }
+
+      function applyChartTheme(options) {
+        const theme = currentChartTheme();
+        const themedOptions = {
+          ...options,
+          scales: {
+            ...(options.scales || {}),
+          },
+          plugins: {
+            ...(options.plugins || {}),
+          },
+        };
+        ["x", "y"].forEach((axisKey) => {
+          const axis = themedOptions.scales?.[axisKey];
+          if (!axis) return;
+          themedOptions.scales[axisKey] = {
+            ...axis,
+            ticks: {
+              ...(axis.ticks || {}),
+              color: theme.axisLabel,
+            },
+            title: axis.title
+              ? {
+                  ...axis.title,
+                  color: theme.axisTitle,
+                }
+              : axis.title,
+            grid: {
+              ...(axis.grid || {}),
+              color:
+                axis.grid && Object.prototype.hasOwnProperty.call(axis.grid, "color")
+                  ? axis.grid.color
+                  : theme.grid,
+            },
+            border: {
+              ...(axis.border || {}),
+              color: theme.border,
+            },
+          };
+        });
+        if (themedOptions.plugins.legend !== false) {
+          themedOptions.plugins.legend = {
+            ...(themedOptions.plugins.legend || {}),
+            labels: {
+              ...((themedOptions.plugins.legend || {}).labels || {}),
+              color: theme.axisLabel,
+            },
+          };
+        }
+        themedOptions.plugins.tooltip = {
+          ...(themedOptions.plugins.tooltip || {}),
+          backgroundColor: theme.tooltipBackground,
+          borderColor: theme.tooltipBorder,
+          borderWidth: 1,
+          titleColor: theme.tooltipText,
+          bodyColor: theme.tooltipText,
+          footerColor: theme.tooltipText,
+        };
+        return themedOptions;
+      }
+
+      function refreshChartTheme() {
+        if (!chartInstance) return;
+        chartInstance.options = applyChartTheme(chartInstance.options || {});
+        chartInstance.update();
+      }
+
       const noonDividerPlugin = {
         id: "noonDivider",
         afterDatasetsDraw(chart, _args, options) {
@@ -462,7 +555,7 @@
               },
             ],
           },
-          options: {
+          options: applyChartTheme({
             responsive: true,
             maintainAspectRatio: false,
             interaction: {
@@ -516,7 +609,7 @@
                 },
               },
             },
-          },
+          }),
         });
       }
 
@@ -583,7 +676,7 @@
               },
             ],
           },
-          options: {
+          options: applyChartTheme({
             responsive: true,
             maintainAspectRatio: false,
             interaction: {
@@ -612,7 +705,7 @@
                   color(context) {
                     return context.tick.value === 0
                       ? "rgba(37, 99, 235, 0.28)"
-                      : "rgba(0, 0, 0, 0.08)";
+                      : currentChartTheme().grid;
                   },
                 },
                 title: {
@@ -643,7 +736,7 @@
                 },
               },
             },
-          },
+          }),
         });
       }
 
@@ -732,7 +825,7 @@
               },
             ],
           },
-          options: {
+          options: applyChartTheme({
             responsive: true,
             maintainAspectRatio: false,
             interaction: {
@@ -761,7 +854,7 @@
                   color(context) {
                     return context.tick.value === 0
                       ? "rgba(37, 99, 235, 0.28)"
-                      : "rgba(0, 0, 0, 0.08)";
+                      : currentChartTheme().grid;
                   },
                 },
                 title: {
@@ -797,7 +890,7 @@
                 },
               },
             },
-          },
+          }),
         });
       }
 
@@ -822,7 +915,7 @@
               },
             ],
           },
-          options: {
+          options: applyChartTheme({
             responsive: true,
             maintainAspectRatio: false,
             scales: {
@@ -838,7 +931,7 @@
                 position: "bottom",
               },
             },
-          },
+          }),
         });
       }
 
@@ -913,6 +1006,10 @@
       loadChart().catch(() => {
         document.getElementById("chart-sub").textContent =
           "Chart konnte nicht geladen werden.";
+      });
+
+      DARK_MODE_MEDIA_QUERY.addEventListener?.("change", () => {
+        refreshChartTheme();
       });
     </script>
     <script src="app-install-promo.js?v=20260409-app-promo-v12"></script>
