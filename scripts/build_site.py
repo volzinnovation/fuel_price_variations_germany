@@ -570,8 +570,12 @@ def build_station_page(
     longitude = float(station.get("longitude") or 0)
     canonical_path = station_page_path(station_id)
     canonical_url = absolute_url(canonical_path)
+    navigation_app_url = (
+        f"geo:{latitude},{longitude}?q={latitude},{longitude}({quote(name)})"
+    )
     google_maps_url = f"https://www.google.com/maps/dir/?api=1&destination={latitude},{longitude}"
     canonical_href = attribute_url(canonical_url)
+    navigation_app_href = attribute_url(navigation_app_url)
     google_maps_href = attribute_url(google_maps_url)
     stats_by_fuel = load_station_stats(station_id)
     description = build_station_description(name, city, street, stats_by_fuel)
@@ -676,7 +680,8 @@ def build_station_page(
           <a class="link-btn" href="{diesel_chart_url}">Diesel-Chart</a>
           <a class="link-btn secondary-link" href="{e10_chart_url}">E10-Chart</a>
           <a class="link-btn secondary-link" href="{e5_chart_url}">E5-Chart</a>
-          <a class="link-btn secondary-link" href="{google_maps_href}" target="_blank" rel="noopener noreferrer">Navigation</a>
+          <a class="link-btn secondary-link" href="{navigation_app_href}">Navigation-App</a>
+          <a class="link-btn secondary-link" href="{google_maps_href}" target="_blank" rel="noopener noreferrer">Google Maps</a>
         </div>
       </section>
 

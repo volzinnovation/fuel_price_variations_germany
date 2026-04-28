@@ -74,6 +74,19 @@ test("index.html shows Diesel tankzeit ending exactly at noon", async ({ page })
     expectedTankzeitText(stationStatsFixture),
   );
   await expect(page.locator(`#${stationId}-profile`)).toContainText("2.050");
+  await expect(page.locator("thead th")).toHaveText([
+    "",
+    "Name",
+    "Tankzeit",
+    "Preis €/l",
+    "Preisverlauf",
+    "Entfernung",
+  ]);
+  await expect(page.locator(`#${stationId} td`).nth(1).locator("a")).toHaveAttribute(
+    "href",
+    `station/${stationId}.html`,
+  );
+  await expect(page.locator(`#${stationId} td`).nth(5)).toHaveText("1.2 km");
 });
 
 test("e10.html shows E10 tankzeit ending exactly at noon", async ({ page }) => {
@@ -88,6 +101,19 @@ test("e10.html shows E10 tankzeit ending exactly at noon", async ({ page }) => {
     expectedTankzeitText(stationStatsFixture),
   );
   await expect(page.locator(`#${stationId}-profile`)).toContainText("2.050");
+  await expect(page.locator("thead th")).toHaveText([
+    "",
+    "Name",
+    "Tankzeit",
+    "Preis €/l",
+    "Preisverlauf",
+    "Entfernung",
+  ]);
+  await expect(page.locator(`#${stationId} td`).nth(1).locator("a")).toHaveAttribute(
+    "href",
+    `station/${stationId}.html`,
+  );
+  await expect(page.locator(`#${stationId} td`).nth(5)).toHaveText("1.2 km");
 });
 
 test("index.html falls back to the local station catalog when live prices are unavailable", async ({
@@ -389,7 +415,9 @@ async function clickManagementHour(page, hour) {
     const plotLeft = 72;
     const plotRight = 18;
     const plotWidth = rect.width - plotLeft - plotRight;
-    const clientX = rect.left + plotLeft + ((hourIndex + 0.5) * plotWidth) / 24;
+    const bucketCount = 25;
+    const clientX =
+      rect.left + plotLeft + ((hourIndex + 0.5) * plotWidth) / bucketCount;
     const clientY = rect.top + 32;
 
     element.dispatchEvent(

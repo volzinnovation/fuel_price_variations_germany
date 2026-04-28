@@ -480,6 +480,11 @@ p {
   color: var(--muted);
 }
 
+.station-favorite-cell {
+  width: 1%;
+  white-space: nowrap;
+}
+
 .table a {
   color: var(--accent);
   text-decoration: none;
@@ -551,6 +556,13 @@ p {
     font-weight: 600;
     color: var(--muted);
     margin-right: 10px;
+  }
+  .station-favorite-cell {
+    justify-content: flex-start;
+  }
+  .station-favorite-cell::before {
+    content: "";
+    display: none;
   }
 }
 

@@ -123,6 +123,23 @@ class BuildSiteTests(unittest.TestCase):
         self.assertIn("Minimum meist 12:00 Uhr für 24h", html)
         self.assertIn("den 12:00-Referenzpreis", html)
 
+    def test_station_page_offers_default_navigation_app_link(self) -> None:
+        stats_by_fuel = {
+            "diesel": _generic_stats(),
+            "e10": _generic_stats(),
+            "e5": _generic_stats(),
+        }
+
+        with patch("scripts.build_site.load_station_stats", return_value=stats_by_fuel):
+            _path, html = build_station_page(_station(), {})
+
+        self.assertIn(
+            'href="geo:52.5,13.4?q=52.5,13.4(Beispiel%20Tankstelle)"',
+            html,
+        )
+        self.assertIn(">Navigation-App</a>", html)
+        self.assertIn(">Google Maps</a>", html)
+
 
 if __name__ == "__main__":
     unittest.main()
