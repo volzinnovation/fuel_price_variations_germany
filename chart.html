@@ -44,6 +44,7 @@
           <button class="btn primary" id="history-view" type="button">
             Mittagspreise
           </button>
+          <button class="btn" id="heatmap-view" type="button">Heatmap</button>
           <button class="btn" id="profile-view" type="button">Preisänderung</button>
           <a class="btn" id="maps-link" href="#" target="_blank" rel="noopener"
             >Zur Tankstelle</a
@@ -109,7 +110,11 @@
       const DATA_BASE = "data2/";
       const HISTORY_START = "2026-04-01";
       let chartInstance = null;
-      let activeView = params.get("view") === "profile" ? "profile" : "history";
+      const requestedView = params.get("view");
+      let activeView =
+        requestedView === "profile" || requestedView === "heatmap"
+          ? requestedView
+          : "history";
       const DARK_MODE_MEDIA_QUERY = window.matchMedia(
         "(prefers-color-scheme: dark)",
       );
@@ -125,6 +130,19 @@
         stroke: "#0f766e",
         fill: "rgba(15, 118, 110, 0.16)",
       };
+      const HEATMAP_LOW_COLOR = "#0f766e";
+      const HEATMAP_MID_COLOR = "#f59e0b";
+      const HEATMAP_HIGH_COLOR = "#b91c1c";
+      const HEATMAP_WEEKDAY_LABELS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+      const HEATMAP_WEEKDAY_FULL_LABELS = [
+        "Montag",
+        "Dienstag",
+        "Mittwoch",
+        "Donnerstag",
+        "Freitag",
+        "Samstag",
+        "Sonntag",
+      ];
 
       function currentChartTheme() {
         if (DARK_MODE_MEDIA_QUERY.matches) {
@@ -316,6 +334,7 @@
         },
       };
       const historyButton = document.getElementById("history-view");
+      const heatmapButton = document.getElementById("heatmap-view");
       const profileButton = document.getElementById("profile-view");
 
       const title = `${name} · ${fuel.toUpperCase()}`;
@@ -363,6 +382,7 @@
 
       function setButtonState() {
         historyButton.classList.toggle("primary", activeView === "history");
+        heatmapButton.classList.toggle("primary", activeView === "heatmap");
         profileButton.classList.toggle("primary", activeView === "profile");
       }
 
@@ -380,6 +400,7 @@
       }
 
       historyButton.addEventListener("click", () => switchView("history"));
+      heatmapButton.addEventListener("click", () => switchView("heatmap"));
       profileButton.addEventListener("click", () => switchView("profile"));
       setButtonState();
       updateViewInUrl();
@@ -500,6 +521,19 @@
         }).format(parsed);
       }
 
+      function parseHistoryDate(day) {
+        const [year, month, date] = String(day).split("-").map(Number);
+        if (!year || !month || !date) return null;
+        const parsed = new Date(Date.UTC(year, month - 1, date));
+        return Number.isNaN(parsed.getTime()) ? null : parsed;
+      }
+
+      function weekdayIndexForDate(day) {
+        const parsed = parseHistoryDate(day);
+        if (!parsed) return null;
+        return (parsed.getUTCDay() + 6) % 7;
+      }
+
       function normalizeHistoryRows(rows) {
         return rows
           .map((row) => ({
@@ -516,6 +550,22 @@
           .sort((left, right) => left.date.localeCompare(right.date));
       }
 
+      function buildHeatmapSubtitle(rows) {
+        if (!rows.length) {
+          return `${fuel.toUpperCase()} · Keine Heatmap-Daten ab ${formatHistoryDay(HISTORY_START)} verfügbar.`;
+        }
+        const first = rows[0].date;
+        const last = rows[rows.length - 1].date;
+        return [
+          `${fuel.toUpperCase()} · Heatmap der Mittagspreise`,
+          `${rows.length} Tage`,
+          `${formatHistoryDay(first)} - ${formatHistoryDay(last)}`,
+          "Zeilen = Wochentage",
+          "Spalten = Kalenderwochen",
+          "Farbe = Preisniveau",
+        ].join(" · ");
+      }
+
       function buildHistorySubtitle(rows) {
         if (!rows.length) {
           return `${fuel.toUpperCase()} · Keine Mittagspreise ab ${formatHistoryDay(HISTORY_START)} verfügbar.`;
@@ -528,6 +578,261 @@
           `${formatHistoryDay(first)} - ${formatHistoryDay(last)}`,
           "y-Achse = etablierter Mittagspreis",
         ].join(" · ");
+      }
+
+      function hexToRgb(hex) {
+        const clean = String(hex).replace("#", "");
+        const value = Number.parseInt(clean, 16);
+        return {
+          r: (value >> 16) & 255,
+          g: (value >> 8) & 255,
+          b: value & 255,
+        };
+      }
+
+      function mixColor(left, right, ratio) {
+        const a = hexToRgb(left);
+        const b = hexToRgb(right);
+        const t = Math.max(0, Math.min(1, ratio));
+        return `rgb(${Math.round(a.r + (b.r - a.r) * t)}, ${Math.round(
+          a.g + (b.g - a.g) * t,
+        )}, ${Math.round(a.b + (b.b - a.b) * t)})`;
+      }
+
+      function heatmapColor(value, min, max) {
+        if (!Number.isFinite(value)) return "rgba(148, 163, 184, 0.16)";
+        if (Math.abs(max - min) < 0.0005) return HEATMAP_MID_COLOR;
+        const ratio = (value - min) / (max - min);
+        if (ratio < 0.5) {
+          return mixColor(HEATMAP_LOW_COLOR, HEATMAP_MID_COLOR, ratio / 0.5);
+        }
+        return mixColor(HEATMAP_MID_COLOR, HEATMAP_HIGH_COLOR, (ratio - 0.5) / 0.5);
+      }
+
+      function textColorForFill(fill) {
+        const match = String(fill).match(/\d+/g);
+        if (!match || match.length < 3) return "#111827";
+        const [r, g, b] = match.slice(0, 3).map(Number);
+        const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+        return luminance > 0.58 ? "#111827" : "#ffffff";
+      }
+
+      function buildHeatmapLayout(rows) {
+        const datedRows = rows
+          .map((row) => {
+            const parsed = parseHistoryDate(row.date);
+            const weekday = weekdayIndexForDate(row.date);
+            return parsed && weekday !== null
+              ? {
+                  ...row,
+                  parsed,
+                  weekday,
+                }
+              : null;
+          })
+          .filter(Boolean);
+        if (!datedRows.length) return null;
+
+        const oneDayMs = 24 * 60 * 60 * 1000;
+        const first = datedRows[0].parsed;
+        const firstWeekStart = new Date(first.getTime());
+        firstWeekStart.setUTCDate(firstWeekStart.getUTCDate() - datedRows[0].weekday);
+        const firstWeekStartMs = firstWeekStart.getTime();
+        const values = datedRows.map((row) => row.price);
+        const cells = datedRows.map((row) => ({
+          ...row,
+          week: Math.floor((row.parsed.getTime() - firstWeekStartMs) / (7 * oneDayMs)),
+        }));
+
+        return {
+          cells,
+          columns: Math.max(...cells.map((cell) => cell.week)) + 1,
+          firstWeekStart,
+          min: Math.min(...values),
+          max: Math.max(...values),
+        };
+      }
+
+      function setupHeatmapCanvas(canvas) {
+        const bounds = canvas.getBoundingClientRect();
+        const ratio = Math.max(window.devicePixelRatio || 1, 1);
+        const width = Math.max(320, Math.round(bounds.width));
+        const height = Math.max(320, Math.round(bounds.height));
+        canvas.width = Math.round(width * ratio);
+        canvas.height = Math.round(height * ratio);
+        const ctx = canvas.getContext("2d");
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        ctx.clearRect(0, 0, width, height);
+        return { ctx, width, height };
+      }
+
+      function drawHeatmapCanvas(canvas, rows) {
+        const layout = buildHeatmapLayout(rows);
+        const { ctx, width, height } = setupHeatmapCanvas(canvas);
+        const theme = currentChartTheme();
+        const margin = {
+          top: 34,
+          right: 22,
+          bottom: 72,
+          left: 48,
+        };
+        const plotWidth = width - margin.left - margin.right;
+        const plotHeight = height - margin.top - margin.bottom;
+
+        ctx.font = "12px Manrope, system-ui, sans-serif";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = theme.axisLabel;
+
+        if (!layout || plotWidth <= 0 || plotHeight <= 0) {
+          ctx.textAlign = "center";
+          ctx.fillText("Keine Heatmap-Daten verfügbar.", width / 2, height / 2);
+          return null;
+        }
+
+        const cellWidth = plotWidth / layout.columns;
+        const cellHeight = plotHeight / HEATMAP_WEEKDAY_LABELS.length;
+        const cellGap = Math.max(1, Math.min(3, cellWidth * 0.08, cellHeight * 0.08));
+        const cellsByPosition = new Map();
+
+        ctx.textAlign = "right";
+        HEATMAP_WEEKDAY_LABELS.forEach((label, index) => {
+          const y = margin.top + index * cellHeight + cellHeight / 2;
+          ctx.fillStyle = theme.axisLabel;
+          ctx.fillText(label, margin.left - 12, y);
+        });
+
+        ctx.strokeStyle = theme.grid;
+        ctx.lineWidth = 1;
+        for (let row = 0; row <= HEATMAP_WEEKDAY_LABELS.length; row += 1) {
+          const y = margin.top + row * cellHeight;
+          ctx.beginPath();
+          ctx.moveTo(margin.left, y);
+          ctx.lineTo(width - margin.right, y);
+          ctx.stroke();
+        }
+
+        layout.cells.forEach((cell) => {
+          const x = margin.left + cell.week * cellWidth;
+          const y = margin.top + cell.weekday * cellHeight;
+          const fill = heatmapColor(cell.price, layout.min, layout.max);
+          const rect = {
+            x: x + cellGap / 2,
+            y: y + cellGap / 2,
+            width: Math.max(1, cellWidth - cellGap),
+            height: Math.max(1, cellHeight - cellGap),
+          };
+          ctx.fillStyle = fill;
+          ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+          cellsByPosition.set(`${cell.week}:${cell.weekday}`, { ...cell, rect });
+
+          if (cellWidth >= 46 && cellHeight >= 24) {
+            ctx.fillStyle = textColorForFill(fill);
+            ctx.textAlign = "center";
+            ctx.font = "600 11px Manrope, system-ui, sans-serif";
+            ctx.fillText(
+              formatFuelPrice(cell.price),
+              rect.x + rect.width / 2,
+              rect.y + rect.height / 2,
+            );
+            ctx.font = "12px Manrope, system-ui, sans-serif";
+          }
+        });
+
+        const labelEvery = Math.max(1, Math.ceil(layout.columns / 8));
+        ctx.fillStyle = theme.axisLabel;
+        ctx.textAlign = "center";
+        for (let week = 0; week < layout.columns; week += 1) {
+          if (week % labelEvery !== 0 && week !== layout.columns - 1) continue;
+          const labelDate = new Date(layout.firstWeekStart.getTime());
+          labelDate.setUTCDate(labelDate.getUTCDate() + week * 7);
+          const label = formatHistoryTick(labelDate.toISOString().slice(0, 10));
+          const x = margin.left + week * cellWidth + cellWidth / 2;
+          ctx.fillText(label, x, margin.top + plotHeight + 18);
+        }
+
+        const legendWidth = Math.min(280, Math.max(160, plotWidth * 0.42));
+        const legendHeight = 10;
+        const legendX = margin.left;
+        const legendY = height - 34;
+        const gradient = ctx.createLinearGradient(legendX, 0, legendX + legendWidth, 0);
+        gradient.addColorStop(0, HEATMAP_LOW_COLOR);
+        gradient.addColorStop(0.5, HEATMAP_MID_COLOR);
+        gradient.addColorStop(1, HEATMAP_HIGH_COLOR);
+        ctx.fillStyle = gradient;
+        ctx.fillRect(legendX, legendY, legendWidth, legendHeight);
+        ctx.strokeStyle = theme.border;
+        ctx.strokeRect(legendX, legendY, legendWidth, legendHeight);
+        ctx.fillStyle = theme.axisLabel;
+        ctx.textAlign = "left";
+        ctx.fillText(`${formatFuelPrice(layout.min)} EUR/l`, legendX, legendY + 26);
+        ctx.textAlign = "right";
+        ctx.fillText(
+          `${formatFuelPrice(layout.max)} EUR/l`,
+          legendX + legendWidth,
+          legendY + 26,
+        );
+
+        return {
+          ...layout,
+          margin,
+          plotWidth,
+          plotHeight,
+          cellWidth,
+          cellHeight,
+          cellsByPosition,
+        };
+      }
+
+      function heatmapCellAt(layout, x, y) {
+        if (!layout) return null;
+        const week = Math.floor((x - layout.margin.left) / layout.cellWidth);
+        const weekday = Math.floor((y - layout.margin.top) / layout.cellHeight);
+        return layout.cellsByPosition.get(`${week}:${weekday}`) || null;
+      }
+
+      function renderHeatmapChart(rows) {
+        const canvas = document.getElementById("chart");
+        if (chartInstance) chartInstance.destroy();
+        canvas.classList.add("heatmap-canvas");
+        let layout = drawHeatmapCanvas(canvas, rows);
+
+        const handleMove = (event) => {
+          const bounds = canvas.getBoundingClientRect();
+          const cell = heatmapCellAt(
+            layout,
+            event.clientX - bounds.left,
+            event.clientY - bounds.top,
+          );
+          canvas.style.cursor = cell ? "pointer" : "default";
+          canvas.title = cell
+            ? `${HEATMAP_WEEKDAY_FULL_LABELS[cell.weekday]}, ${formatHistoryDay(
+                cell.date,
+              )}: ${formatFuelPrice(cell.price)} EUR/l`
+            : "";
+        };
+        const handleLeave = () => {
+          canvas.style.cursor = "default";
+          canvas.title = "";
+        };
+        canvas.addEventListener("mousemove", handleMove);
+        canvas.addEventListener("mouseleave", handleLeave);
+
+        chartInstance = {
+          options: {},
+          destroy() {
+            canvas.removeEventListener("mousemove", handleMove);
+            canvas.removeEventListener("mouseleave", handleLeave);
+            canvas.classList.remove("heatmap-canvas");
+            canvas.style.cursor = "default";
+            canvas.title = "";
+            const ctx = canvas.getContext("2d");
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+          },
+          update() {
+            layout = drawHeatmapCanvas(canvas, rows);
+          },
+        };
       }
 
       function renderNoonHistoryChart(rows) {
@@ -946,6 +1251,17 @@
         renderNoonHistoryChart(rows);
       }
 
+      async function loadHeatmapChart() {
+        const historyUrl = `${DATA_BASE}${stationPath(stationId)}/${fuel}/history.csv`;
+        const rows = normalizeHistoryRows(await fetchCsv(historyUrl));
+        if (!rows.length) {
+          throw new Error("Heatmap history unavailable");
+        }
+        document.getElementById("chart-sub").textContent =
+          buildHeatmapSubtitle(rows);
+        renderHeatmapChart(rows);
+      }
+
       async function loadProfileChart() {
         const statsUrl = `${DATA_BASE}${stationPath(stationId)}/${fuel}.json`;
         const stats = await fetchJson(statsUrl);
@@ -973,6 +1289,17 @@
 
       async function loadChart() {
         if (!stationId) return;
+
+        if (activeView === "heatmap") {
+          try {
+            await loadHeatmapChart();
+            return;
+          } catch (_error) {
+            activeView = "profile";
+            setButtonState();
+            updateViewInUrl();
+          }
+        }
 
         // Wait for Chart.js to be available (deferred loading)
         const waitForChart = () =>
@@ -1010,6 +1337,12 @@
 
       DARK_MODE_MEDIA_QUERY.addEventListener?.("change", () => {
         refreshChartTheme();
+      });
+
+      window.addEventListener("resize", () => {
+        if (activeView === "heatmap" && chartInstance?.update) {
+          window.requestAnimationFrame(() => chartInstance?.update());
+        }
       });
     </script>
     <script src="app-install-promo.js?v=20260409-app-promo-v12"></script>
