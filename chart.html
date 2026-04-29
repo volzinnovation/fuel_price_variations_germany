@@ -50,9 +50,35 @@
             >Zur Tankstelle</a
           >
         </div>
+        <div class="heatmap-controls" id="heatmap-controls" hidden>
+          <label>
+            <span>Standort</span>
+            <select id="location-select">
+              <option value="">Standort wählen</option>
+            </select>
+          </label>
+          <label>
+            <span>Tankstelle</span>
+            <select id="station-select" disabled>
+              <option value="">Erst Standort wählen</option>
+            </select>
+          </label>
+        </div>
         <h2 class="chart-title" id="chart-title">Lade Chart...</h2>
         <canvas id="chart"></canvas>
         <p class="chart-sub" id="chart-sub"></p>
+        <div class="heatmap-grid" id="heatmap-grid" hidden>
+          <article class="heatmap-panel" id="location-heatmap-panel" hidden>
+            <h3 id="location-heatmap-title">Standort-Heatmap</h3>
+            <canvas id="location-heatmap"></canvas>
+            <p class="chart-sub" id="location-heatmap-sub"></p>
+          </article>
+          <article class="heatmap-panel" id="station-heatmap-panel" hidden>
+            <h3 id="station-heatmap-title">Tankstellen-Heatmap</h3>
+            <canvas id="station-heatmap"></canvas>
+            <p class="chart-sub" id="station-heatmap-sub"></p>
+          </article>
+        </div>
       </section>
     </main>
 
@@ -110,6 +136,11 @@
       const DATA_BASE = "data2/";
       const HISTORY_START = "2026-04-01";
       let chartInstance = null;
+      let heatmapInstances = [];
+      let locationHeatmapInstance = null;
+      let stationHeatmapInstance = null;
+      let heatmapSummary = null;
+      let stationCatalog = null;
       const requestedView = params.get("view");
       let activeView =
         requestedView === "profile" || requestedView === "heatmap"
@@ -336,6 +367,24 @@
       const historyButton = document.getElementById("history-view");
       const heatmapButton = document.getElementById("heatmap-view");
       const profileButton = document.getElementById("profile-view");
+      const heatmapControlsEl = document.getElementById("heatmap-controls");
+      const locationSelectEl = document.getElementById("location-select");
+      const stationSelectEl = document.getElementById("station-select");
+      const heatmapGridEl = document.getElementById("heatmap-grid");
+      const locationHeatmapPanelEl = document.getElementById(
+        "location-heatmap-panel",
+      );
+      const stationHeatmapPanelEl = document.getElementById(
+        "station-heatmap-panel",
+      );
+      const locationHeatmapTitleEl = document.getElementById(
+        "location-heatmap-title",
+      );
+      const stationHeatmapTitleEl = document.getElementById(
+        "station-heatmap-title",
+      );
+      const locationHeatmapSubEl = document.getElementById("location-heatmap-sub");
+      const stationHeatmapSubEl = document.getElementById("station-heatmap-sub");
 
       const title = `${name} · ${fuel.toUpperCase()}`;
       document.getElementById("chart-title").textContent = title;
@@ -357,6 +406,30 @@
         const response = await fetch(url);
         if (!response.ok) throw new Error(`Request failed: ${response.status}`);
         return parseCsv(await response.text());
+      }
+
+      async function loadStationCatalog() {
+        if (stationCatalog) return stationCatalog;
+        const rows = await fetchJson("data/stations.json");
+        stationCatalog = new Map(
+          rows
+            .map((row) => {
+              const id = String(row?.uuid || "").trim();
+              if (!id) return null;
+              return [
+                id,
+                {
+                  id,
+                  name: String(row?.name || "Tankstelle").trim(),
+                  brand: String(row?.brand || "").trim(),
+                  city: String(row?.city || "").trim(),
+                  street: String(row?.street || "").trim(),
+                },
+              ];
+            })
+            .filter(Boolean),
+        );
+        return stationCatalog;
       }
 
       function parseCsv(text) {
@@ -384,6 +457,14 @@
         historyButton.classList.toggle("primary", activeView === "history");
         heatmapButton.classList.toggle("primary", activeView === "heatmap");
         profileButton.classList.toggle("primary", activeView === "profile");
+        const isHeatmap = activeView === "heatmap";
+        heatmapControlsEl.hidden = !isHeatmap;
+        heatmapGridEl.hidden = !isHeatmap;
+        if (!isHeatmap) {
+          locationHeatmapPanelEl.hidden = true;
+          stationHeatmapPanelEl.hidden = true;
+          destroyHeatmapInstances();
+        }
       }
 
       function updateViewInUrl() {
@@ -402,6 +483,16 @@
       historyButton.addEventListener("click", () => switchView("history"));
       heatmapButton.addEventListener("click", () => switchView("heatmap"));
       profileButton.addEventListener("click", () => switchView("profile"));
+      locationSelectEl.addEventListener("change", () => {
+        handleLocationChange().catch(() => {
+          locationHeatmapSubEl.textContent = "Standort-Heatmap konnte nicht geladen werden.";
+        });
+      });
+      stationSelectEl.addEventListener("change", () => {
+        handleStationChange().catch(() => {
+          stationHeatmapSubEl.textContent = "Tankstellen-Heatmap konnte nicht geladen werden.";
+        });
+      });
       setButtonState();
       updateViewInUrl();
 
@@ -550,14 +641,21 @@
           .sort((left, right) => left.date.localeCompare(right.date));
       }
 
-      function buildHeatmapSubtitle(rows) {
+      function normalizeHeatmapRows(rows) {
+        return normalizeHistoryRows(rows).map((row) => ({
+          ...row,
+          count: Number(row.count || 1),
+        }));
+      }
+
+      function buildHeatmapSubtitle(rows, label = "Heatmap der Mittagspreise") {
         if (!rows.length) {
           return `${fuel.toUpperCase()} · Keine Heatmap-Daten ab ${formatHistoryDay(HISTORY_START)} verfügbar.`;
         }
         const first = rows[0].date;
         const last = rows[rows.length - 1].date;
         return [
-          `${fuel.toUpperCase()} · Heatmap der Mittagspreise`,
+          `${fuel.toUpperCase()} · ${label}`,
           `${rows.length} Tage`,
           `${formatHistoryDay(first)} - ${formatHistoryDay(last)}`,
           "Zeilen = Wochentage",
@@ -790,9 +888,16 @@
         return layout.cellsByPosition.get(`${week}:${weekday}`) || null;
       }
 
-      function renderHeatmapChart(rows) {
-        const canvas = document.getElementById("chart");
-        if (chartInstance) chartInstance.destroy();
+      function destroyHeatmapInstances() {
+        locationHeatmapInstance?.destroy?.();
+        stationHeatmapInstance?.destroy?.();
+        locationHeatmapInstance = null;
+        stationHeatmapInstance = null;
+        heatmapInstances.forEach((instance) => instance?.destroy?.());
+        heatmapInstances = [];
+      }
+
+      function createHeatmapRenderer(canvas, rows) {
         canvas.classList.add("heatmap-canvas");
         let layout = drawHeatmapCanvas(canvas, rows);
 
@@ -817,7 +922,7 @@
         canvas.addEventListener("mousemove", handleMove);
         canvas.addEventListener("mouseleave", handleLeave);
 
-        chartInstance = {
+        return {
           options: {},
           destroy() {
             canvas.removeEventListener("mousemove", handleMove);
@@ -833,6 +938,143 @@
             layout = drawHeatmapCanvas(canvas, rows);
           },
         };
+      }
+
+      function renderHeatmapChart(rows) {
+        const canvas = document.getElementById("chart");
+        if (chartInstance) chartInstance.destroy();
+        chartInstance = createHeatmapRenderer(canvas, rows);
+      }
+
+      function stationDisplayName(stationId) {
+        const station = stationCatalog?.get(stationId);
+        if (!station) return stationId;
+        const parts = [
+          station.brand && station.brand !== station.name ? station.brand : "",
+          station.name,
+          station.street,
+        ].filter(Boolean);
+        return parts.join(" · ");
+      }
+
+      function resetStationSelect(text = "Erst Standort wählen") {
+        stationSelectEl.innerHTML = "";
+        const option = document.createElement("option");
+        option.value = "";
+        option.textContent = text;
+        stationSelectEl.append(option);
+        stationSelectEl.disabled = true;
+      }
+
+      function populateLocationSelect(summary) {
+        const previousValue = locationSelectEl.value;
+        locationSelectEl.innerHTML = "";
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = "Standort wählen";
+        locationSelectEl.append(placeholder);
+
+        (summary.locations || []).forEach((location) => {
+          const option = document.createElement("option");
+          option.value = location.key;
+          option.textContent = `${location.label} (${location.station_count})`;
+          locationSelectEl.append(option);
+        });
+
+        if (
+          previousValue &&
+          Array.from(locationSelectEl.options).some((option) => option.value === previousValue)
+        ) {
+          locationSelectEl.value = previousValue;
+        }
+      }
+
+      function selectedLocationPayload() {
+        const key = locationSelectEl.value;
+        if (!key || !heatmapSummary) return null;
+        return (heatmapSummary.locations || []).find((location) => location.key === key) || null;
+      }
+
+      async function populateStationSelect(location) {
+        resetStationSelect("Tankstelle wählen");
+        if (!location) return;
+        await loadStationCatalog();
+        const stations = (location.station_ids || [])
+          .map((id) => ({
+            id,
+            label: stationDisplayName(id),
+          }))
+          .sort((left, right) => left.label.localeCompare(right.label, "de"));
+
+        stationSelectEl.innerHTML = "";
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = "Tankstelle wählen";
+        stationSelectEl.append(placeholder);
+        stations.forEach((station) => {
+          const option = document.createElement("option");
+          option.value = station.id;
+          option.textContent = station.label;
+          stationSelectEl.append(option);
+        });
+        stationSelectEl.disabled = stations.length === 0;
+      }
+
+      function hideLocationHeatmap() {
+        locationHeatmapInstance?.destroy?.();
+        locationHeatmapInstance = null;
+        locationHeatmapPanelEl.hidden = true;
+        locationHeatmapSubEl.textContent = "";
+      }
+
+      function hideStationHeatmap() {
+        stationHeatmapInstance?.destroy?.();
+        stationHeatmapInstance = null;
+        stationHeatmapPanelEl.hidden = true;
+        stationHeatmapSubEl.textContent = "";
+      }
+
+      function renderLocationHeatmap(location) {
+        hideLocationHeatmap();
+        if (!location) return;
+        const rows = normalizeHeatmapRows(location.rows || []);
+        if (!rows.length) return;
+        locationHeatmapTitleEl.textContent = `Standort: ${location.label}`;
+        locationHeatmapSubEl.textContent = buildHeatmapSubtitle(
+          rows,
+          `Standort-Median · ${location.station_count} Tankstellen`,
+        );
+        locationHeatmapPanelEl.hidden = false;
+        locationHeatmapInstance = createHeatmapRenderer(
+          document.getElementById("location-heatmap"),
+          rows,
+        );
+      }
+
+      async function renderStationHeatmap(stationIdValue) {
+        hideStationHeatmap();
+        if (!stationIdValue) return;
+        const historyUrl = `${DATA_BASE}${stationPath(stationIdValue)}/${fuel}/history.csv`;
+        const rows = normalizeHistoryRows(await fetchCsv(historyUrl));
+        if (!rows.length) return;
+        stationHeatmapTitleEl.textContent = `Tankstelle: ${stationDisplayName(stationIdValue)}`;
+        stationHeatmapSubEl.textContent = buildHeatmapSubtitle(rows, "Einzelstation");
+        stationHeatmapPanelEl.hidden = false;
+        stationHeatmapInstance = createHeatmapRenderer(
+          document.getElementById("station-heatmap"),
+          rows,
+        );
+      }
+
+      async function handleLocationChange() {
+        hideStationHeatmap();
+        const location = selectedLocationPayload();
+        await populateStationSelect(location);
+        renderLocationHeatmap(location);
+      }
+
+      async function handleStationChange() {
+        await renderStationHeatmap(stationSelectEl.value);
       }
 
       function renderNoonHistoryChart(rows) {
@@ -1241,6 +1483,7 @@
       }
 
       async function loadHistoryChart() {
+        document.getElementById("chart-title").textContent = title;
         const historyUrl = `${DATA_BASE}${stationPath(stationId)}/${fuel}/history.csv`;
         const rows = normalizeHistoryRows(await fetchCsv(historyUrl));
         if (!rows.length) {
@@ -1252,17 +1495,31 @@
       }
 
       async function loadHeatmapChart() {
-        const historyUrl = `${DATA_BASE}${stationPath(stationId)}/${fuel}/history.csv`;
-        const rows = normalizeHistoryRows(await fetchCsv(historyUrl));
+        heatmapSummary = await fetchJson(`${DATA_BASE}heatmaps/${fuel}.json`);
+        populateLocationSelect(heatmapSummary);
+        resetStationSelect();
+        hideLocationHeatmap();
+        hideStationHeatmap();
+
+        const rows = normalizeHeatmapRows(heatmapSummary?.overall?.rows || []);
         if (!rows.length) {
           throw new Error("Heatmap history unavailable");
         }
+        document.getElementById("chart-title").textContent =
+          `Gesamtübersicht · ${fuel.toUpperCase()}`;
         document.getElementById("chart-sub").textContent =
-          buildHeatmapSubtitle(rows);
+          buildHeatmapSubtitle(rows, "Gesamtmarkt-Median");
         renderHeatmapChart(rows);
+
+        if (locationSelectEl.value) {
+          const location = selectedLocationPayload();
+          await populateStationSelect(location);
+          renderLocationHeatmap(location);
+        }
       }
 
       async function loadProfileChart() {
+        document.getElementById("chart-title").textContent = title;
         const statsUrl = `${DATA_BASE}${stationPath(stationId)}/${fuel}.json`;
         const stats = await fetchJson(statsUrl);
         if (Array.isArray(stats?.cycle_hourly) && stats.cycle_hourly.length) {
@@ -1341,7 +1598,11 @@
 
       window.addEventListener("resize", () => {
         if (activeView === "heatmap" && chartInstance?.update) {
-          window.requestAnimationFrame(() => chartInstance?.update());
+          window.requestAnimationFrame(() => {
+            chartInstance?.update();
+            locationHeatmapInstance?.update?.();
+            stationHeatmapInstance?.update?.();
+          });
         }
       });
     </script>

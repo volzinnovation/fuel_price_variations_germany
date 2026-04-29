@@ -32,6 +32,7 @@ try:
         build_noon_reference_histograms,
         select_noon_reference_from_series,
     )
+    from .generate_heatmap_summary import generate_heatmap_summary
     from .time_utils import parse_timestamps_to_utc
 except ImportError:  # pragma: no cover
     from noon_outputs import (
@@ -46,6 +47,7 @@ except ImportError:  # pragma: no cover
         build_noon_reference_histograms,
         select_noon_reference_from_series,
     )
+    from generate_heatmap_summary import generate_heatmap_summary
     from time_utils import parse_timestamps_to_utc
 
 TZ = pytz.timezone("Europe/Berlin")
@@ -1362,6 +1364,7 @@ def generate(
     )
     mgmt_path.parent.mkdir(parents=True, exist_ok=True)
     mgmt_path.write_text(json.dumps(mgmt_summary, ensure_ascii=False), encoding="utf-8")
+    generate_heatmap_summary(output_root, fuels=fuels)
 
 
 def main() -> None:
