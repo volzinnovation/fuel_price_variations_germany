@@ -641,11 +641,32 @@
           .sort((left, right) => left.date.localeCompare(right.date));
       }
 
-      function normalizeHeatmapRows(rows) {
-        return normalizeHistoryRows(rows).map((row) => ({
-          ...row,
-          count: Number(row.count || 1),
-        }));
+      function normalizeHeatmapRows(source, fallbackDates = []) {
+        if (Array.isArray(source)) {
+          return normalizeHistoryRows(source).map((row) => ({
+            ...row,
+            count: Number(row.count || 1),
+          }));
+        }
+        if (Array.isArray(source?.rows)) {
+          return normalizeHeatmapRows(source.rows);
+        }
+        const dates = Array.isArray(source?.dates) ? source.dates : fallbackDates;
+        const prices = Array.isArray(source?.prices) ? source.prices : [];
+        const counts = Array.isArray(source?.counts) ? source.counts : [];
+        return dates
+          .map((dateValue, index) => ({
+            date: String(dateValue || "").trim(),
+            price: Number(prices[index]),
+            count: Number(counts[index] || 1),
+          }))
+          .filter(
+            (row) =>
+              row.date &&
+              row.date >= HISTORY_START &&
+              Number.isFinite(row.price),
+          )
+          .sort((left, right) => left.date.localeCompare(right.date));
       }
 
       function buildHeatmapSubtitle(rows, label = "Heatmap der Mittagspreise") {
@@ -1037,7 +1058,7 @@
       function renderLocationHeatmap(location) {
         hideLocationHeatmap();
         if (!location) return;
-        const rows = normalizeHeatmapRows(location.rows || []);
+        const rows = normalizeHeatmapRows(location, heatmapSummary?.dates || []);
         if (!rows.length) return;
         locationHeatmapTitleEl.textContent = `Standort: ${location.label}`;
         locationHeatmapSubEl.textContent = buildHeatmapSubtitle(
@@ -1501,7 +1522,10 @@
         hideLocationHeatmap();
         hideStationHeatmap();
 
-        const rows = normalizeHeatmapRows(heatmapSummary?.overall?.rows || []);
+        const rows = normalizeHeatmapRows(
+          heatmapSummary?.overall || [],
+          heatmapSummary?.dates || [],
+        );
         if (!rows.length) {
           throw new Error("Heatmap history unavailable");
         }

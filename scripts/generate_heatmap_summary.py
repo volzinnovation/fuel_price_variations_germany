@@ -75,6 +75,23 @@ def summarize_prices(values_by_date: dict[str, list[float]]) -> list[dict[str, o
     return rows
 
 
+def summarize_price_series(
+    values_by_date: dict[str, list[float]],
+    dates: list[str],
+) -> dict[str, list[float | int | None]]:
+    prices: list[float | None] = []
+    counts: list[int] = []
+    for date_label in dates:
+        values = values_by_date.get(date_label, [])
+        if values:
+            prices.append(round(float(statistics.median(values)), 3))
+            counts.append(len(values))
+        else:
+            prices.append(None)
+            counts.append(0)
+    return {"prices": prices, "counts": counts}
+
+
 def parse_price(row: dict[str, str], fuel: str) -> float | None:
     try:
         price = float(row.get(fuel) or "")
@@ -125,10 +142,10 @@ def generate_heatmap_summary(
     written: list[Path] = []
 
     for fuel in fuels:
+        dates = sorted(overall_values[fuel])
         locations: list[dict[str, object]] = []
         for location_key, values_by_date in location_values[fuel].items():
-            rows = summarize_prices(values_by_date)
-            if not rows:
+            if not any(values_by_date.values()):
                 continue
             station_ids = sorted(stations_by_location[fuel].get(location_key, set()))
             locations.append(
@@ -137,7 +154,7 @@ def generate_heatmap_summary(
                     "label": location_labels.get(location_key, location_key),
                     "station_count": len(station_ids),
                     "station_ids": station_ids,
-                    "rows": rows,
+                    **summarize_price_series(values_by_date, dates),
                 }
             )
         locations.sort(key=lambda item: (str(item["label"]).casefold(), str(item["key"])))
@@ -145,9 +162,10 @@ def generate_heatmap_summary(
             "fuel": fuel,
             "metric": "median",
             "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "dates": dates,
             "overall": {
                 "label": "Gesamtuebersicht",
-                "rows": summarize_prices(overall_values[fuel]),
+                **summarize_price_series(overall_values[fuel], dates),
             },
             "locations": locations,
         }
