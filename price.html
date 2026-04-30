@@ -52,10 +52,11 @@
             <strong id="net-price">-</strong>
           </div>
           <div class="breakdown-operator">−</div>
-        <div class="breakdown-step">
+          <div class="breakdown-step">
             <span>Steuern und Abgaben inkl. CO2</span>
             <strong id="other-taxes-price">-</strong>
           </div>
+          <div class="breakdown-rebate-note" id="rebate-note" hidden></div>
           <div class="breakdown-operator">=</div>
           <div class="breakdown-step breakdown-step-result" id="sale-step">
             <span>Verkaufspreis</span>
@@ -108,16 +109,17 @@
       </a>
     </nav>
 
-    <script src="fuel-breakdown.js"></script>
+    <script src="fuel-breakdown.js?v=20260501-energy-tax-rebate"></script>
     <script>
       const params = new URLSearchParams(window.location.search);
       const fuel = (params.get("fuel") || "diesel").toLowerCase();
       const fuelConfig = TankzeitFuelBreakdown.fuelConfig(fuel);
       const price = TankzeitFuelBreakdown.toNumber(params.get("price"));
+      const priceDate = params.get("date") || new Date();
       const stationId = params.get("id") || "";
       const stationName = params.get("name") || "Tankstelle";
       const stationBrand = params.get("brand") || "";
-      const calculation = TankzeitFuelBreakdown.calculate(fuel, price);
+      const calculation = TankzeitFuelBreakdown.calculate(fuel, price, priceDate);
 
       function safeInternalHref(value, fallback) {
         const candidate = String(value || "").trim();
@@ -235,6 +237,15 @@
           TankzeitFuelBreakdown.formatEuroPerLiter(otherTaxes);
         document.getElementById("sale-price").textContent =
           TankzeitFuelBreakdown.formatEuroPerLiter(calculation.market);
+        const rebateNoteEl = document.getElementById("rebate-note");
+        if (rebateNoteEl && calculation.temporaryEnergyTaxRebate) {
+          const rebate = calculation.temporaryEnergyTaxRebate;
+          rebateNoteEl.hidden = false;
+          rebateNoteEl.innerHTML = `
+            <span>Tankrabatt ${formatShortDate(rebate.startDate)}-${formatShortDate(rebate.endDate)}</span>
+            <strong>−${TankzeitFuelBreakdown.formatEuroPerLiter(rebate.reductionPerLiter)}</strong>
+          `;
+        }
         void renderBrentSupplement(calculation.market);
       }
 

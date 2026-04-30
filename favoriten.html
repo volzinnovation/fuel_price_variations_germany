@@ -101,7 +101,7 @@
     </nav>
 
     <script src="app-stats.js"></script>
-    <script src="fuel-breakdown.js"></script>
+    <script src="fuel-breakdown.js?v=20260501-energy-tax-rebate"></script>
     <script>
       const DATA_BASE = "data2/";
       const TANKERKOENIG_APOLOGY =
@@ -144,13 +144,14 @@
         return fav.find((entry) => entry.id === id) || {};
       }
 
-      function breakdownUrl(station, fuel, price) {
+      function breakdownUrl(station, fuel, price, date) {
         return TankzeitFuelBreakdown.buildBreakdownUrl({
           id: station.id,
           fuel,
           name: station.name || "Tankstelle",
           brand: station.brand || "",
           price,
+          date,
           lat: station.lat || "",
           lng: station.lng || "",
           backPath: "favoriten.html",
@@ -279,11 +280,12 @@
               diesel.textContent = "-";
               return;
             }
+            const priceDate = new Date().toISOString();
             e10.innerHTML = `<a class="price-link" href="${hrefForHtml(
-              breakdownUrl(station, "e10", entry.e10),
+              breakdownUrl(station, "e10", entry.e10, priceDate),
             )}">${escapeHtml(String(entry.e10))} €/l</a>`;
             diesel.innerHTML = `<a class="price-link" href="${hrefForHtml(
-              breakdownUrl(station, "diesel", entry.diesel),
+              breakdownUrl(station, "diesel", entry.diesel, priceDate),
             )}">${escapeHtml(String(entry.diesel))} €/l</a>`;
           });
           clearStatus();

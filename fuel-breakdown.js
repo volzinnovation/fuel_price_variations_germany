@@ -3,12 +3,24 @@
   const CO2_PRICE_MAX_EUR_PER_TON = 65;
   const CO2_PRICE_FLOOR_EUR_PER_TON = 55;
   const EBV_EUR_PER_TON = 3.56;
+  const TEMPORARY_ENERGY_TAX_REBATE = {
+    startDate: "2026-05-01",
+    endDate: "2026-06-30",
+    reductionPerLiter: 0.1404,
+  };
+  const GERMANY_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Europe/Berlin",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
 
   const FUELS = {
     diesel: {
       key: "diesel",
       label: "Diesel",
       energyTaxPerLiter: 0.4704,
+      temporaryEnergyTaxPerLiter: 0.33,
       co2KgPerLiter: 2.627,
       ebvDensityTonsPerM3: 0.845,
       defaultBackPath: "index.html",
@@ -18,6 +30,7 @@
       key: "e10",
       label: "E10",
       energyTaxPerLiter: 0.6545,
+      temporaryEnergyTaxPerLiter: 0.5141,
       co2KgPerLiter: 2.309,
       ebvDensityTonsPerM3: 0.755,
       defaultBackPath: "e10.html",
@@ -27,6 +40,7 @@
       key: "e5",
       label: "E5",
       energyTaxPerLiter: 0.6545,
+      temporaryEnergyTaxPerLiter: 0.5141,
       co2KgPerLiter: 2.330,
       ebvDensityTonsPerM3: 0.755,
       defaultBackPath: "e10.html",
@@ -74,12 +88,51 @@
     return (EBV_EUR_PER_TON * config.ebvDensityTonsPerM3) / 1000;
   }
 
+  function dateKeyForGermany(value = new Date()) {
+    if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
+      return value.trim();
+    }
+
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+
+    const parts = Object.fromEntries(
+      GERMANY_DATE_FORMATTER.formatToParts(date).map((part) => [
+        part.type,
+        part.value,
+      ]),
+    );
+    return `${parts.year}-${parts.month}-${parts.day}`;
+  }
+
+  function isTemporaryEnergyTaxRebateDate(value = new Date()) {
+    const dateKey = dateKeyForGermany(value);
+    if (!dateKey) return false;
+    return (
+      dateKey >= TEMPORARY_ENERGY_TAX_REBATE.startDate &&
+      dateKey <= TEMPORARY_ENERGY_TAX_REBATE.endDate
+    );
+  }
+
+  function energyTaxPerLiter(config, value = new Date()) {
+    return isTemporaryEnergyTaxRebateDate(value)
+      ? config.temporaryEnergyTaxPerLiter
+      : config.energyTaxPerLiter;
+  }
+
+  function serializeDateParam(value) {
+    if (!value) return "";
+    if (value instanceof Date) return value.toISOString();
+    return String(value);
+  }
+
   function buildBreakdownUrl({
     id,
     fuel,
     name,
     brand,
     price,
+    date,
     lat,
     lng,
     backPath,
@@ -95,6 +148,8 @@
     if (price !== undefined && price !== null && price !== "") {
       params.set("price", String(price));
     }
+    const dateParam = serializeDateParam(date);
+    if (dateParam) params.set("date", dateParam);
     if (lat !== undefined && lat !== null && lat !== "") {
       params.set("lat", String(lat));
     }
@@ -107,13 +162,14 @@
     return `price.html?${params.toString()}`;
   }
 
-  function calculate(fuel, grossPrice) {
+  function calculate(fuel, grossPrice, priceDate = new Date()) {
     const config = fuelConfig(fuel);
     const gross = toNumber(grossPrice);
     if (gross === null) return null;
 
     const vat = gross - gross / (1 + VAT_RATE);
-    const energyTax = config.energyTaxPerLiter;
+    const rebateApplies = isTemporaryEnergyTaxRebateDate(priceDate);
+    const energyTax = energyTaxPerLiter(config, priceDate);
     const co2 = (config.co2KgPerLiter * CO2_PRICE_MAX_EUR_PER_TON) / 1000;
     const ebv = ebvPerLiter(config);
     const regulated = energyTax + co2 + ebv + vat;
@@ -131,8 +187,12 @@
       },
       {
         key: "energy-tax",
-        label: "Energiesteuer",
-        detail: "Fixer Steuersatz je Liter nach Energiesteuergesetz.",
+        label: rebateApplies
+          ? "Energiesteuer mit Tankrabatt"
+          : "Energiesteuer",
+        detail: rebateApplies
+          ? "Temporär reduzierter Steuersatz vom 01.05. bis 30.06.2026."
+          : "Fixer Steuersatz je Liter nach Energiesteuergesetz.",
         value: energyTax,
       },
       {
@@ -161,7 +221,9 @@
     return {
       fuel: config,
       grossPrice: gross,
+      priceDate: dateKeyForGermany(priceDate),
       vat,
+      energyTax,
       regulated,
       market,
       components,
@@ -172,6 +234,13 @@
       co2GrossSpread: co2GrossCeiling - co2GrossFloor,
       stateShare: gross > 0 ? (regulated / gross) * 100 : 0,
       marketShare: gross > 0 ? (market / gross) * 100 : 0,
+      temporaryEnergyTaxRebate: rebateApplies
+        ? {
+            ...TEMPORARY_ENERGY_TAX_REBATE,
+            grossReductionPerLiter:
+              TEMPORARY_ENERGY_TAX_REBATE.reductionPerLiter * (1 + VAT_RATE),
+          }
+        : null,
     };
   }
 
@@ -179,11 +248,15 @@
     VAT_RATE,
     CO2_PRICE_MAX_EUR_PER_TON,
     CO2_PRICE_FLOOR_EUR_PER_TON,
+    TEMPORARY_ENERGY_TAX_REBATE,
     toNumber,
     fuelConfig,
     formatEuroPerLiter,
     formatCentPerLiter,
     formatPercent,
+    dateKeyForGermany,
+    isTemporaryEnergyTaxRebateDate,
+    energyTaxPerLiter,
     buildBreakdownUrl,
     calculate,
   };
