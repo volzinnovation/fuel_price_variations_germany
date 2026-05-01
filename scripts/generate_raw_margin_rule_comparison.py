@@ -446,14 +446,29 @@ def render_chart(rows: list[DayResult], output_path: Path) -> None:
     fig.patch.set_facecolor("#f5f7fa")
     ax.set_facecolor("white")
 
+    ax.text(
+        0.5,
+        0.52,
+        "tankzeit.de",
+        transform=ax.transAxes,
+        ha="center",
+        va="center",
+        fontsize=126,
+        fontweight="bold",
+        color="#94a3b8",
+        alpha=0.13,
+        zorder=0,
+    )
+
     ax.plot(
         x_values,
         high_values,
-        color="#0f766e",
+        color="#dc2626",
         marker="o",
         markersize=3.8,
         linewidth=2.3,
         label="März: Tagesmaximum der Stundenmittel / April: 12:00-Anker",
+        zorder=3,
     )
     ax.plot(
         x_values,
@@ -463,6 +478,7 @@ def render_chart(rows: list[DayResult], output_path: Path) -> None:
         markersize=3.6,
         linewidth=2.3,
         label="März: Tagesminimum der Stundenmittel / April: 11:00-Mittel",
+        zorder=3,
     )
 
     cutover = date(2026, 4, 1)
@@ -487,7 +503,7 @@ def render_chart(rows: list[DayResult], output_path: Path) -> None:
     fig.text(
         0.06,
         0.052,
-        "Quelle: rohe Tankerkönig-Azure-Preisdaten; Berechnung: Bruttopreis minus MwSt., Energiesteuer, CO₂-Abgabe, EBV und täglichem Brent-Rohölpreis.",
+        "Quelle: rohe MTS-K Preisdaten; Berechnung: Bruttopreis minus MwSt., Energiesteuer, CO₂-Abgabe, EBV und täglichem Brent-Rohölpreis.",
         fontsize=9.2,
         color="#475569",
     )
