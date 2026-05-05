@@ -67,11 +67,13 @@
         <h2 class="chart-title" id="chart-title">Lade Chart...</h2>
         <canvas id="chart"></canvas>
         <p class="chart-sub" id="chart-sub"></p>
+        <div class="heatmap-detail" id="overall-heatmap-detail"></div>
         <div class="heatmap-grid" id="heatmap-grid" hidden>
           <article class="heatmap-panel" id="location-heatmap-panel" hidden>
             <h3 id="location-heatmap-title">Standort-Heatmap</h3>
             <canvas id="location-heatmap"></canvas>
             <p class="chart-sub" id="location-heatmap-sub"></p>
+            <div class="heatmap-detail" id="location-heatmap-detail"></div>
           </article>
           <article class="heatmap-panel" id="station-heatmap-panel" hidden>
             <h3 id="station-heatmap-title">Tankstellen-Heatmap</h3>
@@ -141,6 +143,10 @@
       let stationHeatmapInstance = null;
       let heatmapSummary = null;
       let stationCatalog = null;
+      let overallHeatmapRows = [];
+      let locationHeatmapRows = [];
+      let stationHeatmapRows = [];
+      const noonSnapshotCache = new Map();
       const requestedView = params.get("view");
       let activeView =
         requestedView === "profile" || requestedView === "heatmap"
@@ -174,6 +180,8 @@
         "Samstag",
         "Sonntag",
       ];
+      const HEATMAP_DETAIL_HINT =
+        "Hinweis: Klicke auf einen Tag in der Heatmap, um den detaillierten Preisvergleich der Tankstellen für diesen Tag einzublenden.";
 
       function currentChartTheme() {
         if (DARK_MODE_MEDIA_QUERY.matches) {
@@ -728,6 +736,34 @@
         return mixColor(HEATMAP_MID_COLOR, HEATMAP_HIGH_COLOR, (ratio - 0.5) / 0.5);
       }
 
+      function computeHeatmapColorDomain(rowSets) {
+        // One global price domain keeps the three heatmaps visually comparable.
+        const values = rowSets
+          .flat()
+          .map((row) => Number(row.price))
+          .filter(Number.isFinite);
+        if (!values.length) return null;
+        return {
+          min: Math.min(...values),
+          max: Math.max(...values),
+        };
+      }
+
+      function currentHeatmapColorDomain() {
+        return computeHeatmapColorDomain([
+          overallHeatmapRows,
+          locationHeatmapRows,
+          stationHeatmapRows,
+        ]);
+      }
+
+      function syncHeatmapColorDomains() {
+        const domain = currentHeatmapColorDomain();
+        chartInstance?.setColorDomain?.(domain);
+        locationHeatmapInstance?.setColorDomain?.(domain);
+        stationHeatmapInstance?.setColorDomain?.(domain);
+      }
+
       function textColorForFill(fill) {
         const match = String(fill).match(/\d+/g);
         if (!match || match.length < 3) return "#111827";
@@ -785,7 +821,7 @@
         return { ctx, width, height };
       }
 
-      function drawHeatmapCanvas(canvas, rows) {
+      function drawHeatmapCanvas(canvas, rows, colorDomain = null) {
         const layout = buildHeatmapLayout(rows);
         const { ctx, width, height } = setupHeatmapCanvas(canvas);
         const theme = currentChartTheme();
@@ -808,6 +844,10 @@
           return null;
         }
 
+        const domain = colorDomain || {
+          min: layout.min,
+          max: layout.max,
+        };
         const cellWidth = plotWidth / layout.columns;
         const cellHeight = plotHeight / HEATMAP_WEEKDAY_LABELS.length;
         const cellGap = Math.max(1, Math.min(3, cellWidth * 0.08, cellHeight * 0.08));
@@ -833,7 +873,7 @@
         layout.cells.forEach((cell) => {
           const x = margin.left + cell.week * cellWidth;
           const y = margin.top + cell.weekday * cellHeight;
-          const fill = heatmapColor(cell.price, layout.min, layout.max);
+          const fill = heatmapColor(cell.price, domain.min, domain.max);
           const rect = {
             x: x + cellGap / 2,
             y: y + cellGap / 2,
@@ -883,16 +923,17 @@
         ctx.strokeRect(legendX, legendY, legendWidth, legendHeight);
         ctx.fillStyle = theme.axisLabel;
         ctx.textAlign = "left";
-        ctx.fillText(`${formatFuelPrice(layout.min)} EUR/l`, legendX, legendY + 26);
+        ctx.fillText(`${formatFuelPrice(domain.min)} EUR/l`, legendX, legendY + 26);
         ctx.textAlign = "right";
         ctx.fillText(
-          `${formatFuelPrice(layout.max)} EUR/l`,
+          `${formatFuelPrice(domain.max)} EUR/l`,
           legendX + legendWidth,
           legendY + 26,
         );
 
         return {
           ...layout,
+          colorDomain: domain,
           margin,
           plotWidth,
           plotHeight,
@@ -914,13 +955,17 @@
         stationHeatmapInstance?.destroy?.();
         locationHeatmapInstance = null;
         stationHeatmapInstance = null;
+        overallHeatmapRows = [];
+        locationHeatmapRows = [];
+        stationHeatmapRows = [];
         heatmapInstances.forEach((instance) => instance?.destroy?.());
         heatmapInstances = [];
       }
 
-      function createHeatmapRenderer(canvas, rows) {
+      function createHeatmapRenderer(canvas, rows, colorDomain = null) {
         canvas.classList.add("heatmap-canvas");
-        let layout = drawHeatmapCanvas(canvas, rows);
+        let activeColorDomain = colorDomain;
+        let layout = drawHeatmapCanvas(canvas, rows, activeColorDomain);
 
         const handleMove = (event) => {
           const bounds = canvas.getBoundingClientRect();
@@ -956,7 +1001,11 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
           },
           update() {
-            layout = drawHeatmapCanvas(canvas, rows);
+            layout = drawHeatmapCanvas(canvas, rows, activeColorDomain);
+          },
+          setColorDomain(domain) {
+            activeColorDomain = domain;
+            layout = drawHeatmapCanvas(canvas, rows, activeColorDomain);
           },
         };
       }
@@ -964,7 +1013,9 @@
       function renderHeatmapChart(rows) {
         const canvas = document.getElementById("chart");
         if (chartInstance) chartInstance.destroy();
-        chartInstance = createHeatmapRenderer(canvas, rows);
+        overallHeatmapRows = rows;
+        chartInstance = createHeatmapRenderer(canvas, rows, currentHeatmapColorDomain());
+        syncHeatmapColorDomains();
       }
 
       function stationDisplayName(stationId) {
@@ -1044,15 +1095,19 @@
       function hideLocationHeatmap() {
         locationHeatmapInstance?.destroy?.();
         locationHeatmapInstance = null;
+        locationHeatmapRows = [];
         locationHeatmapPanelEl.hidden = true;
         locationHeatmapSubEl.textContent = "";
+        syncHeatmapColorDomains();
       }
 
       function hideStationHeatmap() {
         stationHeatmapInstance?.destroy?.();
         stationHeatmapInstance = null;
+        stationHeatmapRows = [];
         stationHeatmapPanelEl.hidden = true;
         stationHeatmapSubEl.textContent = "";
+        syncHeatmapColorDomains();
       }
 
       function renderLocationHeatmap(location) {
@@ -1066,10 +1121,13 @@
           `Standort-Median · ${location.station_count} Tankstellen`,
         );
         locationHeatmapPanelEl.hidden = false;
+        locationHeatmapRows = rows;
         locationHeatmapInstance = createHeatmapRenderer(
           document.getElementById("location-heatmap"),
           rows,
+          currentHeatmapColorDomain(),
         );
+        syncHeatmapColorDomains();
       }
 
       async function renderStationHeatmap(stationIdValue) {
@@ -1081,10 +1139,13 @@
         stationHeatmapTitleEl.textContent = `Tankstelle: ${stationDisplayName(stationIdValue)}`;
         stationHeatmapSubEl.textContent = buildHeatmapSubtitle(rows, "Einzelstation");
         stationHeatmapPanelEl.hidden = false;
+        stationHeatmapRows = rows;
         stationHeatmapInstance = createHeatmapRenderer(
           document.getElementById("station-heatmap"),
           rows,
+          currentHeatmapColorDomain(),
         );
+        syncHeatmapColorDomains();
       }
 
       async function handleLocationChange() {
