@@ -710,7 +710,7 @@ p {
 
 .heatmap-controls {
   display: grid;
-  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  grid-template-columns: minmax(220px, 1fr);
   gap: 12px;
   margin: 0 0 16px;
 }
@@ -721,7 +721,7 @@ p {
   display: none;
 }
 
-.heatmap-controls label {
+.heatmap-select-field {
   display: grid;
   gap: 6px;
   color: var(--muted);
@@ -729,7 +729,7 @@ p {
   font-weight: 700;
 }
 
-.heatmap-controls select {
+.heatmap-select-field select {
   width: 100%;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -737,6 +737,11 @@ p {
   color: var(--text);
   padding: 10px 12px;
   font: inherit;
+}
+
+.heatmap-station-control {
+  max-width: 100%;
+  margin: 0 0 16px;
 }
 
 .heatmap-grid {
@@ -753,6 +758,202 @@ p {
 .heatmap-panel h3 {
   margin: 0 0 10px;
   font-size: 1rem;
+}
+
+.heatmap-detail {
+  margin-top: 12px;
+}
+
+.heatmap-detail[hidden] {
+  display: none;
+}
+
+.heatmap-detail-hint,
+.heatmap-detail-message {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.heatmap-comparison {
+  position: relative;
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.heatmap-comparison--table {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.heatmap-comparison-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.heatmap-comparison--table .heatmap-comparison-header {
+  margin-bottom: 12px;
+}
+
+.heatmap-comparison-header h4,
+.heatmap-comparison-column h4 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.96rem;
+}
+
+.heatmap-comparison-close {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: var(--secondary-btn-bg);
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.heatmap-comparison-close:hover {
+  background: var(--secondary-btn-hover-bg);
+}
+
+.heatmap-comparison > .heatmap-comparison-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+
+.heatmap-comparison > .heatmap-comparison-close + .heatmap-detail-message {
+  padding-right: 34px;
+}
+
+.heatmap-comparison-stack {
+  display: grid;
+  gap: 22px;
+}
+
+.heatmap-comparison-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.heatmap-comparison-table {
+  width: 100%;
+  min-width: 0;
+  border-collapse: collapse !important;
+  border-spacing: 0 !important;
+  table-layout: fixed;
+  font-size: 0.88rem;
+  border: 1px solid #cfcfcf !important;
+}
+
+.heatmap-comparison-table th,
+.heatmap-comparison-table td {
+  padding: 9px 10px;
+  border: 1px solid #cfcfcf !important;
+  text-align: left;
+  vertical-align: top;
+  text-transform: none;
+}
+
+.heatmap-comparison-table th {
+  color: var(--ink);
+  font-weight: 800;
+  background: transparent;
+  white-space: nowrap;
+}
+
+.heatmap-comparison-table thead tr:first-child th {
+  text-align: center;
+  font-size: 0.92rem;
+}
+
+.heatmap-station-col {
+  width: 35%;
+}
+
+.heatmap-price-col {
+  width: 20%;
+}
+
+.heatmap-address-col {
+  width: 45%;
+}
+
+.heatmap-station-cell {
+  color: var(--ink);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.heatmap-price-cell {
+  color: var(--ink);
+  font-weight: 800;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.heatmap-address-cell {
+  width: auto;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.heatmap-comparison-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.heatmap-comparison-column {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.heatmap-comparison-column ol {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.heatmap-comparison-column li {
+  display: grid;
+  gap: 3px;
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--panel-strong);
+}
+
+.heatmap-comparison-column strong,
+.heatmap-comparison-column span,
+.heatmap-comparison-column small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.heatmap-comparison-column span {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.heatmap-comparison-column small {
+  color: var(--muted);
+  line-height: 1.45;
 }
 
 canvas {
@@ -776,6 +977,10 @@ canvas.heatmap-canvas {
 
   canvas.heatmap-canvas {
     height: 360px !important;
+  }
+
+  .heatmap-comparison-grid {
+    grid-template-columns: 1fr;
   }
 }
 

@@ -51,16 +51,10 @@
           >
         </div>
         <div class="heatmap-controls" id="heatmap-controls" hidden>
-          <label>
+          <label class="heatmap-select-field">
             <span>Standort</span>
             <select id="location-select">
               <option value="">Standort wählen</option>
-            </select>
-          </label>
-          <label>
-            <span>Tankstelle</span>
-            <select id="station-select" disabled>
-              <option value="">Erst Standort wählen</option>
             </select>
           </label>
         </div>
@@ -71,6 +65,14 @@
         <div class="heatmap-grid" id="heatmap-grid" hidden>
           <article class="heatmap-panel" id="location-heatmap-panel" hidden>
             <h3 id="location-heatmap-title">Standort-Heatmap</h3>
+            <div class="heatmap-station-control">
+              <label class="heatmap-select-field">
+                <span>Tankstelle</span>
+                <select id="station-select" disabled>
+                  <option value="">Erst Standort wählen</option>
+                </select>
+              </label>
+            </div>
             <canvas id="location-heatmap"></canvas>
             <p class="chart-sub" id="location-heatmap-sub"></p>
             <div class="heatmap-detail" id="location-heatmap-detail"></div>
@@ -393,6 +395,12 @@
       );
       const locationHeatmapSubEl = document.getElementById("location-heatmap-sub");
       const stationHeatmapSubEl = document.getElementById("station-heatmap-sub");
+      const overallHeatmapDetailEl = document.getElementById(
+        "overall-heatmap-detail",
+      );
+      const locationHeatmapDetailEl = document.getElementById(
+        "location-heatmap-detail",
+      );
 
       const title = `${name} · ${fuel.toUpperCase()}`;
       document.getElementById("chart-title").textContent = title;
@@ -432,6 +440,8 @@
                   brand: String(row?.brand || "").trim(),
                   city: String(row?.city || "").trim(),
                   street: String(row?.street || "").trim(),
+                  houseNumber: String(row?.house_number || "").trim(),
+                  postCode: String(row?.post_code || "").trim(),
                 },
               ];
             })
@@ -468,6 +478,7 @@
         const isHeatmap = activeView === "heatmap";
         heatmapControlsEl.hidden = !isHeatmap;
         heatmapGridEl.hidden = !isHeatmap;
+        overallHeatmapDetailEl.hidden = !isHeatmap;
         if (!isHeatmap) {
           locationHeatmapPanelEl.hidden = true;
           stationHeatmapPanelEl.hidden = true;
@@ -962,7 +973,7 @@
         heatmapInstances = [];
       }
 
-      function createHeatmapRenderer(canvas, rows, colorDomain = null) {
+      function createHeatmapRenderer(canvas, rows, colorDomain = null, options = {}) {
         canvas.classList.add("heatmap-canvas");
         let activeColorDomain = colorDomain;
         let layout = drawHeatmapCanvas(canvas, rows, activeColorDomain);
@@ -985,14 +996,26 @@
           canvas.style.cursor = "default";
           canvas.title = "";
         };
+        const handleClick = (event) => {
+          if (typeof options.onCellClick !== "function") return;
+          const bounds = canvas.getBoundingClientRect();
+          const cell = heatmapCellAt(
+            layout,
+            event.clientX - bounds.left,
+            event.clientY - bounds.top,
+          );
+          if (cell) options.onCellClick(cell);
+        };
         canvas.addEventListener("mousemove", handleMove);
         canvas.addEventListener("mouseleave", handleLeave);
+        canvas.addEventListener("click", handleClick);
 
         return {
           options: {},
           destroy() {
             canvas.removeEventListener("mousemove", handleMove);
             canvas.removeEventListener("mouseleave", handleLeave);
+            canvas.removeEventListener("click", handleClick);
             canvas.classList.remove("heatmap-canvas");
             canvas.style.cursor = "default";
             canvas.title = "";
@@ -1014,7 +1037,21 @@
         const canvas = document.getElementById("chart");
         if (chartInstance) chartInstance.destroy();
         overallHeatmapRows = rows;
-        chartInstance = createHeatmapRenderer(canvas, rows, currentHeatmapColorDomain());
+        chartInstance = createHeatmapRenderer(
+          canvas,
+          rows,
+          currentHeatmapColorDomain(),
+          {
+            onCellClick: (cell) => {
+              handleOverallHeatmapCellClick(cell).catch(() => {
+                renderHeatmapDetailMessage(
+                  overallHeatmapDetailEl,
+                  "Der Preisvergleich konnte nicht geladen werden.",
+                );
+              });
+            },
+          },
+        );
         syncHeatmapColorDomains();
       }
 
@@ -1027,6 +1064,224 @@
           station.street,
         ].filter(Boolean);
         return parts.join(" · ");
+      }
+
+      function stationAddress(station) {
+        if (!station) return "";
+        const streetLine = [station.street, station.houseNumber]
+          .filter((part) => part && part.trim())
+          .join(" ")
+          .replace(/\s+/g, " ")
+          .trim();
+        const cityLine = [station.postCode, station.city]
+          .filter((part) => part && part.trim())
+          .join(" ")
+          .replace(/\s+/g, " ")
+          .trim();
+        return [streetLine, cityLine].filter(Boolean).join(", ");
+      }
+
+      function noonSnapshotUrl(dateLabel) {
+        const [year, month, day] = String(dateLabel || "").split("-");
+        return `${DATA_BASE}${year}/${month}/${day}/noon.csv`;
+      }
+
+      async function loadNoonSnapshot(dateLabel) {
+        if (noonSnapshotCache.has(dateLabel)) return noonSnapshotCache.get(dateLabel);
+        const rows = await fetchCsv(noonSnapshotUrl(dateLabel));
+        noonSnapshotCache.set(dateLabel, rows);
+        return rows;
+      }
+
+      function buildStationPriceRows(snapshotRows, catalog, allowedStationIds = null) {
+        const allowed = allowedStationIds ? new Set(allowedStationIds) : null;
+        return snapshotRows
+          .map((row) => {
+            const id = String(row.station_uuid || "").trim();
+            if (!id || (allowed && !allowed.has(id))) return null;
+            const price = Number(row[fuel]);
+            if (!Number.isFinite(price) || price <= 0) return null;
+            const station = catalog.get(id);
+            return {
+              id,
+              name: stationDisplayName(id),
+              price,
+              address: stationAddress(station),
+            };
+          })
+          .filter(Boolean);
+      }
+
+      function getStationPriceComparison(priceRows, limit) {
+        const byNameAscending = (left, right) =>
+          left.name.localeCompare(right.name, "de", { sensitivity: "base" });
+        const cheapest = [...priceRows]
+          .sort((left, right) => left.price - right.price || byNameAscending(left, right))
+          .slice(0, limit);
+        const mostExpensive = [...priceRows]
+          .sort((left, right) => right.price - left.price || byNameAscending(left, right))
+          .slice(0, limit);
+        return {
+          mostExpensive,
+          cheapest,
+        };
+      }
+
+      function resetHeatmapDetail(detailEl) {
+        if (!detailEl) return;
+        detailEl.innerHTML = "";
+        const hint = document.createElement("p");
+        hint.className = "heatmap-detail-hint";
+        hint.textContent = HEATMAP_DETAIL_HINT;
+        detailEl.append(hint);
+      }
+
+      function renderHeatmapDetailMessage(detailEl, message) {
+        if (!detailEl) return;
+        detailEl.innerHTML = "";
+        const panel = document.createElement("div");
+        panel.className = "heatmap-comparison";
+        const closeButton = document.createElement("button");
+        closeButton.className = "heatmap-comparison-close";
+        closeButton.type = "button";
+        closeButton.setAttribute("aria-label", "Preisvergleich schließen");
+        closeButton.textContent = "×";
+        closeButton.addEventListener("click", () => resetHeatmapDetail(detailEl));
+        const text = document.createElement("p");
+        text.className = "heatmap-detail-message";
+        text.textContent = message;
+        panel.append(closeButton, text);
+        detailEl.append(panel);
+      }
+
+      function appendComparisonCells(tableRow, row) {
+        const nameCell = document.createElement("td");
+        nameCell.className = "heatmap-station-cell";
+        nameCell.textContent = row?.name || "";
+        const priceCell = document.createElement("td");
+        priceCell.className = "heatmap-price-cell";
+        priceCell.textContent = row ? `${formatFuelPrice(row.price)}\u00A0€` : "";
+        const addressCell = document.createElement("td");
+        addressCell.className = "heatmap-address-cell";
+        addressCell.textContent = row?.address || "";
+        tableRow.append(nameCell, priceCell, addressCell);
+      }
+
+      function createComparisonTable(title, rows) {
+        const table = document.createElement("table");
+        table.className = "heatmap-comparison-table";
+        const colgroup = document.createElement("colgroup");
+        [
+          "heatmap-station-col",
+          "heatmap-price-col",
+          "heatmap-address-col",
+        ].forEach((className) => {
+          const col = document.createElement("col");
+          col.className = className;
+          colgroup.append(col);
+        });
+        const thead = document.createElement("thead");
+        const groupRow = document.createElement("tr");
+        const groupHeader = document.createElement("th");
+        groupHeader.scope = "colgroup";
+        groupHeader.colSpan = 3;
+        groupHeader.textContent = title;
+        groupRow.append(groupHeader);
+        const labelRow = document.createElement("tr");
+        ["Tankstelle", "Preis", "Adresse"].forEach((label) => {
+          const header = document.createElement("th");
+          header.scope = "col";
+          header.textContent = label;
+          labelRow.append(header);
+        });
+        thead.append(groupRow, labelRow);
+
+        const tbody = document.createElement("tbody");
+        rows.forEach((priceRow) => {
+          const row = document.createElement("tr");
+          appendComparisonCells(row, priceRow);
+          tbody.append(row);
+        });
+        table.append(colgroup, thead, tbody);
+        return table;
+      }
+
+      function renderPriceComparison(detailEl, dateLabel, comparison) {
+        if (!detailEl) return;
+        detailEl.innerHTML = "";
+        const panel = document.createElement("div");
+        panel.className = "heatmap-comparison heatmap-comparison--table";
+        const header = document.createElement("div");
+        header.className = "heatmap-comparison-header";
+        const titleEl = document.createElement("h4");
+        titleEl.textContent = `Preisvergleich am ${formatHistoryDay(dateLabel)}`;
+        const closeButton = document.createElement("button");
+        closeButton.className = "heatmap-comparison-close";
+        closeButton.type = "button";
+        closeButton.setAttribute("aria-label", "Preisvergleich schließen");
+        closeButton.textContent = "×";
+        closeButton.addEventListener("click", () => resetHeatmapDetail(detailEl));
+        header.append(titleEl, closeButton);
+
+        const stack = document.createElement("div");
+        stack.className = "heatmap-comparison-stack";
+        [
+          ["Teuerste", comparison.mostExpensive],
+          ["Günstigste", comparison.cheapest],
+        ].forEach(([sectionTitle, rows]) => {
+          const tableWrap = document.createElement("div");
+          tableWrap.className = "heatmap-comparison-table-wrap";
+          tableWrap.append(createComparisonTable(sectionTitle, rows));
+          stack.append(tableWrap);
+        });
+        panel.append(header, stack);
+        detailEl.append(panel);
+      }
+
+      async function handleOverallHeatmapCellClick(cell) {
+        await loadStationCatalog();
+        const snapshotRows = await loadNoonSnapshot(cell.date);
+        const priceRows = buildStationPriceRows(snapshotRows, stationCatalog);
+        if (!priceRows.length) {
+          renderHeatmapDetailMessage(
+            overallHeatmapDetailEl,
+            "Ein Preisvergleich ist für diesen Tag nicht möglich, da keine Preisdaten vorliegen.",
+          );
+          return;
+        }
+        renderPriceComparison(
+          overallHeatmapDetailEl,
+          cell.date,
+          getStationPriceComparison(priceRows, 3),
+        );
+      }
+
+      async function handleLocationHeatmapCellClick(cell, location) {
+        const stationIds = Array.isArray(location?.station_ids)
+          ? location.station_ids
+          : [];
+        if (stationIds.length <= 1) {
+          renderHeatmapDetailMessage(
+            locationHeatmapDetailEl,
+            "Ein Preisvergleich ist für diesen Standort nicht möglich, da nur eine einzige Tankstelle vorhanden ist.",
+          );
+          return;
+        }
+        await loadStationCatalog();
+        const snapshotRows = await loadNoonSnapshot(cell.date);
+        const priceRows = buildStationPriceRows(snapshotRows, stationCatalog, stationIds);
+        if (!priceRows.length) {
+          renderHeatmapDetailMessage(
+            locationHeatmapDetailEl,
+            "Ein Preisvergleich ist für diesen Tag nicht möglich, da keine Preisdaten vorliegen.",
+          );
+          return;
+        }
+        renderPriceComparison(
+          locationHeatmapDetailEl,
+          cell.date,
+          getStationPriceComparison(priceRows, 1),
+        );
       }
 
       function resetStationSelect(text = "Erst Standort wählen") {
@@ -1098,6 +1353,7 @@
         locationHeatmapRows = [];
         locationHeatmapPanelEl.hidden = true;
         locationHeatmapSubEl.textContent = "";
+        resetHeatmapDetail(locationHeatmapDetailEl);
         syncHeatmapColorDomains();
       }
 
@@ -1121,11 +1377,22 @@
           `Standort-Median · ${location.station_count} Tankstellen`,
         );
         locationHeatmapPanelEl.hidden = false;
+        resetHeatmapDetail(locationHeatmapDetailEl);
         locationHeatmapRows = rows;
         locationHeatmapInstance = createHeatmapRenderer(
           document.getElementById("location-heatmap"),
           rows,
           currentHeatmapColorDomain(),
+          {
+            onCellClick: (cell) => {
+              handleLocationHeatmapCellClick(cell, location).catch(() => {
+                renderHeatmapDetailMessage(
+                  locationHeatmapDetailEl,
+                  "Der Preisvergleich konnte nicht geladen werden.",
+                );
+              });
+            },
+          },
         );
         syncHeatmapColorDomains();
       }
@@ -1582,6 +1849,8 @@
         resetStationSelect();
         hideLocationHeatmap();
         hideStationHeatmap();
+        resetHeatmapDetail(overallHeatmapDetailEl);
+        resetHeatmapDetail(locationHeatmapDetailEl);
 
         const rows = normalizeHeatmapRows(
           heatmapSummary?.overall || [],
