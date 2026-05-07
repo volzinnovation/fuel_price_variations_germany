@@ -67,12 +67,12 @@
     <title>Tankzeit.de: Beste Tankzeit finden und Geld sparen</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="preload" href="styles.css?v=20260409-app-promo-v18" as="style" />
+    <link rel="preload" href="styles.css?v=20260507-diesel-heatmap-v1" as="style" />
     <link
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&amp;display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260409-app-promo-v18" />
+    <link rel="stylesheet" href="styles.css?v=20260507-diesel-heatmap-v1" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -125,19 +125,82 @@
             sparen kannst.
           </p>
         </div>
-        <label class="filter-chip" for="sort-mode">
-          <span class="filter-chip-label">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 7h16M7 12h10M10 17h4" />
-            </svg>
-            Sortierung
-          </span>
-          <select id="sort-mode" aria-label="Stationen sortieren">
-            <option value="distance">Distanz</option>
-            <option value="price">Preis</option>
-          </select>
-        </label>
+        <div class="header-filters">
+          <label class="filter-chip" for="sort-mode">
+            <span class="filter-chip-label">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 7h16M7 12h10M10 17h4" />
+              </svg>
+              Sortierung
+            </span>
+            <select id="sort-mode" aria-label="Stationen sortieren">
+              <option value="distance">Distanz</option>
+              <option value="price">Preis</option>
+            </select>
+          </label>
+          <div class="filter-chip location-filter" aria-labelledby="location-filter-label">
+            <span class="filter-chip-label" id="location-filter-label">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 21s7-5.15 7-11a7 7 0 1 0-14 0c0 5.85 7 11 7 11z" />
+                <circle cx="12" cy="10" r="2.4" />
+              </svg>
+              Standort
+            </span>
+            <div class="location-filter-fields">
+              <label class="location-field" for="manual-location-place">
+                <span class="sr-only">Postleitzahl oder Ort</span>
+                <input
+                  id="manual-location-place"
+                  type="text"
+                  autocomplete="postal-code address-level2"
+                  placeholder="PLZ oder Ort"
+                  aria-describedby="manual-location-place-error"
+                />
+                <span
+                  class="field-error"
+                  id="manual-location-place-error"
+                  aria-live="polite"
+                ></span>
+              </label>
+              <label class="location-field" for="manual-location-address">
+                <span class="sr-only">Adresse</span>
+                <input
+                  id="manual-location-address"
+                  type="text"
+                  autocomplete="street-address"
+                  placeholder="Stra&szlig;e + Nr."
+                  aria-describedby="manual-location-address-error"
+                />
+                <span
+                  class="field-error"
+                  id="manual-location-address-error"
+                  aria-live="polite"
+                ></span>
+              </label>
+            </div>
+            <button class="btn location-apply-btn" id="manual-location-apply" type="button">
+              &Uuml;bernehmen
+            </button>
+          </div>
+          <button class="btn diesel-heatmap-toggle" id="diesel-heatmap-toggle" type="button">
+            Heatmap
+          </button>
+        </div>
       </header>
+
+      <section class="diesel-heatmap-view" id="diesel-heatmap-view" hidden>
+        <div class="diesel-heatmap-toolbar">
+          <h2>Diesel Heatmap</h2>
+          <button class="btn" id="diesel-table-toggle" type="button">
+            Zur&uuml;ck zur Tabelle
+          </button>
+        </div>
+        <iframe
+          class="diesel-heatmap-frame"
+          id="diesel-heatmap-frame"
+          title="Diesel Heatmap"
+        ></iframe>
+      </section>
 
       <section class="hero" id="location-hint">
         <div class="tip">
@@ -157,20 +220,21 @@
 
       <div id="status" class="status"></div>
 
-      <section class="card">
+      <section class="card" id="diesel-table-card">
         <table class="table">
           <thead>
             <tr>
-              <th>Name</th>
-              <th id="price-heading">Preis €/l</th>
-              <th>Mittagspreis/Vortag</th>
-              <th>Tankzeit</th>
               <th></th>
+              <th>Name</th>
+              <th>Tankzeit</th>
+              <th id="price-heading">Preis €/l</th>
+              <th>Preisverlauf</th>
+              <th class="distance-heading">Entfernung</th>
             </tr>
           </thead>
           <tbody id="stations">
             <tr>
-              <td colspan="5">Wir laden die Daten...</td>
+              <td colspan="6">Wir laden die Daten...</td>
             </tr>
           </tbody>
         </table>
@@ -221,6 +285,7 @@
 
     <script src="app-stats.js"></script>
     <script src="station-catalog.js"></script>
+    <script src="station-geocoder.js"></script>
     <script>
       const DATA_BASE = "data2/";
       const FUEL = "diesel";
@@ -234,19 +299,61 @@
       const statusEl = document.getElementById("status");
       const stationsEl = document.getElementById("stations");
       const sortModeEl = document.getElementById("sort-mode");
+      const headerFiltersEl = document.querySelector(".header-filters");
+      const locationHintEl = document.getElementById("location-hint");
+      const dieselTableCardEl = document.getElementById("diesel-table-card");
+      const dieselHeatmapViewEl = document.getElementById("diesel-heatmap-view");
+      const dieselHeatmapFrameEl = document.getElementById("diesel-heatmap-frame");
+      const dieselHeatmapToggleEl = document.getElementById("diesel-heatmap-toggle");
+      const dieselTableToggleEl = document.getElementById("diesel-table-toggle");
       const locationRequestBtn = document.getElementById("location-request-btn");
+      const manualLocationPlaceEl = document.getElementById(
+        "manual-location-place",
+      );
+      const manualLocationAddressEl = document.getElementById(
+        "manual-location-address",
+      );
+      const manualLocationApplyBtn = document.getElementById(
+        "manual-location-apply",
+      );
+      const manualLocationPlaceErrorEl = document.getElementById(
+        "manual-location-place-error",
+      );
+      const manualLocationAddressErrorEl = document.getElementById(
+        "manual-location-address-error",
+      );
       const priceHeadingEl = document.getElementById("price-heading");
       const ids = JSON.parse(localStorage.getItem("ids")) || [];
       const fav = JSON.parse(localStorage.getItem("fav")) || [];
       const SORT_STORAGE_KEY = `tankzeit_sort_${FUEL}`;
       const LOCATION_OPTIONS = { enableHighAccuracy: false, maximumAge: 300000 };
       const LOCATION_DEADLINE_MS = 25000;
+      const DIESEL_HEATMAP_URL =
+        "chart.html?fuel=diesel&name=Diesel&view=heatmap&embed=1";
       let currentCenter = null;
       let livePricesAvailable = true;
       let locationWatchId = null;
       let locationDeadlineId = null;
 
       sortModeEl.value = localStorage.getItem(SORT_STORAGE_KEY) || "distance";
+      function setDieselHeatmapMode(isHeatmap) {
+        if (headerFiltersEl) headerFiltersEl.hidden = isHeatmap;
+        if (locationHintEl) locationHintEl.hidden = isHeatmap;
+        if (statusEl) statusEl.hidden = isHeatmap;
+        if (dieselTableCardEl) dieselTableCardEl.hidden = isHeatmap;
+        if (dieselHeatmapViewEl) dieselHeatmapViewEl.hidden = !isHeatmap;
+        if (isHeatmap && dieselHeatmapFrameEl && !dieselHeatmapFrameEl.src) {
+          dieselHeatmapFrameEl.src = DIESEL_HEATMAP_URL;
+        }
+      }
+
+      dieselHeatmapToggleEl?.addEventListener("click", () => {
+        setDieselHeatmapMode(true);
+      });
+      dieselTableToggleEl?.addEventListener("click", () => {
+        setDieselHeatmapMode(false);
+      });
+
       sortModeEl.addEventListener("change", () => {
         localStorage.setItem(SORT_STORAGE_KEY, sortModeEl.value);
         if (currentCenter) {
@@ -315,6 +422,32 @@
         locationRequestBtn.textContent = isBusy
           ? "Standort wird geladen..."
           : "Standort abrufen";
+      }
+
+      function setManualLocationBusy(isBusy) {
+        if (!manualLocationApplyBtn) return;
+        manualLocationApplyBtn.disabled = isBusy;
+        manualLocationApplyBtn.textContent = isBusy
+          ? "Wird gesucht..."
+          : "\u00dcbernehmen";
+      }
+
+      function clearManualLocationErrors() {
+        manualLocationPlaceErrorEl.textContent = "";
+        manualLocationAddressErrorEl.textContent = "";
+        manualLocationPlaceEl.removeAttribute("aria-invalid");
+        manualLocationAddressEl.removeAttribute("aria-invalid");
+      }
+
+      function setManualLocationError(field, message) {
+        const inputEl =
+          field === "address" ? manualLocationAddressEl : manualLocationPlaceEl;
+        const errorEl =
+          field === "address"
+            ? manualLocationAddressErrorEl
+            : manualLocationPlaceErrorEl;
+        errorEl.textContent = message;
+        inputEl.setAttribute("aria-invalid", "true");
       }
 
       function geoError(err) {
@@ -390,6 +523,52 @@
         }, LOCATION_DEADLINE_MS);
       }
 
+      async function applyManualLocation() {
+        const place = manualLocationPlaceEl.value.trim();
+        const address = manualLocationAddressEl.value.trim();
+
+        clearManualLocationErrors();
+        manualLocationPlaceEl.value = place;
+        manualLocationAddressEl.value = address;
+
+        if (!place) {
+          setManualLocationError(
+            "place",
+            "Bitte Postleitzahl oder Ort eingeben.",
+          );
+          return;
+        }
+
+        setManualLocationBusy(true);
+        try {
+          const result = await TankzeitStationGeocoder.resolveLocation(
+            place,
+            address,
+          );
+          if (!result.ok) {
+            setManualLocationError(
+              result.field,
+              "Standort nicht gefunden. Bitte Eingabe pr\u00fcfen.",
+            );
+            return;
+          }
+
+          clearLocationRequest();
+          setLocationButtonBusy(false);
+          const hint = document.getElementById("location-hint");
+          if (hint) hint.style.display = "none";
+          loadStations(result.lat, result.lng);
+        } catch (err) {
+          console.warn("Manual location lookup failed", err);
+          setManualLocationError(
+            "place",
+            "Standort nicht gefunden. Bitte Eingabe pr\u00fcfen.",
+          );
+        } finally {
+          setManualLocationBusy(false);
+        }
+      }
+
       function isTankerkoenigRequest(url) {
         return url.includes("tankerkoenig.de");
       }
@@ -458,6 +637,62 @@
           : escapeHtml(station.name);
       }
 
+      function formatDistance(distanceKm) {
+        const distance = Number(distanceKm);
+        if (!Number.isFinite(distance)) return "-";
+        return `${distance.toFixed(1).replace(".", ",")} km`;
+      }
+
+      function distanceRange(stations) {
+        const distances = stations
+          .map((station) => Number(station.dist))
+          .filter(Number.isFinite);
+        if (!distances.length) {
+          return { min: null, max: null };
+        }
+        return {
+          min: Math.min(...distances),
+          max: Math.max(...distances),
+        };
+      }
+
+      function distancePositionRatio(distanceKm, range) {
+        const distance = Number(distanceKm);
+        if (
+          !Number.isFinite(distance) ||
+          !range ||
+          !Number.isFinite(range.min) ||
+          !Number.isFinite(range.max) ||
+          range.max <= range.min
+        ) {
+          return 1;
+        }
+        const ratio = (distance - range.min) / (range.max - range.min);
+        return Math.max(0, Math.min(1, 1 - ratio));
+      }
+
+      function distanceAnimationHtml(distanceKm, range) {
+        const label = formatDistance(distanceKm);
+        const position = distancePositionRatio(distanceKm, range).toFixed(4);
+        return `
+          <div class="distance-drive" style="--distance-ratio: ${position};" aria-label="Entfernung ${escapeHtml(label)}">
+            <div class="distance-road" aria-hidden="true"></div>
+            <div class="distance-flag" aria-hidden="true">
+              <span></span><span></span><span></span><span></span>
+            </div>
+            <div class="distance-car-wrap">
+              <span class="distance-label">${escapeHtml(label)}</span>
+              <svg class="distance-car" viewBox="0 0 64 32" aria-hidden="true">
+                <path d="M8 20h5l5-8h22l8 8h8a4 4 0 0 1 4 4v2H4v-2a4 4 0 0 1 4-4z" />
+                <circle cx="18" cy="26" r="4" />
+                <circle cx="48" cy="26" r="4" />
+                <path d="M22 13h8v7H18l4-7zM33 13h6l6 7H33v-7z" />
+              </svg>
+            </div>
+          </div>
+        `;
+      }
+
       async function loadFallbackStations(lat, lng) {
         const catalog = await TankzeitStationCatalog.loadCatalog();
         return TankzeitStationCatalog.findNearbyStations(catalog, lat, lng, {
@@ -468,6 +703,7 @@
 
       async function renderStations(stations) {
         const limited = stations.slice(0, 10);
+        const visibleDistanceRange = distanceRange(limited);
         stationsEl.innerHTML = limited
           .map((s) => {
             const isSaved = ids.includes(s.id);
@@ -477,11 +713,12 @@
             );
             return `
             <tr id="${s.id}">
-              <td data-label="Name"><a href="${mapsHref}" target="_blank" rel="noopener">${formatStationName(s)}</a></td>
-              <td data-label="Preis">${livePricesAvailable ? `${s[FUEL]} €/l` : NO_LIVE_PRICE_TEXT}</td>
-              <td data-label="Mittagspreis/Vortag" id="${s.id}-profile"><a href="${detailsHref}">Details</a></td>
-              <td data-label="Tankzeit" id="${s.id}-minimum">-</td>
               <td><button class="fav" data-id="${s.id}" ${isSaved ? "disabled" : ""}>${isSaved ? "❤️" : "🤍"}</button></td>
+              <td data-label="Name"><a href="${mapsHref}" target="_blank" rel="noopener">${formatStationName(s)}</a></td>
+              <td data-label="Tankzeit" id="${s.id}-minimum">-</td>
+              <td data-label="Preis €/l">${livePricesAvailable ? `${s[FUEL]} €/l` : NO_LIVE_PRICE_TEXT}</td>
+              <td data-label="Preisverlauf" id="${s.id}-profile"><a href="${detailsHref}">Details</a></td>
+              <td data-label="Entfernung" class="distance-cell">${distanceAnimationHtml(s.dist, visibleDistanceRange)}</td>
             </tr>
           `;
           })
@@ -515,11 +752,6 @@
               stats,
               stats.text || "-",
             );
-
-            if (TankzeitStats.isNowInRelativeMinimumWindow(stats)) {
-              const row = document.getElementById(s.id);
-              row.classList.add("row-highlight");
-            }
           }),
         );
       }
@@ -536,7 +768,7 @@
           );
           if (!stations.length) {
             stationsEl.innerHTML =
-              "<tr><td colspan='5'>Keine offenen Stationen gefunden.</td></tr>";
+              "<tr><td colspan='6'>Keine offenen Stationen gefunden.</td></tr>";
             setStatus("Keine Stationen im Umkreis.");
             return;
           }
@@ -551,7 +783,7 @@
               );
               if (!fallbackStations.length) {
                 stationsEl.innerHTML =
-                  "<tr><td colspan='5'>Keine Stationen im Umkreis gefunden.</td></tr>";
+                  "<tr><td colspan='6'>Keine Stationen im Umkreis gefunden.</td></tr>";
                 setStatus(
                   "Livepreise sind derzeit nicht verfügbar. Im lokalen Verzeichnis wurden keine Stationen im Umkreis gefunden.",
                 );
@@ -563,7 +795,7 @@
             } catch (fallbackErr) {
               console.warn("Local station fallback failed", fallbackErr);
               stationsEl.innerHTML =
-                "<tr><td colspan='5'>Livepreise und lokales Stationsverzeichnis sind derzeit nicht verfügbar.</td></tr>";
+                "<tr><td colspan='6'>Livepreise und lokales Stationsverzeichnis sind derzeit nicht verfügbar.</td></tr>";
               setStatus(
                 "Livepreise sind derzeit nicht verfügbar und das lokale Stationsverzeichnis konnte nicht geladen werden.",
                 "error",
@@ -573,13 +805,14 @@
           }
           const message =
             "Fehler beim Laden der Daten. Bitte später erneut versuchen.";
-          stationsEl.innerHTML = `<tr><td colspan='5'>${message}</td></tr>`;
+          stationsEl.innerHTML = `<tr><td colspan='6'>${message}</td></tr>`;
           setStatus(message, "error");
         }
       }
 
       setLivePriceAvailability(true);
       locationRequestBtn.addEventListener("click", requestLocation);
+      manualLocationApplyBtn.addEventListener("click", applyManualLocation);
       requestLocation();
     </script>
     <script src="app-install-promo.js?v=20260409-app-promo-v12"></script>

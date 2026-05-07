@@ -19,12 +19,12 @@
     <title>Tankzeit | Chart</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="preload" href="styles.css?v=20260507-heatmap-table-v2" as="style" />
+    <link rel="preload" href="styles.css?v=20260507-diesel-heatmap-v1" as="style" />
     <link
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&amp;display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260507-heatmap-table-v2" />
+    <link rel="stylesheet" href="styles.css?v=20260507-diesel-heatmap-v1" />
     <script
       defer
       src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
@@ -51,12 +51,45 @@
           >
         </div>
         <div class="heatmap-controls" id="heatmap-controls" hidden>
-          <label class="heatmap-select-field">
-            <span>Standort</span>
-            <select id="location-select">
+          <div class="heatmap-select-field">
+            <span id="location-combobox-label">Standort</span>
+            <div class="heatmap-combobox" id="location-combobox">
+              <input
+                aria-autocomplete="list"
+                aria-controls="location-combobox-list"
+                aria-expanded="false"
+                aria-labelledby="location-combobox-label"
+                autocomplete="off"
+                class="heatmap-combobox-input"
+                id="location-combobox-input"
+                placeholder="Standort wählen"
+                role="combobox"
+                type="text"
+              />
+              <button
+                aria-label="Standortliste öffnen"
+                class="heatmap-combobox-toggle"
+                id="location-combobox-toggle"
+                type="button"
+              >
+                ▾
+              </button>
+              <ul
+                class="heatmap-combobox-list"
+                id="location-combobox-list"
+                role="listbox"
+                hidden
+              ></ul>
+            </div>
+            <select
+              aria-hidden="true"
+              class="heatmap-native-select"
+              id="location-select"
+              tabindex="-1"
+            >
               <option value="">Standort wählen</option>
             </select>
-          </label>
+          </div>
         </div>
         <h2 class="chart-title" id="chart-title">Lade Chart...</h2>
         <canvas id="chart"></canvas>
@@ -131,6 +164,7 @@
     <script src="app-stats.js"></script>
     <script>
       const params = new URLSearchParams(window.location.search);
+      const isEmbeddedHeatmap = params.get("embed") === "1";
       const stationId = params.get("id");
       const fuel = (params.get("fuel") || "diesel").toLowerCase();
       const name = params.get("name") || "Tankstelle";
@@ -151,9 +185,15 @@
       const noonSnapshotCache = new Map();
       const requestedView = params.get("view");
       let activeView =
-        requestedView === "profile" || requestedView === "heatmap"
+        isEmbeddedHeatmap
+          ? "heatmap"
+          : requestedView === "profile" || requestedView === "heatmap"
           ? requestedView
           : "history";
+      if (isEmbeddedHeatmap) {
+        activeView = "heatmap";
+        document.body.classList.add("chart-embed");
+      }
       const DARK_MODE_MEDIA_QUERY = window.matchMedia(
         "(prefers-color-scheme: dark)",
       );
@@ -172,6 +212,7 @@
       const HEATMAP_LOW_COLOR = "#0f766e";
       const HEATMAP_MID_COLOR = "#f59e0b";
       const HEATMAP_HIGH_COLOR = "#b91c1c";
+      const HEATMAP_NO_DATA_COLOR = "#E0E0E0";
       const HEATMAP_WEEKDAY_LABELS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
       const HEATMAP_WEEKDAY_FULL_LABELS = [
         "Montag",
@@ -379,6 +420,15 @@
       const profileButton = document.getElementById("profile-view");
       const heatmapControlsEl = document.getElementById("heatmap-controls");
       const locationSelectEl = document.getElementById("location-select");
+      const locationComboboxInputEl = document.getElementById(
+        "location-combobox-input",
+      );
+      const locationComboboxToggleEl = document.getElementById(
+        "location-combobox-toggle",
+      );
+      const locationComboboxListEl = document.getElementById(
+        "location-combobox-list",
+      );
       const stationSelectEl = document.getElementById("station-select");
       const heatmapGridEl = document.getElementById("heatmap-grid");
       const locationHeatmapPanelEl = document.getElementById(
@@ -401,6 +451,8 @@
       const locationHeatmapDetailEl = document.getElementById(
         "location-heatmap-detail",
       );
+      let locationComboboxOptions = [];
+      let activeLocationOptionIndex = -1;
 
       const title = `${name} · ${fuel.toUpperCase()}`;
       document.getElementById("chart-title").textContent = title;
@@ -506,6 +558,25 @@
         handleLocationChange().catch(() => {
           locationHeatmapSubEl.textContent = "Standort-Heatmap konnte nicht geladen werden.";
         });
+      });
+      locationComboboxInputEl.addEventListener("input", () => {
+        handleLocationComboboxInput();
+      });
+      locationComboboxInputEl.addEventListener("focus", () => {
+        renderLocationComboboxOptions(locationComboboxInputEl.value);
+      });
+      locationComboboxInputEl.addEventListener("blur", () => {
+        window.setTimeout(() => {
+          closeLocationCombobox();
+          syncLocationComboboxInput();
+        }, 120);
+      });
+      locationComboboxInputEl.addEventListener("keydown", (event) => {
+        handleLocationComboboxKeydown(event);
+      });
+      locationComboboxToggleEl.addEventListener("click", () => {
+        locationComboboxInputEl.focus();
+        renderLocationComboboxOptions(locationComboboxInputEl.value, true);
       });
       stationSelectEl.addEventListener("change", () => {
         handleStationChange().catch(() => {
@@ -665,6 +736,7 @@
           return normalizeHistoryRows(source).map((row) => ({
             ...row,
             count: Number(row.count || 1),
+            hasData: true,
           }));
         }
         if (Array.isArray(source?.rows)) {
@@ -674,16 +746,27 @@
         const prices = Array.isArray(source?.prices) ? source.prices : [];
         const counts = Array.isArray(source?.counts) ? source.counts : [];
         return dates
-          .map((dateValue, index) => ({
-            date: String(dateValue || "").trim(),
-            price: Number(prices[index]),
-            count: Number(counts[index] || 1),
-          }))
+          .map((dateValue, index) => {
+            const rawPrice = prices[index];
+            const price =
+              rawPrice === null ||
+              typeof rawPrice === "undefined" ||
+              String(rawPrice).trim() === ""
+                ? null
+                : Number(rawPrice);
+            const count = Number(counts[index] || 0);
+            const hasData = count > 0 && Number.isFinite(price);
+            return {
+              date: String(dateValue || "").trim(),
+              price: hasData ? price : null,
+              count,
+              hasData,
+            };
+          })
           .filter(
             (row) =>
               row.date &&
-              row.date >= HISTORY_START &&
-              Number.isFinite(row.price),
+              row.date >= HISTORY_START,
           )
           .sort((left, right) => left.date.localeCompare(right.date));
       }
@@ -737,8 +820,12 @@
         )}, ${Math.round(a.b + (b.b - a.b) * t)})`;
       }
 
-      function heatmapColor(value, min, max) {
-        if (!Number.isFinite(value)) return "rgba(148, 163, 184, 0.16)";
+      function hasHeatmapData(row) {
+        return row?.hasData !== false && Number.isFinite(Number(row?.price));
+      }
+
+      function heatmapColor(value, min, max, hasData = true) {
+        if (!hasData || !Number.isFinite(value)) return HEATMAP_NO_DATA_COLOR;
         if (Math.abs(max - min) < 0.0005) return HEATMAP_MID_COLOR;
         const ratio = (value - min) / (max - min);
         if (ratio < 0.5) {
@@ -751,6 +838,7 @@
         // One global price domain keeps the three heatmaps visually comparable.
         const values = rowSets
           .flat()
+          .filter(hasHeatmapData)
           .map((row) => Number(row.price))
           .filter(Number.isFinite);
         if (!values.length) return null;
@@ -804,7 +892,9 @@
         const firstWeekStart = new Date(first.getTime());
         firstWeekStart.setUTCDate(firstWeekStart.getUTCDate() - datedRows[0].weekday);
         const firstWeekStartMs = firstWeekStart.getTime();
-        const values = datedRows.map((row) => row.price);
+        const values = datedRows
+          .filter(hasHeatmapData)
+          .map((row) => Number(row.price));
         const cells = datedRows.map((row) => ({
           ...row,
           week: Math.floor((row.parsed.getTime() - firstWeekStartMs) / (7 * oneDayMs)),
@@ -814,8 +904,8 @@
           cells,
           columns: Math.max(...cells.map((cell) => cell.week)) + 1,
           firstWeekStart,
-          min: Math.min(...values),
-          max: Math.max(...values),
+          min: values.length ? Math.min(...values) : 0,
+          max: values.length ? Math.max(...values) : 0,
         };
       }
 
@@ -884,7 +974,13 @@
         layout.cells.forEach((cell) => {
           const x = margin.left + cell.week * cellWidth;
           const y = margin.top + cell.weekday * cellHeight;
-          const fill = heatmapColor(cell.price, domain.min, domain.max);
+          const cellHasData = hasHeatmapData(cell);
+          const fill = heatmapColor(
+            Number(cell.price),
+            domain.min,
+            domain.max,
+            cellHasData,
+          );
           const rect = {
             x: x + cellGap / 2,
             y: y + cellGap / 2,
@@ -900,7 +996,11 @@
             ctx.textAlign = "center";
             ctx.font = "600 11px Manrope, system-ui, sans-serif";
             ctx.fillText(
-              formatFuelPrice(cell.price),
+              cellHasData
+                ? formatFuelPrice(cell.price)
+                : cellWidth >= 82
+                  ? "Keine Daten"
+                  : "-",
               rect.x + rect.width / 2,
               rect.y + rect.height / 2,
             );
@@ -989,7 +1089,9 @@
           canvas.title = cell
             ? `${HEATMAP_WEEKDAY_FULL_LABELS[cell.weekday]}, ${formatHistoryDay(
                 cell.date,
-              )}: ${formatFuelPrice(cell.price)} EUR/l`
+              )}: ${
+                hasHeatmapData(cell) ? `${formatFuelPrice(cell.price)} EUR/l` : "Keine Daten"
+              }`
             : "";
         };
         const handleLeave = () => {
@@ -1154,6 +1256,12 @@
         detailEl.append(panel);
       }
 
+      function noDataComparisonMessage(dateLabel) {
+        return `Keine Daten für ${formatHistoryDay(
+          dateLabel,
+        )} verfügbar — Tabelle kann nicht angezeigt werden.`;
+      }
+
       function appendComparisonCells(tableRow, row) {
         const nameCell = document.createElement("td");
         nameCell.className = "heatmap-station-cell";
@@ -1245,6 +1353,13 @@
         if (!priceRows.length) {
           renderHeatmapDetailMessage(
             overallHeatmapDetailEl,
+            noDataComparisonMessage(cell.date),
+          );
+          return;
+        }
+        if (!priceRows.length) {
+          renderHeatmapDetailMessage(
+            overallHeatmapDetailEl,
             "Ein Preisvergleich ist für diesen Tag nicht möglich, da keine Preisdaten vorliegen.",
           );
           return;
@@ -1273,6 +1388,13 @@
         if (!priceRows.length) {
           renderHeatmapDetailMessage(
             locationHeatmapDetailEl,
+            noDataComparisonMessage(cell.date),
+          );
+          return;
+        }
+        if (!priceRows.length) {
+          renderHeatmapDetailMessage(
+            locationHeatmapDetailEl,
             "Ein Preisvergleich ist für diesen Tag nicht möglich, da keine Preisdaten vorliegen.",
           );
           return;
@@ -1295,6 +1417,7 @@
 
       function populateLocationSelect(summary) {
         const previousValue = locationSelectEl.value;
+        locationComboboxOptions = [];
         locationSelectEl.innerHTML = "";
         const placeholder = document.createElement("option");
         placeholder.value = "";
@@ -1302,10 +1425,15 @@
         locationSelectEl.append(placeholder);
 
         (summary.locations || []).forEach((location) => {
+          const label = `${location.label} (${location.station_count})`;
           const option = document.createElement("option");
           option.value = location.key;
-          option.textContent = `${location.label} (${location.station_count})`;
+          option.textContent = label;
           locationSelectEl.append(option);
+          locationComboboxOptions.push({
+            value: location.key,
+            label,
+          });
         });
 
         if (
@@ -1313,6 +1441,138 @@
           Array.from(locationSelectEl.options).some((option) => option.value === previousValue)
         ) {
           locationSelectEl.value = previousValue;
+        }
+        syncLocationComboboxInput();
+        closeLocationCombobox();
+      }
+
+      function selectedLocationOption() {
+        const value = locationSelectEl.value;
+        return locationComboboxOptions.find((option) => option.value === value) || null;
+      }
+
+      function syncLocationComboboxInput() {
+        const option = selectedLocationOption();
+        locationComboboxInputEl.value = option ? option.label : "";
+      }
+
+      function closeLocationCombobox() {
+        locationComboboxListEl.hidden = true;
+        locationComboboxInputEl.setAttribute("aria-expanded", "false");
+        activeLocationOptionIndex = -1;
+      }
+
+      function setActiveLocationOption(index) {
+        const options = Array.from(
+          locationComboboxListEl.querySelectorAll(".heatmap-combobox-option"),
+        );
+        activeLocationOptionIndex = Math.max(-1, Math.min(index, options.length - 1));
+        options.forEach((option, optionIndex) => {
+          option.classList.toggle("is-active", optionIndex === activeLocationOptionIndex);
+        });
+      }
+
+      function selectLocationComboboxOption(option) {
+        if (!option) return;
+        if (locationSelectEl.value !== option.value) {
+          locationSelectEl.value = option.value;
+          locationSelectEl.dispatchEvent(new Event("change"));
+        }
+        locationComboboxInputEl.value = option.label;
+        closeLocationCombobox();
+      }
+
+      function clearLocationSelection() {
+        if (!locationSelectEl.value) return;
+        locationSelectEl.value = "";
+        locationSelectEl.dispatchEvent(new Event("change"));
+      }
+
+      function matchingLocationOption(label) {
+        const needle = String(label || "").trim().toLocaleLowerCase("de");
+        return (
+          locationComboboxOptions.find(
+            (option) => option.label.toLocaleLowerCase("de") === needle,
+          ) || null
+        );
+      }
+
+      function filteredLocationOptions(query) {
+        const needle = String(query || "").trim().toLocaleLowerCase("de");
+        if (!needle) return locationComboboxOptions;
+        return locationComboboxOptions.filter((option) =>
+          option.label.toLocaleLowerCase("de").includes(needle),
+        );
+      }
+
+      function renderLocationComboboxOptions(query = "", forceOpen = false) {
+        const options = filteredLocationOptions(query);
+        locationComboboxListEl.innerHTML = "";
+        if (!options.length) {
+          const item = document.createElement("li");
+          item.className = "heatmap-combobox-empty";
+          item.textContent = "Kein Standort gefunden";
+          locationComboboxListEl.append(item);
+          activeLocationOptionIndex = -1;
+        } else {
+          options.forEach((option) => {
+            const item = document.createElement("li");
+            item.role = "option";
+            const button = document.createElement("button");
+            button.className = "heatmap-combobox-option";
+            button.type = "button";
+            button.textContent = option.label;
+            button.addEventListener("mousedown", (event) => event.preventDefault());
+            button.addEventListener("click", () => selectLocationComboboxOption(option));
+            item.append(button);
+            locationComboboxListEl.append(item);
+          });
+          setActiveLocationOption(0);
+        }
+        if (forceOpen || document.activeElement === locationComboboxInputEl) {
+          locationComboboxListEl.hidden = false;
+          locationComboboxInputEl.setAttribute("aria-expanded", "true");
+        }
+      }
+
+      function handleLocationComboboxInput() {
+        const match = matchingLocationOption(locationComboboxInputEl.value);
+        if (match) {
+          selectLocationComboboxOption(match);
+          return;
+        }
+        clearLocationSelection();
+        renderLocationComboboxOptions(locationComboboxInputEl.value);
+      }
+
+      function handleLocationComboboxKeydown(event) {
+        const options = Array.from(
+          locationComboboxListEl.querySelectorAll(".heatmap-combobox-option"),
+        );
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          if (locationComboboxListEl.hidden) {
+            renderLocationComboboxOptions(locationComboboxInputEl.value, true);
+            return;
+          }
+          setActiveLocationOption(activeLocationOptionIndex + 1);
+          options[activeLocationOptionIndex]?.scrollIntoView({ block: "nearest" });
+        } else if (event.key === "ArrowUp") {
+          event.preventDefault();
+          setActiveLocationOption(activeLocationOptionIndex - 1);
+          options[activeLocationOptionIndex]?.scrollIntoView({ block: "nearest" });
+        } else if (event.key === "Enter") {
+          event.preventDefault();
+          const activeOption = options[activeLocationOptionIndex];
+          if (activeOption) {
+            activeOption.click();
+          } else {
+            const match = matchingLocationOption(locationComboboxInputEl.value);
+            if (match) selectLocationComboboxOption(match);
+          }
+        } else if (event.key === "Escape") {
+          closeLocationCombobox();
+          syncLocationComboboxInput();
         }
       }
 
@@ -1899,13 +2159,16 @@
       }
 
       async function loadChart() {
-        if (!stationId) return;
+        if (!stationId && activeView !== "heatmap") return;
 
         if (activeView === "heatmap") {
           try {
             await loadHeatmapChart();
             return;
           } catch (_error) {
+            if (isEmbeddedHeatmap) {
+              throw _error;
+            }
             activeView = "profile";
             setButtonState();
             updateViewInUrl();

@@ -92,6 +92,14 @@ header {
   margin-bottom: 16px;
 }
 
+.header-filters {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .brand h1 {
   margin: 0 0 4px;
   font-size: clamp(24px, 5vw, 38px);
@@ -150,6 +158,125 @@ header {
 
 .filter-chip select:focus {
   outline: none;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.location-filter {
+  align-items: flex-start;
+  border-radius: 24px;
+}
+
+.location-filter-fields {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.location-field {
+  display: grid;
+  gap: 4px;
+  min-width: 132px;
+}
+
+.location-field input {
+  width: 150px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(128, 128, 128, 0.1);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  padding: 8px 12px;
+}
+
+.location-field input:focus {
+  outline: 2px solid rgba(20, 184, 166, 0.35);
+  outline-offset: 1px;
+}
+
+.location-field input[aria-invalid="true"] {
+  outline: 2px solid rgba(220, 38, 38, 0.45);
+}
+
+.field-error {
+  min-height: 1rem;
+  color: #b91c1c;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.location-apply-btn {
+  padding: 8px 14px;
+  font-size: 0.88rem;
+  box-shadow: none;
+}
+
+.diesel-heatmap-toggle {
+  align-self: flex-start;
+  margin-left: auto;
+}
+
+.diesel-heatmap-view {
+  display: grid;
+  gap: 14px;
+}
+
+.diesel-heatmap-view[hidden] {
+  display: none;
+}
+
+.diesel-heatmap-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.diesel-heatmap-toolbar h2 {
+  margin: 0;
+  font-size: clamp(20px, 4vw, 30px);
+}
+
+.diesel-heatmap-frame {
+  width: 100%;
+  min-height: 1180px;
+  border: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  .field-error {
+    color: #ff8a8a;
+  }
+}
+
+@media (max-width: 760px) {
+  .header-filters,
+  .filter-chip,
+  .location-filter,
+  .location-filter-fields,
+  .location-field,
+  .location-field input {
+    width: 100%;
+  }
+  .diesel-heatmap-toggle {
+    margin-left: 0;
+  }
+  .diesel-heatmap-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
 }
 
 h1 {
@@ -518,6 +645,128 @@ p {
   }
 }
 
+.distance-heading,
+.distance-cell {
+  min-width: 220px;
+  width: 28%;
+}
+
+.distance-cell {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.distance-drive {
+  position: relative;
+  width: 100%;
+  min-width: 200px;
+  height: 56px;
+  overflow: hidden;
+  container-type: inline-size;
+}
+
+.distance-road {
+  position: absolute;
+  left: 0;
+  right: 8px;
+  bottom: 12px;
+  height: 5px;
+  border-radius: 999px;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.86) 0 14px,
+      rgba(255, 255, 255, 0.22) 14px 25px
+    ),
+    rgba(96, 96, 96, 0.34);
+}
+
+.distance-flag {
+  position: absolute;
+  right: 0;
+  bottom: 14px;
+  display: grid;
+  grid-template-columns: repeat(2, 8px);
+  grid-template-rows: repeat(2, 7px);
+  width: 16px;
+  height: 14px;
+  box-shadow: -1px 0 0 var(--ink);
+}
+
+.distance-flag::after {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: 0;
+  width: 2px;
+  height: 32px;
+  border-radius: 999px;
+  background: var(--ink);
+}
+
+.distance-flag span:nth-child(1),
+.distance-flag span:nth-child(4) {
+  background: var(--ink);
+}
+
+.distance-flag span:nth-child(2),
+.distance-flag span:nth-child(3) {
+  background: var(--card);
+}
+
+.distance-car-wrap {
+  position: absolute;
+  left: 0;
+  bottom: 6px;
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  width: 58px;
+  transform: translateX(calc((100cqw - 58px) * var(--distance-ratio)));
+  animation: drive-distance 5s linear both;
+}
+
+.distance-label {
+  color: var(--ink);
+  font-size: 0.76rem;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+  text-shadow:
+    0 1px 0 var(--card),
+    0 -1px 0 var(--card),
+    1px 0 0 var(--card),
+    -1px 0 0 var(--card);
+}
+
+.distance-car {
+  width: 46px;
+  height: 24px;
+  color: var(--accent);
+  fill: currentColor;
+  filter: drop-shadow(0 2px 3px rgba(10, 10, 10, 0.18));
+}
+
+.distance-car path:last-child {
+  fill: rgba(255, 255, 255, 0.74);
+}
+
+@keyframes drive-distance {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(calc((100cqw - 58px) * var(--distance-ratio)));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .distance-car-wrap {
+    animation: none;
+  }
+}
+
 /* ========== Card Layout for Mobile ========== */
 @media (max-width: 600px) {
   .table thead {
@@ -539,6 +788,7 @@ p {
   .table td {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     padding: 6px 0;
     border-bottom: 1px solid rgba(128, 128, 128, 0.08);
     font-size: 0.9rem;
@@ -551,6 +801,21 @@ p {
     font-weight: 600;
     color: var(--muted);
     margin-right: 10px;
+  }
+
+  .distance-cell {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .distance-cell::before {
+    margin-right: 0;
+  }
+
+  .distance-drive {
+    min-width: 0;
   }
 }
 
@@ -689,6 +954,29 @@ p {
   padding: 18px;
 }
 
+body.chart-embed {
+  background: transparent;
+}
+
+body.chart-embed .app {
+  max-width: none;
+  padding: 0;
+}
+
+body.chart-embed header,
+body.chart-embed .chart-actions,
+body.chart-embed .nav-bar {
+  display: none;
+}
+
+body.chart-embed .chart-card {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+
 .chart-title {
   margin: 0 0 6px;
   font-size: clamp(20px, 4vw, 30px);
@@ -729,7 +1017,8 @@ p {
   font-weight: 700;
 }
 
-.heatmap-select-field select {
+.heatmap-select-field select,
+.heatmap-combobox-input {
   width: 100%;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -737,6 +1026,80 @@ p {
   color: var(--text);
   padding: 10px 12px;
   font: inherit;
+}
+
+.heatmap-native-select {
+  display: none;
+}
+
+.heatmap-combobox {
+  position: relative;
+  display: grid;
+}
+
+.heatmap-combobox-input {
+  padding-right: 42px;
+}
+
+.heatmap-combobox-toggle {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  bottom: 1px;
+  width: 38px;
+  border: 0;
+  border-left: 1px solid var(--border);
+  border-radius: 0 8px 8px 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+}
+
+.heatmap-combobox-list {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  max-height: 260px;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.14);
+}
+
+.heatmap-combobox-list[hidden] {
+  display: none;
+}
+
+.heatmap-combobox-option,
+.heatmap-combobox-empty {
+  width: 100%;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  padding: 9px 10px;
+  font: inherit;
+  text-align: left;
+}
+
+.heatmap-combobox-option {
+  cursor: pointer;
+}
+
+.heatmap-combobox-option:hover,
+.heatmap-combobox-option.is-active {
+  background: rgba(15, 118, 110, 0.1);
+}
+
+.heatmap-combobox-empty {
+  color: var(--muted);
 }
 
 .heatmap-station-control {
