@@ -865,6 +865,7 @@ p {
   text-align: left;
   vertical-align: top;
   text-transform: none;
+  min-width: 0;
 }
 
 .heatmap-comparison-table th {
@@ -894,7 +895,9 @@ p {
 .heatmap-station-cell {
   color: var(--ink);
   font-weight: 700;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  white-space: normal;
 }
 
 .heatmap-price-cell {
