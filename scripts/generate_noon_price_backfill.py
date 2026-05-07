@@ -22,6 +22,7 @@ try:
         write_history_files as _write_history_files,
         write_snapshot as _write_snapshot,
     )
+    from .generate_heatmap_summary import generate_heatmap_summary
     from .noon_reference import FUELS
 except ImportError:  # pragma: no cover
     from generate_data import TZ, TANKER_BASE, _data_path, _parse_dates_utc, _read_csv_from_url
@@ -34,6 +35,7 @@ except ImportError:  # pragma: no cover
         write_history_files as _write_history_files,
         write_snapshot as _write_snapshot,
     )
+    from generate_heatmap_summary import generate_heatmap_summary
     from noon_reference import FUELS
 
 
@@ -161,6 +163,8 @@ def generate_noon_price_backfill(
         _write_snapshot(latest_snapshot, latest_output_path)
     if history_paths:
         print(f"Wrote {len(history_paths):,} station fuel noon history files")
+    heatmap_paths = generate_heatmap_summary(output_root)
+    print(f"Wrote {len(heatmap_paths):,} heatmap summary files")
     return written_paths
 
 

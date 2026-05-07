@@ -19,12 +19,12 @@
     <title>Tankzeit | Chart</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="preload" href="styles.css?v=20260409-app-promo-v18" as="style" />
+    <link rel="preload" href="styles.css?v=20260507-heatmap-table-v2" as="style" />
     <link
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&amp;display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260409-app-promo-v18" />
+    <link rel="stylesheet" href="styles.css?v=20260507-heatmap-table-v2" />
     <script
       defer
       src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
@@ -44,14 +44,45 @@
           <button class="btn primary" id="history-view" type="button">
             Mittagspreise
           </button>
+          <button class="btn" id="heatmap-view" type="button">Heatmap</button>
           <button class="btn" id="profile-view" type="button">Preisänderung</button>
           <a class="btn" id="maps-link" href="#" target="_blank" rel="noopener"
             >Zur Tankstelle</a
           >
         </div>
+        <div class="heatmap-controls" id="heatmap-controls" hidden>
+          <label class="heatmap-select-field">
+            <span>Standort</span>
+            <select id="location-select">
+              <option value="">Standort wählen</option>
+            </select>
+          </label>
+        </div>
         <h2 class="chart-title" id="chart-title">Lade Chart...</h2>
         <canvas id="chart"></canvas>
         <p class="chart-sub" id="chart-sub"></p>
+        <div class="heatmap-detail" id="overall-heatmap-detail"></div>
+        <div class="heatmap-grid" id="heatmap-grid" hidden>
+          <article class="heatmap-panel" id="location-heatmap-panel" hidden>
+            <h3 id="location-heatmap-title">Standort-Heatmap</h3>
+            <div class="heatmap-station-control">
+              <label class="heatmap-select-field">
+                <span>Tankstelle</span>
+                <select id="station-select" disabled>
+                  <option value="">Erst Standort wählen</option>
+                </select>
+              </label>
+            </div>
+            <canvas id="location-heatmap"></canvas>
+            <p class="chart-sub" id="location-heatmap-sub"></p>
+            <div class="heatmap-detail" id="location-heatmap-detail"></div>
+          </article>
+          <article class="heatmap-panel" id="station-heatmap-panel" hidden>
+            <h3 id="station-heatmap-title">Tankstellen-Heatmap</h3>
+            <canvas id="station-heatmap"></canvas>
+            <p class="chart-sub" id="station-heatmap-sub"></p>
+          </article>
+        </div>
       </section>
     </main>
 
@@ -109,7 +140,20 @@
       const DATA_BASE = "data2/";
       const HISTORY_START = "2026-04-01";
       let chartInstance = null;
-      let activeView = params.get("view") === "profile" ? "profile" : "history";
+      let heatmapInstances = [];
+      let locationHeatmapInstance = null;
+      let stationHeatmapInstance = null;
+      let heatmapSummary = null;
+      let stationCatalog = null;
+      let overallHeatmapRows = [];
+      let locationHeatmapRows = [];
+      let stationHeatmapRows = [];
+      const noonSnapshotCache = new Map();
+      const requestedView = params.get("view");
+      let activeView =
+        requestedView === "profile" || requestedView === "heatmap"
+          ? requestedView
+          : "history";
       const DARK_MODE_MEDIA_QUERY = window.matchMedia(
         "(prefers-color-scheme: dark)",
       );
@@ -125,6 +169,21 @@
         stroke: "#0f766e",
         fill: "rgba(15, 118, 110, 0.16)",
       };
+      const HEATMAP_LOW_COLOR = "#0f766e";
+      const HEATMAP_MID_COLOR = "#f59e0b";
+      const HEATMAP_HIGH_COLOR = "#b91c1c";
+      const HEATMAP_WEEKDAY_LABELS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+      const HEATMAP_WEEKDAY_FULL_LABELS = [
+        "Montag",
+        "Dienstag",
+        "Mittwoch",
+        "Donnerstag",
+        "Freitag",
+        "Samstag",
+        "Sonntag",
+      ];
+      const HEATMAP_DETAIL_HINT =
+        "Hinweis: Klicke auf einen Tag in der Heatmap, um den detaillierten Preisvergleich der Tankstellen für diesen Tag einzublenden.";
 
       function currentChartTheme() {
         if (DARK_MODE_MEDIA_QUERY.matches) {
@@ -316,7 +375,32 @@
         },
       };
       const historyButton = document.getElementById("history-view");
+      const heatmapButton = document.getElementById("heatmap-view");
       const profileButton = document.getElementById("profile-view");
+      const heatmapControlsEl = document.getElementById("heatmap-controls");
+      const locationSelectEl = document.getElementById("location-select");
+      const stationSelectEl = document.getElementById("station-select");
+      const heatmapGridEl = document.getElementById("heatmap-grid");
+      const locationHeatmapPanelEl = document.getElementById(
+        "location-heatmap-panel",
+      );
+      const stationHeatmapPanelEl = document.getElementById(
+        "station-heatmap-panel",
+      );
+      const locationHeatmapTitleEl = document.getElementById(
+        "location-heatmap-title",
+      );
+      const stationHeatmapTitleEl = document.getElementById(
+        "station-heatmap-title",
+      );
+      const locationHeatmapSubEl = document.getElementById("location-heatmap-sub");
+      const stationHeatmapSubEl = document.getElementById("station-heatmap-sub");
+      const overallHeatmapDetailEl = document.getElementById(
+        "overall-heatmap-detail",
+      );
+      const locationHeatmapDetailEl = document.getElementById(
+        "location-heatmap-detail",
+      );
 
       const title = `${name} · ${fuel.toUpperCase()}`;
       document.getElementById("chart-title").textContent = title;
@@ -338,6 +422,32 @@
         const response = await fetch(url);
         if (!response.ok) throw new Error(`Request failed: ${response.status}`);
         return parseCsv(await response.text());
+      }
+
+      async function loadStationCatalog() {
+        if (stationCatalog) return stationCatalog;
+        const rows = await fetchJson("data/stations.json");
+        stationCatalog = new Map(
+          rows
+            .map((row) => {
+              const id = String(row?.uuid || "").trim();
+              if (!id) return null;
+              return [
+                id,
+                {
+                  id,
+                  name: String(row?.name || "Tankstelle").trim(),
+                  brand: String(row?.brand || "").trim(),
+                  city: String(row?.city || "").trim(),
+                  street: String(row?.street || "").trim(),
+                  houseNumber: String(row?.house_number || "").trim(),
+                  postCode: String(row?.post_code || "").trim(),
+                },
+              ];
+            })
+            .filter(Boolean),
+        );
+        return stationCatalog;
       }
 
       function parseCsv(text) {
@@ -363,7 +473,17 @@
 
       function setButtonState() {
         historyButton.classList.toggle("primary", activeView === "history");
+        heatmapButton.classList.toggle("primary", activeView === "heatmap");
         profileButton.classList.toggle("primary", activeView === "profile");
+        const isHeatmap = activeView === "heatmap";
+        heatmapControlsEl.hidden = !isHeatmap;
+        heatmapGridEl.hidden = !isHeatmap;
+        overallHeatmapDetailEl.hidden = !isHeatmap;
+        if (!isHeatmap) {
+          locationHeatmapPanelEl.hidden = true;
+          stationHeatmapPanelEl.hidden = true;
+          destroyHeatmapInstances();
+        }
       }
 
       function updateViewInUrl() {
@@ -380,7 +500,18 @@
       }
 
       historyButton.addEventListener("click", () => switchView("history"));
+      heatmapButton.addEventListener("click", () => switchView("heatmap"));
       profileButton.addEventListener("click", () => switchView("profile"));
+      locationSelectEl.addEventListener("change", () => {
+        handleLocationChange().catch(() => {
+          locationHeatmapSubEl.textContent = "Standort-Heatmap konnte nicht geladen werden.";
+        });
+      });
+      stationSelectEl.addEventListener("change", () => {
+        handleStationChange().catch(() => {
+          stationHeatmapSubEl.textContent = "Tankstellen-Heatmap konnte nicht geladen werden.";
+        });
+      });
       setButtonState();
       updateViewInUrl();
 
@@ -500,6 +631,19 @@
         }).format(parsed);
       }
 
+      function parseHistoryDate(day) {
+        const [year, month, date] = String(day).split("-").map(Number);
+        if (!year || !month || !date) return null;
+        const parsed = new Date(Date.UTC(year, month - 1, date));
+        return Number.isNaN(parsed.getTime()) ? null : parsed;
+      }
+
+      function weekdayIndexForDate(day) {
+        const parsed = parseHistoryDate(day);
+        if (!parsed) return null;
+        return (parsed.getUTCDay() + 6) % 7;
+      }
+
       function normalizeHistoryRows(rows) {
         return rows
           .map((row) => ({
@@ -516,6 +660,50 @@
           .sort((left, right) => left.date.localeCompare(right.date));
       }
 
+      function normalizeHeatmapRows(source, fallbackDates = []) {
+        if (Array.isArray(source)) {
+          return normalizeHistoryRows(source).map((row) => ({
+            ...row,
+            count: Number(row.count || 1),
+          }));
+        }
+        if (Array.isArray(source?.rows)) {
+          return normalizeHeatmapRows(source.rows);
+        }
+        const dates = Array.isArray(source?.dates) ? source.dates : fallbackDates;
+        const prices = Array.isArray(source?.prices) ? source.prices : [];
+        const counts = Array.isArray(source?.counts) ? source.counts : [];
+        return dates
+          .map((dateValue, index) => ({
+            date: String(dateValue || "").trim(),
+            price: Number(prices[index]),
+            count: Number(counts[index] || 1),
+          }))
+          .filter(
+            (row) =>
+              row.date &&
+              row.date >= HISTORY_START &&
+              Number.isFinite(row.price),
+          )
+          .sort((left, right) => left.date.localeCompare(right.date));
+      }
+
+      function buildHeatmapSubtitle(rows, label = "Heatmap der Mittagspreise") {
+        if (!rows.length) {
+          return `${fuel.toUpperCase()} · Keine Heatmap-Daten ab ${formatHistoryDay(HISTORY_START)} verfügbar.`;
+        }
+        const first = rows[0].date;
+        const last = rows[rows.length - 1].date;
+        return [
+          `${fuel.toUpperCase()} · ${label}`,
+          `${rows.length} Tage`,
+          `${formatHistoryDay(first)} - ${formatHistoryDay(last)}`,
+          "Zeilen = Wochentage",
+          "Spalten = Kalenderwochen",
+          "Farbe = Preisniveau",
+        ].join(" · ");
+      }
+
       function buildHistorySubtitle(rows) {
         if (!rows.length) {
           return `${fuel.toUpperCase()} · Keine Mittagspreise ab ${formatHistoryDay(HISTORY_START)} verfügbar.`;
@@ -528,6 +716,714 @@
           `${formatHistoryDay(first)} - ${formatHistoryDay(last)}`,
           "y-Achse = etablierter Mittagspreis",
         ].join(" · ");
+      }
+
+      function hexToRgb(hex) {
+        const clean = String(hex).replace("#", "");
+        const value = Number.parseInt(clean, 16);
+        return {
+          r: (value >> 16) & 255,
+          g: (value >> 8) & 255,
+          b: value & 255,
+        };
+      }
+
+      function mixColor(left, right, ratio) {
+        const a = hexToRgb(left);
+        const b = hexToRgb(right);
+        const t = Math.max(0, Math.min(1, ratio));
+        return `rgb(${Math.round(a.r + (b.r - a.r) * t)}, ${Math.round(
+          a.g + (b.g - a.g) * t,
+        )}, ${Math.round(a.b + (b.b - a.b) * t)})`;
+      }
+
+      function heatmapColor(value, min, max) {
+        if (!Number.isFinite(value)) return "rgba(148, 163, 184, 0.16)";
+        if (Math.abs(max - min) < 0.0005) return HEATMAP_MID_COLOR;
+        const ratio = (value - min) / (max - min);
+        if (ratio < 0.5) {
+          return mixColor(HEATMAP_LOW_COLOR, HEATMAP_MID_COLOR, ratio / 0.5);
+        }
+        return mixColor(HEATMAP_MID_COLOR, HEATMAP_HIGH_COLOR, (ratio - 0.5) / 0.5);
+      }
+
+      function computeHeatmapColorDomain(rowSets) {
+        // One global price domain keeps the three heatmaps visually comparable.
+        const values = rowSets
+          .flat()
+          .map((row) => Number(row.price))
+          .filter(Number.isFinite);
+        if (!values.length) return null;
+        return {
+          min: Math.min(...values),
+          max: Math.max(...values),
+        };
+      }
+
+      function currentHeatmapColorDomain() {
+        return computeHeatmapColorDomain([
+          overallHeatmapRows,
+          locationHeatmapRows,
+          stationHeatmapRows,
+        ]);
+      }
+
+      function syncHeatmapColorDomains() {
+        const domain = currentHeatmapColorDomain();
+        chartInstance?.setColorDomain?.(domain);
+        locationHeatmapInstance?.setColorDomain?.(domain);
+        stationHeatmapInstance?.setColorDomain?.(domain);
+      }
+
+      function textColorForFill(fill) {
+        const match = String(fill).match(/\d+/g);
+        if (!match || match.length < 3) return "#111827";
+        const [r, g, b] = match.slice(0, 3).map(Number);
+        const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+        return luminance > 0.58 ? "#111827" : "#ffffff";
+      }
+
+      function buildHeatmapLayout(rows) {
+        const datedRows = rows
+          .map((row) => {
+            const parsed = parseHistoryDate(row.date);
+            const weekday = weekdayIndexForDate(row.date);
+            return parsed && weekday !== null
+              ? {
+                  ...row,
+                  parsed,
+                  weekday,
+                }
+              : null;
+          })
+          .filter(Boolean);
+        if (!datedRows.length) return null;
+
+        const oneDayMs = 24 * 60 * 60 * 1000;
+        const first = datedRows[0].parsed;
+        const firstWeekStart = new Date(first.getTime());
+        firstWeekStart.setUTCDate(firstWeekStart.getUTCDate() - datedRows[0].weekday);
+        const firstWeekStartMs = firstWeekStart.getTime();
+        const values = datedRows.map((row) => row.price);
+        const cells = datedRows.map((row) => ({
+          ...row,
+          week: Math.floor((row.parsed.getTime() - firstWeekStartMs) / (7 * oneDayMs)),
+        }));
+
+        return {
+          cells,
+          columns: Math.max(...cells.map((cell) => cell.week)) + 1,
+          firstWeekStart,
+          min: Math.min(...values),
+          max: Math.max(...values),
+        };
+      }
+
+      function setupHeatmapCanvas(canvas) {
+        const bounds = canvas.getBoundingClientRect();
+        const ratio = Math.max(window.devicePixelRatio || 1, 1);
+        const width = Math.max(320, Math.round(bounds.width));
+        const height = Math.max(320, Math.round(bounds.height));
+        canvas.width = Math.round(width * ratio);
+        canvas.height = Math.round(height * ratio);
+        const ctx = canvas.getContext("2d");
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        ctx.clearRect(0, 0, width, height);
+        return { ctx, width, height };
+      }
+
+      function drawHeatmapCanvas(canvas, rows, colorDomain = null) {
+        const layout = buildHeatmapLayout(rows);
+        const { ctx, width, height } = setupHeatmapCanvas(canvas);
+        const theme = currentChartTheme();
+        const margin = {
+          top: 34,
+          right: 22,
+          bottom: 72,
+          left: 48,
+        };
+        const plotWidth = width - margin.left - margin.right;
+        const plotHeight = height - margin.top - margin.bottom;
+
+        ctx.font = "12px Manrope, system-ui, sans-serif";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = theme.axisLabel;
+
+        if (!layout || plotWidth <= 0 || plotHeight <= 0) {
+          ctx.textAlign = "center";
+          ctx.fillText("Keine Heatmap-Daten verfügbar.", width / 2, height / 2);
+          return null;
+        }
+
+        const domain = colorDomain || {
+          min: layout.min,
+          max: layout.max,
+        };
+        const cellWidth = plotWidth / layout.columns;
+        const cellHeight = plotHeight / HEATMAP_WEEKDAY_LABELS.length;
+        const cellGap = Math.max(1, Math.min(3, cellWidth * 0.08, cellHeight * 0.08));
+        const cellsByPosition = new Map();
+
+        ctx.textAlign = "right";
+        HEATMAP_WEEKDAY_LABELS.forEach((label, index) => {
+          const y = margin.top + index * cellHeight + cellHeight / 2;
+          ctx.fillStyle = theme.axisLabel;
+          ctx.fillText(label, margin.left - 12, y);
+        });
+
+        ctx.strokeStyle = theme.grid;
+        ctx.lineWidth = 1;
+        for (let row = 0; row <= HEATMAP_WEEKDAY_LABELS.length; row += 1) {
+          const y = margin.top + row * cellHeight;
+          ctx.beginPath();
+          ctx.moveTo(margin.left, y);
+          ctx.lineTo(width - margin.right, y);
+          ctx.stroke();
+        }
+
+        layout.cells.forEach((cell) => {
+          const x = margin.left + cell.week * cellWidth;
+          const y = margin.top + cell.weekday * cellHeight;
+          const fill = heatmapColor(cell.price, domain.min, domain.max);
+          const rect = {
+            x: x + cellGap / 2,
+            y: y + cellGap / 2,
+            width: Math.max(1, cellWidth - cellGap),
+            height: Math.max(1, cellHeight - cellGap),
+          };
+          ctx.fillStyle = fill;
+          ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+          cellsByPosition.set(`${cell.week}:${cell.weekday}`, { ...cell, rect });
+
+          if (cellWidth >= 46 && cellHeight >= 24) {
+            ctx.fillStyle = textColorForFill(fill);
+            ctx.textAlign = "center";
+            ctx.font = "600 11px Manrope, system-ui, sans-serif";
+            ctx.fillText(
+              formatFuelPrice(cell.price),
+              rect.x + rect.width / 2,
+              rect.y + rect.height / 2,
+            );
+            ctx.font = "12px Manrope, system-ui, sans-serif";
+          }
+        });
+
+        const labelEvery = Math.max(1, Math.ceil(layout.columns / 8));
+        ctx.fillStyle = theme.axisLabel;
+        ctx.textAlign = "center";
+        for (let week = 0; week < layout.columns; week += 1) {
+          if (week % labelEvery !== 0 && week !== layout.columns - 1) continue;
+          const labelDate = new Date(layout.firstWeekStart.getTime());
+          labelDate.setUTCDate(labelDate.getUTCDate() + week * 7);
+          const label = formatHistoryTick(labelDate.toISOString().slice(0, 10));
+          const x = margin.left + week * cellWidth + cellWidth / 2;
+          ctx.fillText(label, x, margin.top + plotHeight + 18);
+        }
+
+        const legendWidth = Math.min(280, Math.max(160, plotWidth * 0.42));
+        const legendHeight = 10;
+        const legendX = margin.left;
+        const legendY = height - 34;
+        const gradient = ctx.createLinearGradient(legendX, 0, legendX + legendWidth, 0);
+        gradient.addColorStop(0, HEATMAP_LOW_COLOR);
+        gradient.addColorStop(0.5, HEATMAP_MID_COLOR);
+        gradient.addColorStop(1, HEATMAP_HIGH_COLOR);
+        ctx.fillStyle = gradient;
+        ctx.fillRect(legendX, legendY, legendWidth, legendHeight);
+        ctx.strokeStyle = theme.border;
+        ctx.strokeRect(legendX, legendY, legendWidth, legendHeight);
+        ctx.fillStyle = theme.axisLabel;
+        ctx.textAlign = "left";
+        ctx.fillText(`${formatFuelPrice(domain.min)} EUR/l`, legendX, legendY + 26);
+        ctx.textAlign = "right";
+        ctx.fillText(
+          `${formatFuelPrice(domain.max)} EUR/l`,
+          legendX + legendWidth,
+          legendY + 26,
+        );
+
+        return {
+          ...layout,
+          colorDomain: domain,
+          margin,
+          plotWidth,
+          plotHeight,
+          cellWidth,
+          cellHeight,
+          cellsByPosition,
+        };
+      }
+
+      function heatmapCellAt(layout, x, y) {
+        if (!layout) return null;
+        const week = Math.floor((x - layout.margin.left) / layout.cellWidth);
+        const weekday = Math.floor((y - layout.margin.top) / layout.cellHeight);
+        return layout.cellsByPosition.get(`${week}:${weekday}`) || null;
+      }
+
+      function destroyHeatmapInstances() {
+        locationHeatmapInstance?.destroy?.();
+        stationHeatmapInstance?.destroy?.();
+        locationHeatmapInstance = null;
+        stationHeatmapInstance = null;
+        overallHeatmapRows = [];
+        locationHeatmapRows = [];
+        stationHeatmapRows = [];
+        heatmapInstances.forEach((instance) => instance?.destroy?.());
+        heatmapInstances = [];
+      }
+
+      function createHeatmapRenderer(canvas, rows, colorDomain = null, options = {}) {
+        canvas.classList.add("heatmap-canvas");
+        let activeColorDomain = colorDomain;
+        let layout = drawHeatmapCanvas(canvas, rows, activeColorDomain);
+
+        const handleMove = (event) => {
+          const bounds = canvas.getBoundingClientRect();
+          const cell = heatmapCellAt(
+            layout,
+            event.clientX - bounds.left,
+            event.clientY - bounds.top,
+          );
+          canvas.style.cursor = cell ? "pointer" : "default";
+          canvas.title = cell
+            ? `${HEATMAP_WEEKDAY_FULL_LABELS[cell.weekday]}, ${formatHistoryDay(
+                cell.date,
+              )}: ${formatFuelPrice(cell.price)} EUR/l`
+            : "";
+        };
+        const handleLeave = () => {
+          canvas.style.cursor = "default";
+          canvas.title = "";
+        };
+        const handleClick = (event) => {
+          if (typeof options.onCellClick !== "function") return;
+          const bounds = canvas.getBoundingClientRect();
+          const cell = heatmapCellAt(
+            layout,
+            event.clientX - bounds.left,
+            event.clientY - bounds.top,
+          );
+          if (cell) options.onCellClick(cell);
+        };
+        canvas.addEventListener("mousemove", handleMove);
+        canvas.addEventListener("mouseleave", handleLeave);
+        canvas.addEventListener("click", handleClick);
+
+        return {
+          options: {},
+          destroy() {
+            canvas.removeEventListener("mousemove", handleMove);
+            canvas.removeEventListener("mouseleave", handleLeave);
+            canvas.removeEventListener("click", handleClick);
+            canvas.classList.remove("heatmap-canvas");
+            canvas.style.cursor = "default";
+            canvas.title = "";
+            const ctx = canvas.getContext("2d");
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+          },
+          update() {
+            layout = drawHeatmapCanvas(canvas, rows, activeColorDomain);
+          },
+          setColorDomain(domain) {
+            activeColorDomain = domain;
+            layout = drawHeatmapCanvas(canvas, rows, activeColorDomain);
+          },
+        };
+      }
+
+      function renderHeatmapChart(rows) {
+        const canvas = document.getElementById("chart");
+        if (chartInstance) chartInstance.destroy();
+        overallHeatmapRows = rows;
+        chartInstance = createHeatmapRenderer(
+          canvas,
+          rows,
+          currentHeatmapColorDomain(),
+          {
+            onCellClick: (cell) => {
+              handleOverallHeatmapCellClick(cell).catch(() => {
+                renderHeatmapDetailMessage(
+                  overallHeatmapDetailEl,
+                  "Der Preisvergleich konnte nicht geladen werden.",
+                );
+              });
+            },
+          },
+        );
+        syncHeatmapColorDomains();
+      }
+
+      function stationDisplayName(stationId) {
+        const station = stationCatalog?.get(stationId);
+        if (!station) return stationId;
+        const parts = [
+          station.brand && station.brand !== station.name ? station.brand : "",
+          station.name,
+          station.street,
+        ].filter(Boolean);
+        return parts.join(" · ");
+      }
+
+      function stationAddress(station) {
+        if (!station) return "";
+        const streetLine = [station.street, station.houseNumber]
+          .filter((part) => part && part.trim())
+          .join(" ")
+          .replace(/\s+/g, " ")
+          .trim();
+        const cityLine = [station.postCode, station.city]
+          .filter((part) => part && part.trim())
+          .join(" ")
+          .replace(/\s+/g, " ")
+          .trim();
+        return [streetLine, cityLine].filter(Boolean).join(", ");
+      }
+
+      function noonSnapshotUrl(dateLabel) {
+        const [year, month, day] = String(dateLabel || "").split("-");
+        return `${DATA_BASE}${year}/${month}/${day}/noon.csv`;
+      }
+
+      async function loadNoonSnapshot(dateLabel) {
+        if (noonSnapshotCache.has(dateLabel)) return noonSnapshotCache.get(dateLabel);
+        const rows = await fetchCsv(noonSnapshotUrl(dateLabel));
+        noonSnapshotCache.set(dateLabel, rows);
+        return rows;
+      }
+
+      function buildStationPriceRows(snapshotRows, catalog, allowedStationIds = null) {
+        const allowed = allowedStationIds ? new Set(allowedStationIds) : null;
+        return snapshotRows
+          .map((row) => {
+            const id = String(row.station_uuid || "").trim();
+            if (!id || (allowed && !allowed.has(id))) return null;
+            const price = Number(row[fuel]);
+            if (!Number.isFinite(price) || price <= 0) return null;
+            const station = catalog.get(id);
+            return {
+              id,
+              name: stationDisplayName(id),
+              price,
+              address: stationAddress(station),
+            };
+          })
+          .filter(Boolean);
+      }
+
+      function getStationPriceComparison(priceRows, limit) {
+        const byNameAscending = (left, right) =>
+          left.name.localeCompare(right.name, "de", { sensitivity: "base" });
+        const cheapest = [...priceRows]
+          .sort((left, right) => left.price - right.price || byNameAscending(left, right))
+          .slice(0, limit);
+        const mostExpensive = [...priceRows]
+          .sort((left, right) => right.price - left.price || byNameAscending(left, right))
+          .slice(0, limit);
+        return {
+          mostExpensive,
+          cheapest,
+        };
+      }
+
+      function resetHeatmapDetail(detailEl) {
+        if (!detailEl) return;
+        detailEl.innerHTML = "";
+        const hint = document.createElement("p");
+        hint.className = "heatmap-detail-hint";
+        hint.textContent = HEATMAP_DETAIL_HINT;
+        detailEl.append(hint);
+      }
+
+      function renderHeatmapDetailMessage(detailEl, message) {
+        if (!detailEl) return;
+        detailEl.innerHTML = "";
+        const panel = document.createElement("div");
+        panel.className = "heatmap-comparison";
+        const closeButton = document.createElement("button");
+        closeButton.className = "heatmap-comparison-close";
+        closeButton.type = "button";
+        closeButton.setAttribute("aria-label", "Preisvergleich schließen");
+        closeButton.textContent = "×";
+        closeButton.addEventListener("click", () => resetHeatmapDetail(detailEl));
+        const text = document.createElement("p");
+        text.className = "heatmap-detail-message";
+        text.textContent = message;
+        panel.append(closeButton, text);
+        detailEl.append(panel);
+      }
+
+      function appendComparisonCells(tableRow, row) {
+        const nameCell = document.createElement("td");
+        nameCell.className = "heatmap-station-cell";
+        nameCell.textContent = row?.name || "";
+        const priceCell = document.createElement("td");
+        priceCell.className = "heatmap-price-cell";
+        priceCell.textContent = row ? `${formatFuelPrice(row.price)}\u00A0€` : "";
+        const addressCell = document.createElement("td");
+        addressCell.className = "heatmap-address-cell";
+        addressCell.textContent = row?.address || "";
+        tableRow.append(nameCell, priceCell, addressCell);
+      }
+
+      function createComparisonTable(title, rows) {
+        const table = document.createElement("table");
+        table.className = "heatmap-comparison-table";
+        const colgroup = document.createElement("colgroup");
+        [
+          "heatmap-station-col",
+          "heatmap-price-col",
+          "heatmap-address-col",
+        ].forEach((className) => {
+          const col = document.createElement("col");
+          col.className = className;
+          colgroup.append(col);
+        });
+        const thead = document.createElement("thead");
+        const groupRow = document.createElement("tr");
+        const groupHeader = document.createElement("th");
+        groupHeader.scope = "colgroup";
+        groupHeader.colSpan = 3;
+        groupHeader.textContent = title;
+        groupRow.append(groupHeader);
+        const labelRow = document.createElement("tr");
+        ["Tankstelle", "Preis", "Adresse"].forEach((label) => {
+          const header = document.createElement("th");
+          header.scope = "col";
+          header.textContent = label;
+          labelRow.append(header);
+        });
+        thead.append(groupRow, labelRow);
+
+        const tbody = document.createElement("tbody");
+        rows.forEach((priceRow) => {
+          const row = document.createElement("tr");
+          appendComparisonCells(row, priceRow);
+          tbody.append(row);
+        });
+        table.append(colgroup, thead, tbody);
+        return table;
+      }
+
+      function renderPriceComparison(detailEl, dateLabel, comparison) {
+        if (!detailEl) return;
+        detailEl.innerHTML = "";
+        const panel = document.createElement("div");
+        panel.className = "heatmap-comparison heatmap-comparison--table";
+        const header = document.createElement("div");
+        header.className = "heatmap-comparison-header";
+        const titleEl = document.createElement("h4");
+        titleEl.textContent = `Preisvergleich am ${formatHistoryDay(dateLabel)}`;
+        const closeButton = document.createElement("button");
+        closeButton.className = "heatmap-comparison-close";
+        closeButton.type = "button";
+        closeButton.setAttribute("aria-label", "Preisvergleich schließen");
+        closeButton.textContent = "×";
+        closeButton.addEventListener("click", () => resetHeatmapDetail(detailEl));
+        header.append(titleEl, closeButton);
+
+        const stack = document.createElement("div");
+        stack.className = "heatmap-comparison-stack";
+        [
+          ["Teuerste", comparison.mostExpensive],
+          ["Günstigste", comparison.cheapest],
+        ].forEach(([sectionTitle, rows]) => {
+          const tableWrap = document.createElement("div");
+          tableWrap.className = "heatmap-comparison-table-wrap";
+          tableWrap.append(createComparisonTable(sectionTitle, rows));
+          stack.append(tableWrap);
+        });
+        panel.append(header, stack);
+        detailEl.append(panel);
+      }
+
+      async function handleOverallHeatmapCellClick(cell) {
+        await loadStationCatalog();
+        const snapshotRows = await loadNoonSnapshot(cell.date);
+        const priceRows = buildStationPriceRows(snapshotRows, stationCatalog);
+        if (!priceRows.length) {
+          renderHeatmapDetailMessage(
+            overallHeatmapDetailEl,
+            "Ein Preisvergleich ist für diesen Tag nicht möglich, da keine Preisdaten vorliegen.",
+          );
+          return;
+        }
+        renderPriceComparison(
+          overallHeatmapDetailEl,
+          cell.date,
+          getStationPriceComparison(priceRows, 3),
+        );
+      }
+
+      async function handleLocationHeatmapCellClick(cell, location) {
+        const stationIds = Array.isArray(location?.station_ids)
+          ? location.station_ids
+          : [];
+        if (stationIds.length <= 1) {
+          renderHeatmapDetailMessage(
+            locationHeatmapDetailEl,
+            "Ein Preisvergleich ist für diesen Standort nicht möglich, da nur eine einzige Tankstelle vorhanden ist.",
+          );
+          return;
+        }
+        await loadStationCatalog();
+        const snapshotRows = await loadNoonSnapshot(cell.date);
+        const priceRows = buildStationPriceRows(snapshotRows, stationCatalog, stationIds);
+        if (!priceRows.length) {
+          renderHeatmapDetailMessage(
+            locationHeatmapDetailEl,
+            "Ein Preisvergleich ist für diesen Tag nicht möglich, da keine Preisdaten vorliegen.",
+          );
+          return;
+        }
+        renderPriceComparison(
+          locationHeatmapDetailEl,
+          cell.date,
+          getStationPriceComparison(priceRows, 1),
+        );
+      }
+
+      function resetStationSelect(text = "Erst Standort wählen") {
+        stationSelectEl.innerHTML = "";
+        const option = document.createElement("option");
+        option.value = "";
+        option.textContent = text;
+        stationSelectEl.append(option);
+        stationSelectEl.disabled = true;
+      }
+
+      function populateLocationSelect(summary) {
+        const previousValue = locationSelectEl.value;
+        locationSelectEl.innerHTML = "";
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = "Standort wählen";
+        locationSelectEl.append(placeholder);
+
+        (summary.locations || []).forEach((location) => {
+          const option = document.createElement("option");
+          option.value = location.key;
+          option.textContent = `${location.label} (${location.station_count})`;
+          locationSelectEl.append(option);
+        });
+
+        if (
+          previousValue &&
+          Array.from(locationSelectEl.options).some((option) => option.value === previousValue)
+        ) {
+          locationSelectEl.value = previousValue;
+        }
+      }
+
+      function selectedLocationPayload() {
+        const key = locationSelectEl.value;
+        if (!key || !heatmapSummary) return null;
+        return (heatmapSummary.locations || []).find((location) => location.key === key) || null;
+      }
+
+      async function populateStationSelect(location) {
+        resetStationSelect("Tankstelle wählen");
+        if (!location) return;
+        await loadStationCatalog();
+        const stations = (location.station_ids || [])
+          .map((id) => ({
+            id,
+            label: stationDisplayName(id),
+          }))
+          .sort((left, right) => left.label.localeCompare(right.label, "de"));
+
+        stationSelectEl.innerHTML = "";
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = "Tankstelle wählen";
+        stationSelectEl.append(placeholder);
+        stations.forEach((station) => {
+          const option = document.createElement("option");
+          option.value = station.id;
+          option.textContent = station.label;
+          stationSelectEl.append(option);
+        });
+        stationSelectEl.disabled = stations.length === 0;
+      }
+
+      function hideLocationHeatmap() {
+        locationHeatmapInstance?.destroy?.();
+        locationHeatmapInstance = null;
+        locationHeatmapRows = [];
+        locationHeatmapPanelEl.hidden = true;
+        locationHeatmapSubEl.textContent = "";
+        resetHeatmapDetail(locationHeatmapDetailEl);
+        syncHeatmapColorDomains();
+      }
+
+      function hideStationHeatmap() {
+        stationHeatmapInstance?.destroy?.();
+        stationHeatmapInstance = null;
+        stationHeatmapRows = [];
+        stationHeatmapPanelEl.hidden = true;
+        stationHeatmapSubEl.textContent = "";
+        syncHeatmapColorDomains();
+      }
+
+      function renderLocationHeatmap(location) {
+        hideLocationHeatmap();
+        if (!location) return;
+        const rows = normalizeHeatmapRows(location, heatmapSummary?.dates || []);
+        if (!rows.length) return;
+        locationHeatmapTitleEl.textContent = `Standort: ${location.label}`;
+        locationHeatmapSubEl.textContent = buildHeatmapSubtitle(
+          rows,
+          `Standort-Median · ${location.station_count} Tankstellen`,
+        );
+        locationHeatmapPanelEl.hidden = false;
+        resetHeatmapDetail(locationHeatmapDetailEl);
+        locationHeatmapRows = rows;
+        locationHeatmapInstance = createHeatmapRenderer(
+          document.getElementById("location-heatmap"),
+          rows,
+          currentHeatmapColorDomain(),
+          {
+            onCellClick: (cell) => {
+              handleLocationHeatmapCellClick(cell, location).catch(() => {
+                renderHeatmapDetailMessage(
+                  locationHeatmapDetailEl,
+                  "Der Preisvergleich konnte nicht geladen werden.",
+                );
+              });
+            },
+          },
+        );
+        syncHeatmapColorDomains();
+      }
+
+      async function renderStationHeatmap(stationIdValue) {
+        hideStationHeatmap();
+        if (!stationIdValue) return;
+        const historyUrl = `${DATA_BASE}${stationPath(stationIdValue)}/${fuel}/history.csv`;
+        const rows = normalizeHistoryRows(await fetchCsv(historyUrl));
+        if (!rows.length) return;
+        stationHeatmapTitleEl.textContent = `Tankstelle: ${stationDisplayName(stationIdValue)}`;
+        stationHeatmapSubEl.textContent = buildHeatmapSubtitle(rows, "Einzelstation");
+        stationHeatmapPanelEl.hidden = false;
+        stationHeatmapRows = rows;
+        stationHeatmapInstance = createHeatmapRenderer(
+          document.getElementById("station-heatmap"),
+          rows,
+          currentHeatmapColorDomain(),
+        );
+        syncHeatmapColorDomains();
+      }
+
+      async function handleLocationChange() {
+        hideStationHeatmap();
+        const location = selectedLocationPayload();
+        await populateStationSelect(location);
+        renderLocationHeatmap(location);
+      }
+
+      async function handleStationChange() {
+        await renderStationHeatmap(stationSelectEl.value);
       }
 
       function renderNoonHistoryChart(rows) {
@@ -936,6 +1832,7 @@
       }
 
       async function loadHistoryChart() {
+        document.getElementById("chart-title").textContent = title;
         const historyUrl = `${DATA_BASE}${stationPath(stationId)}/${fuel}/history.csv`;
         const rows = normalizeHistoryRows(await fetchCsv(historyUrl));
         if (!rows.length) {
@@ -946,7 +1843,37 @@
         renderNoonHistoryChart(rows);
       }
 
+      async function loadHeatmapChart() {
+        heatmapSummary = await fetchJson(`${DATA_BASE}heatmaps/${fuel}.json`);
+        populateLocationSelect(heatmapSummary);
+        resetStationSelect();
+        hideLocationHeatmap();
+        hideStationHeatmap();
+        resetHeatmapDetail(overallHeatmapDetailEl);
+        resetHeatmapDetail(locationHeatmapDetailEl);
+
+        const rows = normalizeHeatmapRows(
+          heatmapSummary?.overall || [],
+          heatmapSummary?.dates || [],
+        );
+        if (!rows.length) {
+          throw new Error("Heatmap history unavailable");
+        }
+        document.getElementById("chart-title").textContent =
+          `Gesamtübersicht · ${fuel.toUpperCase()}`;
+        document.getElementById("chart-sub").textContent =
+          buildHeatmapSubtitle(rows, "Gesamtmarkt-Median");
+        renderHeatmapChart(rows);
+
+        if (locationSelectEl.value) {
+          const location = selectedLocationPayload();
+          await populateStationSelect(location);
+          renderLocationHeatmap(location);
+        }
+      }
+
       async function loadProfileChart() {
+        document.getElementById("chart-title").textContent = title;
         const statsUrl = `${DATA_BASE}${stationPath(stationId)}/${fuel}.json`;
         const stats = await fetchJson(statsUrl);
         if (Array.isArray(stats?.cycle_hourly) && stats.cycle_hourly.length) {
@@ -973,6 +1900,17 @@
 
       async function loadChart() {
         if (!stationId) return;
+
+        if (activeView === "heatmap") {
+          try {
+            await loadHeatmapChart();
+            return;
+          } catch (_error) {
+            activeView = "profile";
+            setButtonState();
+            updateViewInUrl();
+          }
+        }
 
         // Wait for Chart.js to be available (deferred loading)
         const waitForChart = () =>
@@ -1010,6 +1948,16 @@
 
       DARK_MODE_MEDIA_QUERY.addEventListener?.("change", () => {
         refreshChartTheme();
+      });
+
+      window.addEventListener("resize", () => {
+        if (activeView === "heatmap" && chartInstance?.update) {
+          window.requestAnimationFrame(() => {
+            chartInstance?.update();
+            locationHeatmapInstance?.update?.();
+            stationHeatmapInstance?.update?.();
+          });
+        }
       });
     </script>
     <script src="app-install-promo.js?v=20260409-app-promo-v12"></script>
