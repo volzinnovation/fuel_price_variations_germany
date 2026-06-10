@@ -5,12 +5,12 @@ from tempfile import TemporaryDirectory
 
 from scripts.verify_live_generated_data import (
     NoonReference,
-    cycle_anchor_delta,
     cycle_anchor_price,
     default_target_date,
     iter_delayed_noon_references,
     sample_references,
     station_json_path,
+    verification_cycle_row,
     verify_station_payload,
 )
 
@@ -85,17 +85,38 @@ class VerifyLiveGeneratedDataTests(unittest.TestCase):
                 root / "data2" / "4152d0cf" / "65a3" / "4656" / "b2de" / "d09e00d0bbda" / "diesel.json",
             )
 
-    def test_cycle_anchor_helpers_read_first_cycle_row(self) -> None:
+    def test_cycle_anchor_price_reads_current_day_noon_row(self) -> None:
         payload = {
             "cycle_hourly": [
                 {
+                    "cycle_hour": 0,
+                    "label": "12",
+                    "price_median": 2.389,
+                    "delta_median": 0.0,
+                },
+                {
+                    "cycle_hour": 24,
+                    "label": "12",
+                    "price_median": 2.449,
+                    "delta_median": -0.06,
+                }
+            ]
+        }
+        self.assertEqual(cycle_anchor_price(payload), 2.449)
+        self.assertEqual(verification_cycle_row(payload)["cycle_hour"], 24)
+
+    def test_cycle_anchor_price_returns_none_without_current_day_noon_row(self) -> None:
+        payload = {
+            "cycle_hourly": [
+                {
+                    "cycle_hour": 0,
+                    "label": "12",
                     "price_median": 2.449,
                     "delta_median": 0.0,
                 }
             ]
         }
-        self.assertEqual(cycle_anchor_price(payload), 2.449)
-        self.assertEqual(cycle_anchor_delta(payload), 0.0)
+        self.assertIsNone(cycle_anchor_price(payload))
 
     def test_verify_station_payload_accepts_matching_anchor(self) -> None:
         reference = NoonReference(
@@ -108,12 +129,40 @@ class VerifyLiveGeneratedDataTests(unittest.TestCase):
         payload = {
             "cycle_hourly": [
                 {
+                    "cycle_hour": 0,
+                    "label": "12",
+                    "price_median": 2.389,
+                    "delta_median": 0.0,
+                },
+                {
+                    "cycle_hour": 24,
+                    "label": "12",
+                    "price_median": 2.449,
+                    "delta_median": -0.06,
+                },
+            ]
+        }
+        self.assertTrue(verify_station_payload(reference, payload, "test"))
+
+    def test_verify_station_payload_skips_without_current_day_noon_row(self) -> None:
+        reference = NoonReference(
+            station_uuid="station-a",
+            fuel="diesel",
+            price=2.449,
+            last_update=datetime.fromisoformat("2026-04-08T12:05:15+02:00"),
+            selection_method="increase",
+        )
+        payload = {
+            "cycle_hourly": [
+                {
+                    "cycle_hour": 0,
+                    "label": "12",
                     "price_median": 2.449,
                     "delta_median": 0.0,
                 }
             ]
         }
-        verify_station_payload(reference, payload, "test")
+        self.assertFalse(verify_station_payload(reference, payload, "test"))
 
     def test_verify_station_payload_rejects_anchor_mismatch(self) -> None:
         reference = NoonReference(
@@ -126,8 +175,10 @@ class VerifyLiveGeneratedDataTests(unittest.TestCase):
         payload = {
             "cycle_hourly": [
                 {
+                    "cycle_hour": 24,
+                    "label": "12",
                     "price_median": 2.389,
-                    "delta_median": 0.0,
+                    "delta_median": -0.06,
                 }
             ]
         }

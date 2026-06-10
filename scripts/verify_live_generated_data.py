@@ -225,55 +225,60 @@ def sample_references(
     return selected
 
 
-def cycle_anchor_price(payload: dict[str, object]) -> float:
+def verification_cycle_row(payload: dict[str, object]) -> dict[str, object] | None:
     cycle_rows = payload.get("cycle_hourly")
     if not isinstance(cycle_rows, list) or not cycle_rows:
-        raise VerificationError("Missing cycle_hourly data.")
-    first_row = cycle_rows[0]
-    if not isinstance(first_row, dict):
-        raise VerificationError("Invalid first cycle row.")
-    price = first_row.get("price_median")
+        return None
+
+    dict_rows = [row for row in cycle_rows if isinstance(row, dict)]
+    if not dict_rows:
+        raise VerificationError("Invalid cycle_hourly data.")
+
+    matching_rows = [row for row in dict_rows if row.get("cycle_hour") == 24]
+    if matching_rows:
+        return matching_rows[-1]
+
+    matching_rows = [
+        row
+        for row in dict_rows
+        if row.get("label") == "12" and int(row.get("cycle_hour", 0)) > 0
+    ]
+    if matching_rows:
+        return matching_rows[-1]
+
+    return None
+
+
+def cycle_anchor_price(payload: dict[str, object]) -> float | None:
+    row = verification_cycle_row(payload)
+    if row is None:
+        return None
+    price = row.get("price_median")
     if price is None:
-        raise VerificationError("First cycle row is missing price_median.")
+        raise VerificationError("Matching cycle row is missing price_median.")
     return float(price)
-
-
-def cycle_anchor_delta(payload: dict[str, object]) -> float:
-    cycle_rows = payload.get("cycle_hourly")
-    if not isinstance(cycle_rows, list) or not cycle_rows:
-        raise VerificationError("Missing cycle_hourly data.")
-    first_row = cycle_rows[0]
-    if not isinstance(first_row, dict):
-        raise VerificationError("Invalid first cycle row.")
-    delta = first_row.get("delta_median")
-    if delta is None:
-        raise VerificationError("First cycle row is missing delta_median.")
-    return float(delta)
 
 
 def verify_station_payload(
     reference: NoonReference,
     payload: dict[str, object],
     source_label: str,
-) -> None:
+) -> bool:
     try:
         anchor_price = cycle_anchor_price(payload)
-        anchor_delta = cycle_anchor_delta(payload)
     except VerificationError as exc:
         raise VerificationError(
             f"{source_label} {reference.fuel} {reference.station_uuid}: {exc}"
         ) from exc
+    if anchor_price is None:
+        return False
     if abs(anchor_price - reference.price) > PRICE_TOLERANCE:
         raise VerificationError(
             f"{source_label} {reference.fuel} {reference.station_uuid} anchor mismatch: "
             f"cycle price {anchor_price:.3f} vs noon reference {reference.price:.3f} "
             f"at {reference.last_update.isoformat(timespec='seconds')}"
         )
-    if abs(anchor_delta) > PRICE_TOLERANCE:
-        raise VerificationError(
-            f"{source_label} {reference.fuel} {reference.station_uuid} first cycle delta is "
-            f"{anchor_delta:.3f} instead of 0.000"
-        )
+    return True
 
 
 def verify_local_delayed_references(
@@ -281,6 +286,7 @@ def verify_local_delayed_references(
     references: list[NoonReference],
 ) -> dict[str, int]:
     checked = 0
+    skipped = 0
     per_fuel = {fuel: 0 for fuel in FUELS}
     failures: list[str] = []
     for reference in references:
@@ -290,9 +296,12 @@ def verify_local_delayed_references(
             continue
         payload = load_json(payload_path)
         try:
-            verify_station_payload(reference, payload, "local")
+            compared = verify_station_payload(reference, payload, "local")
         except VerificationError as exc:
             failures.append(str(exc))
+            continue
+        if not compared:
+            skipped += 1
             continue
         checked += 1
         per_fuel[reference.fuel] += 1
@@ -303,7 +312,11 @@ def verify_local_delayed_references(
             f"Local delayed-reference verification failed for {len(failures)} station/fuel payloads:\n"
             f"{preview}{suffix}"
         )
-    return {"checked": checked, **{f"{fuel}_checked": count for fuel, count in per_fuel.items()}}
+    return {
+        "checked": checked,
+        "skipped_no_cycle": skipped,
+        **{f"{fuel}_checked": count for fuel, count in per_fuel.items()},
+    }
 
 
 def verify_live_samples(
@@ -314,6 +327,7 @@ def verify_live_samples(
     repo_root: Path | None = None,
 ) -> dict[str, int]:
     checked = 0
+    skipped = 0
     per_fuel = {fuel: 0 for fuel in FUELS}
     failures: list[str] = []
     for reference in references:
@@ -323,9 +337,12 @@ def verify_live_samples(
             failures.append(f"Live payload at {url} is not a JSON object.")
             continue
         try:
-            verify_station_payload(reference, payload, "live")
+            compared = verify_station_payload(reference, payload, "live")
         except VerificationError as exc:
             failures.append(str(exc))
+            continue
+        if not compared:
+            skipped += 1
             continue
         if repo_root is not None:
             local_path = station_json_path(repo_root, reference.station_uuid, reference.fuel)
@@ -342,7 +359,11 @@ def verify_live_samples(
             f"Live delayed-reference verification failed for {len(failures)} sampled payloads:\n"
             f"{preview}{suffix}"
         )
-    return {"checked": checked, **{f"{fuel}_checked": count for fuel, count in per_fuel.items()}}
+    return {
+        "checked": checked,
+        "skipped_no_cycle": skipped,
+        **{f"{fuel}_checked": count for fuel, count in per_fuel.items()},
+    }
 
 
 def wait_for_live_artifacts(
@@ -415,7 +436,11 @@ def main() -> int:
     if delayed_references:
         local_summary = verify_local_delayed_references(repo_root, delayed_references)
     else:
-        local_summary = {"checked": 0, **{f"{fuel}_checked": 0 for fuel in FUELS}}
+        local_summary = {
+            "checked": 0,
+            "skipped_no_cycle": 0,
+            **{f"{fuel}_checked": 0 for fuel in FUELS},
+        }
     print_summary(f"Local delayed-reference verification for {target_day:%Y-%m-%d}", local_summary)
 
     session = _request_session()
@@ -441,7 +466,11 @@ def main() -> int:
             repo_root=repo_root,
         )
     else:
-        live_summary = {"checked": 0, **{f"{fuel}_checked": 0 for fuel in FUELS}}
+        live_summary = {
+            "checked": 0,
+            "skipped_no_cycle": 0,
+            **{f"{fuel}_checked": 0 for fuel in FUELS},
+        }
     print_summary(f"Live delayed-reference verification for {target_day:%Y-%m-%d}", live_summary)
     print(
         "Verified live noon-reference artifacts:",

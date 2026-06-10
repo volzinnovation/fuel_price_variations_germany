@@ -445,6 +445,7 @@ def render_chart(rows: list[DayResult], output_path: Path) -> None:
     fig, ax = plt.subplots(figsize=(15, 8.3), dpi=150)
     fig.patch.set_facecolor("#f5f7fa")
     ax.set_facecolor("white")
+    cutover = date(2026, 4, 1)
 
     ax.text(
         0.5,
@@ -455,10 +456,71 @@ def render_chart(rows: list[DayResult], output_path: Path) -> None:
         va="center",
         fontsize=126,
         fontweight="bold",
-        color="#94a3b8",
-        alpha=0.13,
+        color="#64748b",
+        alpha=0.2,
         zorder=0,
     )
+
+    def period_mean(values: list[float | None], is_period_day) -> float | None:
+        period_values = [
+            value
+            for day, value in zip(x_values, values)
+            if is_period_day(day) and value is not None and math.isfinite(value)
+        ]
+        if not period_values:
+            return None
+        return sum(period_values) / len(period_values)
+
+    def relative_delta(april_mean: float | None, march_mean: float | None) -> float | None:
+        if april_mean is None or march_mean is None or abs(march_mean) < 1e-12:
+            return None
+        return ((april_mean / march_mean) - 1) * 100
+
+    def format_percent(value: float | None) -> str:
+        if value is None:
+            return "-"
+        sign = "+" if value > 0 else ""
+        amount = f"{value:.1f}".replace(".", ",")
+        return f"{sign}{amount} %"
+
+    high_march_mean = period_mean(high_values, lambda day: day < cutover)
+    high_april_mean = period_mean(high_values, lambda day: day >= cutover)
+    low_march_mean = period_mean(low_values, lambda day: day < cutover)
+    low_april_mean = period_mean(low_values, lambda day: day >= cutover)
+    high_relative_delta = relative_delta(high_april_mean, high_march_mean)
+    low_relative_delta = relative_delta(low_april_mean, low_march_mean)
+
+    def draw_period_means(
+        march_mean: float | None,
+        april_mean: float | None,
+        color: str,
+        label: str,
+    ) -> None:
+        label_used = False
+        for period_start, period_end, mean_value in (
+            (
+                min(x_values),
+                cutover - timedelta(days=1),
+                march_mean,
+            ),
+            (
+                cutover,
+                max(x_values),
+                april_mean,
+            ),
+        ):
+            if mean_value is None:
+                continue
+            ax.plot(
+                [period_start, period_end],
+                [mean_value, mean_value],
+                color=color,
+                linewidth=2.4,
+                linestyle=":",
+                label=label if not label_used else "_nolegend_",
+                zorder=2.5,
+            )
+            label_used = True
 
     ax.plot(
         x_values,
@@ -481,11 +543,31 @@ def render_chart(rows: list[DayResult], output_path: Path) -> None:
         zorder=3,
     )
 
-    cutover = date(2026, 4, 1)
-    ax.axvline(cutover, color="#c2410c", linewidth=2, linestyle="--")
-    ax.text(cutover + timedelta(days=0.4), ax.get_ylim()[1], "01.04. Regelwechsel", color="#9a3412", va="top")
+    draw_period_means(
+        high_march_mean,
+        high_april_mean,
+        "#dc2626",
+        "Mittelwerte März/April: Max / 12:00-Anker",
+    )
+    draw_period_means(
+        low_march_mean,
+        low_april_mean,
+        "#2563eb",
+        "Mittelwerte März/April: Min / 11:00-Mittel",
+    )
 
-    ax.set_title("Diesel: Betriebskosten und Marge vor/nach 12:00-Regel")
+    ax.axvline(cutover, color="#111827", linewidth=2, linestyle="--")
+    ax.text(cutover + timedelta(days=0.4), ax.get_ylim()[1], "01.04. Regelwechsel", color="#111827", va="top")
+
+    ax.set_title(
+        "Die 12-Uhr-Regel zeigt Wirkung: Die Margen steigen.\n"
+        f"Um 12 Uhr bleiben {format_percent(high_relative_delta)} mehr für Betriebskosten und Marge,\n"
+        f"selbst um 11 Uhr – inzwischen günstigste Tankzeit – sind es {format_percent(low_relative_delta)} mehr als im März.",
+        fontsize=14.8,
+        fontweight="bold",
+        pad=16,
+        linespacing=1.08,
+    )
     ax.set_ylabel("Betriebskosten und Marge (€/l)")
     ax.set_xlabel("Datum")
     ax.yaxis.set_major_formatter(FuncFormatter(lambda value, _pos: f"{value:.2f}".replace(".", ",")))
