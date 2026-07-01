@@ -1,0 +1,55 @@
+name: One-off Germany daily average profitability chart
+
+on:
+  workflow_dispatch:
+    inputs:
+      warmup_start:
+        description: First raw day used to warm up station price state
+        required: true
+        default: "2026-01-25"
+      start_date:
+        description: First chart day
+        required: true
+        default: "2026-02-01"
+      end_date:
+        description: Last chart day
+        required: true
+        default: "2026-06-30"
+
+jobs:
+  build-chart:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Europe/Berlin
+      TK_USER: ${{ secrets.TK_USER }}
+      TK_PASS: ${{ secrets.TK_PASS }}
+    steps:
+      - name: Checkout latest version
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+
+      - name: Generate Germany daily average profitability chart
+        run: >-
+          python scripts/generate_germany_daily_average_profitability_chart.py
+          --warmup-start "${{ inputs.warmup_start }}"
+          --start-date "${{ inputs.start_date }}"
+          --end-date "${{ inputs.end_date }}"
+
+      - name: Publish summary
+        run: cat output/profitabilitaet_steuereinnahmen_deutschland_tagesdurchschnitt.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload chart artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: germany-daily-average-profitability-chart
+          path: |
+            output/profitabilitaet_steuereinnahmen_deutschland_tagesdurchschnitt.png
+            output/profitabilitaet_steuereinnahmen_deutschland_tagesdurchschnitt.csv
+            output/profitabilitaet_steuereinnahmen_deutschland_tagesdurchschnitt.md
