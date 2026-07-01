@@ -1,5 +1,4 @@
 pandas>=2.2.0
-numpy>=1.26.0
 pytz>=2024.1
 requests>=2.31.0
 certifi>=2024.2.2

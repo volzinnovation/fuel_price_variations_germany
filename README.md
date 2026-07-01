@@ -69,13 +69,6 @@ Das Skript aktualisiert:
 - `sitemap.xml`
 - `robots.txt`
 
-## Tankzeit Mission
-
-[`mission.html`](https://tankzeit.de/mission.html) macht die Preisjagd spielbar:
-Live- oder Timing-Daten werden zu lokalen XP-Zielen, Abzeichen und einer
-taeglichen Challenge mit Share-Text kombiniert. Der Fortschritt bleibt im
-Browser gespeichert und benoetigt kein Backend.
-
 ## Android Play Store Assets
 
 Metadaten und Basisgrafiken für den bestehenden Google-Play-Draft lassen sich so erzeugen:
