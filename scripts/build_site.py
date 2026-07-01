@@ -38,6 +38,7 @@ FUEL_LABELS = {
 ROOT_URLS = [
     "",
     "e10.html",
+    "mission.html",
     "management.html",
     "datenstatus.html",
     "info.html",

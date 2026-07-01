@@ -116,6 +116,29 @@ test("e10.html shows E10 tankzeit ending exactly at noon", async ({ page }) => {
   await expect(page.locator(`#${stationId} td`).nth(5)).toHaveText("1.2 km");
 });
 
+test("mission.html scores a live station and awards local XP", async ({ page }) => {
+  await routeFixtureResponses(page);
+
+  await page.goto(`${baseUrl}/mission.html`);
+
+  const target = page.locator(".mission-target").first();
+  await expect(target).toContainText("Noon Test Station");
+  await expect(target).toContainText("1.950 €/l");
+  await expect(target).toContainText("1.2 km");
+  await expect(page.locator("#mission-best-station")).toHaveText(
+    "Noon Test Station",
+  );
+  await expect(page.locator("#mission-live-mode")).toHaveText("Livepreise");
+  await expect(target.locator(".mission-target-title a")).toHaveAttribute(
+    "href",
+    `station/${stationId}.html`,
+  );
+
+  await target.locator(".mission-claim").click();
+  await expect(target.locator(".mission-claim")).toHaveText("Gesammelt");
+  await expect(page.locator("#mission-xp")).not.toHaveText("0");
+});
+
 test("index.html falls back to the local station catalog when live prices are unavailable", async ({
   page,
 }) => {
