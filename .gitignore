@@ -1,5 +1,9 @@
 set.sh
 setup.sh
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.py[cod]
 R_libs/*
 .RData
 .Rhistory
