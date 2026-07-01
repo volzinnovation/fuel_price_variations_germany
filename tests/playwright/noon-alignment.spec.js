@@ -129,6 +129,9 @@ test("mission.html scores a live station and awards local XP", async ({ page }) 
     "Noon Test Station",
   );
   await expect(page.locator("#mission-live-mode")).toHaveText("Livepreise");
+  await expect(page.locator("#mission-daily-title")).not.toHaveText("Scan starten");
+  await expect(page.locator("#mission-daily-progress")).toContainText("/");
+  await expect(page.locator("#mission-share-btn")).toBeEnabled();
   await expect(target.locator(".mission-target-title a")).toHaveAttribute(
     "href",
     `station/${stationId}.html`,
@@ -137,6 +140,7 @@ test("mission.html scores a live station and awards local XP", async ({ page }) 
   await target.locator(".mission-claim").click();
   await expect(target.locator(".mission-claim")).toHaveText("Gesammelt");
   await expect(page.locator("#mission-xp")).not.toHaveText("0");
+  await expect(page.locator("#mission-daily-progress")).not.toHaveText(/^0 \//);
 });
 
 test("index.html falls back to the local station catalog when live prices are unavailable", async ({

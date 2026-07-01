@@ -10,6 +10,7 @@
     streak: 0,
     lastClaimDay: null,
     claimed: {},
+    dailyClaims: {},
     badges: [],
   };
   const FUEL_LABELS = {
@@ -49,6 +50,13 @@
     streak: document.getElementById("mission-streak"),
     badges: document.getElementById("mission-badges"),
     target: document.getElementById("mission-target"),
+    dailyPanel: document.querySelector(".mission-daily"),
+    dailyTitle: document.getElementById("mission-daily-title"),
+    dailyDetail: document.getElementById("mission-daily-detail"),
+    dailyProgress: document.getElementById("mission-daily-progress"),
+    dailyProgressFill: document.getElementById("mission-daily-progress-fill"),
+    dailyReward: document.getElementById("mission-daily-reward"),
+    shareButton: document.getElementById("mission-share-btn"),
   };
 
   let missionState = loadMissionState();
@@ -68,6 +76,10 @@
           parsed && typeof parsed.claimed === "object" && parsed.claimed
             ? parsed.claimed
             : {},
+        dailyClaims:
+          parsed && typeof parsed.dailyClaims === "object" && parsed.dailyClaims
+            ? parsed.dailyClaims
+            : {},
         badges: Array.isArray(parsed?.badges) ? parsed.badges : [],
       };
     } catch (_err) {
@@ -77,7 +89,9 @@
 
   function saveMissionState() {
     const claimedEntries = Object.entries(missionState.claimed || {}).slice(-600);
+    const dailyEntries = Object.entries(missionState.dailyClaims || {}).slice(-180);
     missionState.claimed = Object.fromEntries(claimedEntries);
+    missionState.dailyClaims = Object.fromEntries(dailyEntries);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(missionState));
   }
 
@@ -132,6 +146,19 @@
       hourCycle: "h23",
     });
     return Number(formatter.format(date));
+  }
+
+  function hashString(value) {
+    return [...String(value)].reduce(
+      (hash, character) =>
+        (Math.imul(31, hash) + character.charCodeAt(0)) >>> 0,
+      2166136261,
+    );
+  }
+
+  function selectedChallengeAreaKey() {
+    if (elements.city.value === "location" && locationCenter) return "location";
+    return elements.city.value || "berlin";
   }
 
   function stationDetailUrl(stationId) {
@@ -335,6 +362,114 @@
     return Boolean(missionState.claimed?.[claimKey(row)]);
   }
 
+  function dailyRewardKey(challenge) {
+    return `${todayKey()}|${selectedChallengeAreaKey()}|${currentFuel}|${challenge.id}`;
+  }
+
+  function isDailyRewardClaimed(challenge) {
+    return Boolean(missionState.dailyClaims?.[dailyRewardKey(challenge)]);
+  }
+
+  function claimedRowsForCurrentMission(rows) {
+    return rows.filter((row) => isClaimed(row));
+  }
+
+  function buildDailyChallenge(rows) {
+    const today = todayKey();
+    const areaKey = selectedChallengeAreaKey();
+    const seed = hashString(`${today}|${areaKey}|${currentFuel}`);
+    let type = ["score", "triple", "now", "podium"][seed % 4];
+    const claimedRows = claimedRowsForCurrentMission(rows);
+
+    if (!rows.length) {
+      return {
+        id: "scan",
+        title: "Mission scannen",
+        detail: "Starte einen Scan, um das heutige Ziel und den Bonus freizuschalten.",
+        reward: 100,
+        progress: 0,
+        target: 1,
+        unit: "Scan",
+        completed: false,
+      };
+    }
+
+    if (type === "now" && !rows.some((row) => row.nowGood)) {
+      type = "podium";
+    }
+
+    if (type === "triple") {
+      const target = Math.min(3, Math.max(1, rows.length));
+      const unit = target === 1 ? "Ziel" : "Ziele";
+      return {
+        id: "triple",
+        title: target >= 3 ? "Dreierjagd" : "Zieljagd",
+        detail: `Sammle ${target} ${unit} in dieser ${FUEL_LABELS[currentFuel]}-Mission.`,
+        reward: 150,
+        progress: Math.min(target, claimedRows.length),
+        target,
+        unit,
+        completed: claimedRows.length >= target,
+      };
+    }
+
+    if (type === "now") {
+      const progress = claimedRows.filter((row) => row.nowGood).length;
+      return {
+        id: "now",
+        title: "Fensterjagd",
+        detail: "Sammle ein Ziel, das gerade in seinem Tankzeitfenster liegt.",
+        reward: 140,
+        progress: Math.min(1, progress),
+        target: 1,
+        unit: "Fenster",
+        completed: progress >= 1,
+      };
+    }
+
+    if (type === "podium") {
+      const podiumIds = new Set(rows.slice(0, 3).map((row) => row.id));
+      const progress = claimedRows.filter((row) => podiumIds.has(row.id)).length;
+      return {
+        id: "podium",
+        title: "Podium sichern",
+        detail: "Sammle eines der drei besten Ziele aus dem aktuellen Ranking.",
+        reward: 120,
+        progress: Math.min(1, progress),
+        target: 1,
+        unit: "Podium",
+        completed: progress >= 1,
+      };
+    }
+
+    const threshold = Math.max(120, Math.round((rows[0]?.score || 160) * 0.9));
+    const progress = claimedRows.filter((row) => row.score >= threshold).length;
+    return {
+      id: "score",
+      title: "Score-Hunt",
+      detail: `Sammle ein Ziel mit mindestens ${threshold} Punkten.`,
+      reward: 130,
+      progress: Math.min(1, progress),
+      target: 1,
+      unit: "Score",
+      completed: progress >= 1,
+    };
+  }
+
+  function claimDailyRewardIfReady(rows) {
+    const challenge = buildDailyChallenge(rows);
+    if (!challenge.completed || isDailyRewardClaimed(challenge)) return 0;
+    missionState.xp += challenge.reward;
+    missionState.dailyClaims[dailyRewardKey(challenge)] = {
+      reward: challenge.reward,
+      claimedAt: new Date().toISOString(),
+    };
+    addBadge("daily");
+    if (levelFromXp(missionState.xp) >= 3) addBadge("level3");
+    saveMissionState();
+    return challenge.reward;
+  }
+
   function addBadge(id) {
     if (!missionState.badges.includes(id)) {
       missionState.badges.push(id);
@@ -363,10 +498,16 @@
     if (missionState.streak >= 3) addBadge("streak");
     if (levelFromXp(missionState.xp) >= 3) addBadge("level3");
     saveMissionState();
+    const dailyBonus = claimDailyRewardIfReady(currentRows);
     renderProgress();
     renderBadges();
+    renderDailyChallenge(currentRows);
     renderRows(currentRows);
-    setStatus(`+${award} XP für ${row.name}.`);
+    setStatus(
+      dailyBonus
+        ? `+${award} XP für ${row.name}. Tageschallenge +${dailyBonus} XP.`
+        : `+${award} XP für ${row.name}.`,
+    );
   }
 
   function levelFromXp(xp) {
@@ -398,6 +539,7 @@
       live: { label: "Live-Radar", meta: "Preisrank gefunden" },
       streak: { label: "Serie", meta: "3 Tage aktiv" },
       level3: { label: "Level 3", meta: "750 XP" },
+      daily: { label: "Tagesziel", meta: "Bonus geholt" },
     };
   }
 
@@ -417,6 +559,61 @@
         </span>`;
       })
       .join("");
+  }
+
+  function renderDailyChallenge(rows) {
+    if (!elements.dailyPanel) return;
+    const challenge = buildDailyChallenge(rows);
+    const progressRatio = clamp(challenge.progress / challenge.target, 0, 1);
+    const rewardClaimed = isDailyRewardClaimed(challenge);
+    elements.dailyTitle.textContent = challenge.title;
+    elements.dailyDetail.textContent = challenge.detail;
+    elements.dailyProgress.textContent = `${challenge.progress} / ${challenge.target} ${challenge.unit}`;
+    elements.dailyProgressFill.style.width = `${Math.round(progressRatio * 100)}%`;
+    elements.dailyReward.textContent = rewardClaimed
+      ? "Bonus gesichert"
+      : `${challenge.reward} XP Bonus`;
+    elements.dailyPanel.classList.toggle("is-complete", challenge.completed);
+  }
+
+  function dailyShareText() {
+    const challenge = buildDailyChallenge(currentRows);
+    const topRow = currentRows[0];
+    const state = challenge.completed
+      ? "geschafft"
+      : `${challenge.progress}/${challenge.target} ${challenge.unit}`;
+    const topTarget = topRow
+      ? `${topRow.name} mit ${topRow.score} Punkten`
+      : "noch kein Ziel";
+    return [
+      `Tankzeit Mission ${todayKey()}: ${challenge.title} ${state}.`,
+      `Top-Ziel: ${topTarget}.`,
+      "https://tankzeit.de/mission.html",
+    ].join(" ");
+  }
+
+  async function shareDailyChallenge() {
+    const text = dailyShareText();
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: "Tankzeit Mission",
+          text,
+          url: "https://tankzeit.de/mission.html",
+        });
+        return;
+      }
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        setStatus("Mission-Text wurde kopiert.");
+        return;
+      }
+      throw new Error("Share unavailable");
+    } catch (err) {
+      if (err?.name === "AbortError") return;
+      console.warn("Mission share failed", err);
+      setStatus("Teilen ist in diesem Browser gerade nicht verfügbar.", "error");
+    }
   }
 
   function renderSummary(rows) {
@@ -504,6 +701,7 @@
     currentRows = rows;
     renderProgress();
     renderBadges();
+    renderDailyChallenge(rows);
     renderSummary(rows);
     renderRows(rows);
     renderControls();
@@ -606,6 +804,7 @@
   elements.radius.addEventListener("change", () => loadMission());
   elements.refreshButton.addEventListener("click", () => loadMission());
   elements.locationButton.addEventListener("click", requestLocation);
+  elements.shareButton?.addEventListener("click", shareDailyChallenge);
   elements.fuelButtons.forEach((button) => {
     button.addEventListener("click", () => {
       currentFuel = button.dataset.missionFuel;

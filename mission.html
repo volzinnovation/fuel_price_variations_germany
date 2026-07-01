@@ -57,12 +57,12 @@
     <title>Tankzeit Mission: Preisjagd spielen und XP sammeln</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="preload" href="styles.css?v=20260701-mission-v1" as="style" />
+    <link rel="preload" href="styles.css?v=20260701-mission-v2" as="style" />
     <link
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&amp;display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260701-mission-v1" />
+    <link rel="stylesheet" href="styles.css?v=20260701-mission-v2" />
   </head>
   <body class="mission-page">
     <main class="app mission-app">
@@ -170,6 +170,27 @@
             <strong id="mission-streak">0 Tage</strong>
           </div>
         </div>
+
+        <div class="mission-panel mission-daily" aria-label="Tageschallenge">
+          <div class="mission-daily-copy">
+            <span class="mission-kicker">Tageschallenge</span>
+            <strong id="mission-daily-title">Scan starten</strong>
+            <p id="mission-daily-detail">Ein lokales Tagesziel wird aus Gebiet und Sorte erzeugt.</p>
+          </div>
+          <div class="mission-daily-meter">
+            <div class="mission-progress-head">
+              <span>Fortschritt</span>
+              <strong id="mission-daily-progress">0 / 1</strong>
+            </div>
+            <div class="mission-progress-track mission-daily-track">
+              <span id="mission-daily-progress-fill"></span>
+            </div>
+          </div>
+          <div class="mission-daily-actions">
+            <span id="mission-daily-reward">100 XP Bonus</span>
+            <button class="btn" id="mission-share-btn" type="button">Teilen</button>
+          </div>
+        </div>
       </section>
 
       <div id="mission-status" class="status mission-status"></div>
@@ -241,8 +262,8 @@
       </a>
     </nav>
 
-    <script src="app-stats.js?v=20260701-mission-v1"></script>
-    <script src="station-catalog.js?v=20260701-mission-v1"></script>
-    <script src="mission.js?v=20260701-mission-v1"></script>
+    <script src="app-stats.js?v=20260701-mission-v2"></script>
+    <script src="station-catalog.js?v=20260701-mission-v2"></script>
+    <script src="mission.js?v=20260701-mission-v2"></script>
   </body>
 </html>
