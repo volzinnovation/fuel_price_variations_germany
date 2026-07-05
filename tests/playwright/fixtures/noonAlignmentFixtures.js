@@ -1,4 +1,4 @@
-const stationId = "s0000000-1111-2222-3333-444444444444";
+const stationId = "a0000000-1111-2222-3333-444444444444";
 const stationIdPath = stationId.split("-").join("/");
 const managementDate = "2026-04-06";
 const managementPath = "/data2/2026/04/06/management_boxplots.json";

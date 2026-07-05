@@ -1,7 +1,12 @@
 import unittest
 from unittest.mock import patch
 
-from scripts.build_site import build_station_page, has_noon_reset_stats
+from scripts.build_site import (
+    build_legacy_alias_page,
+    build_station_page,
+    has_noon_reset_stats,
+    json_for_script,
+)
 
 
 def _station() -> dict[str, object]:
@@ -139,6 +144,37 @@ class BuildSiteTests(unittest.TestCase):
         )
         self.assertIn(">Navigation-App</a>", html)
         self.assertIn(">Google Maps</a>", html)
+
+    def test_json_ld_escapes_script_terminators(self) -> None:
+        station = _station()
+        station["name"] = "Bad </script><script>alert(1)</script>"
+        stats_by_fuel = {
+            "diesel": _generic_stats(),
+            "e10": _generic_stats(),
+            "e5": _generic_stats(),
+        }
+
+        with patch("scripts.build_site.load_station_stats", return_value=stats_by_fuel):
+            _path, html = build_station_page(station, {})
+
+        json_ld = next(
+            line for line in html.splitlines() if 'application/ld+json' in line
+        )
+        self.assertIn("\\u003c/script\\u003e", json_ld)
+        self.assertNotIn("</script><script>", json_ld)
+
+    def test_json_for_script_escapes_html_sensitive_characters(self) -> None:
+        encoded = json_for_script({"name": "</script><img src=x onerror=alert(1)>"})
+
+        self.assertIn("\\u003c/script\\u003e", encoded)
+        self.assertIn("\\u003cimg", encoded)
+        self.assertNotIn("</script>", encoded)
+
+    def test_legacy_alias_redirect_uses_script_safe_json(self) -> None:
+        html = build_legacy_alias_page("/station/bad</script><script>alert(1)</script>")
+
+        self.assertIn("\\u003c/script\\u003e", html)
+        self.assertNotIn("</script><script>", html)
 
 
 if __name__ == "__main__":

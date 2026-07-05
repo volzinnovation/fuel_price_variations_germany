@@ -136,6 +136,53 @@ test("index.html falls back to the local station catalog when live prices are un
   await expect(page.locator(`#${stationId}-profile`)).toContainText("2.050");
 });
 
+test("price.html renders query-controlled station labels as text", async ({ page }) => {
+  await routeCommonResponses(page);
+  const payload = '<img src=x onerror="window.__xss_price=1">';
+
+  await page.goto(
+    `${baseUrl}/price.html?fuel=diesel&price=1.80&brand=${encodeURIComponent(payload)}`,
+  );
+
+  await expect(page.locator("#brent-steps")).toContainText(payload);
+  await expect(page.locator("#brent-steps img")).toHaveCount(0);
+  expect(await page.evaluate(() => window.__xss_price)).toBeUndefined();
+});
+
+test("index.html rejects malformed live station fields before rendering", async ({
+  page,
+}) => {
+  await routeMalformedStationResponse(page);
+
+  await page.goto(`${baseUrl}/index.html`);
+  await page.evaluate(() => {
+    handleLocation({ coords: { latitude: 52.52, longitude: 13.405 } });
+  });
+
+  await expect(page.locator("#stations tr")).toHaveCount(1);
+  await expect(page.locator(`#${stationId}`)).toBeVisible();
+  await expect(page.locator("#stations")).not.toContainText("Bad Station");
+  await expect(page.locator("#stations img")).toHaveCount(0);
+  expect(await page.evaluate(() => window.__xss_station)).toBeUndefined();
+});
+
+test("e10.html rejects malformed live station fields before rendering", async ({
+  page,
+}) => {
+  await routeMalformedStationResponse(page);
+
+  await page.goto(`${baseUrl}/e10.html`);
+  await page.evaluate(() => {
+    handleLocation({ coords: { latitude: 52.52, longitude: 13.405 } });
+  });
+
+  await expect(page.locator("#stations tr")).toHaveCount(1);
+  await expect(page.locator(`#${stationId}`)).toBeVisible();
+  await expect(page.locator("#stations")).not.toContainText("Bad Station");
+  await expect(page.locator("#stations img")).toHaveCount(0);
+  expect(await page.evaluate(() => window.__xss_station)).toBeUndefined();
+});
+
 test("favoriten.html hides live prices when the live price endpoint is unavailable", async ({
   page,
 }) => {
@@ -327,6 +374,33 @@ async function routeFavoriteFailureResponses(page) {
         ok: false,
         status: "error",
         message: "Key existiert nicht oder ist deaktiviert",
+      }),
+    });
+  });
+}
+
+async function routeMalformedStationResponse(page) {
+  await routeCommonResponses(page);
+  await page.route("https://creativecommons.tankerkoenig.de/json/list.php**", (route) => {
+    const safeStation = nearbyStationsResponse.stations[0];
+    route.fulfill({
+      status: 200,
+      contentType: "application/json; charset=utf-8",
+      body: JSON.stringify({
+        ...nearbyStationsResponse,
+        stations: [
+          {
+            ...safeStation,
+            id: 'bad" autofocus onfocus="window.__xss_station=1',
+            name: 'Bad Station <img src=x onerror="window.__xss_station=1">',
+            brand: "EVIL",
+            lat: '52.52" onclick="window.__xss_station=1',
+            lng: 13.405,
+            diesel: '<img src=x onerror="window.__xss_station=1">',
+            e10: '<img src=x onerror="window.__xss_station=1">',
+          },
+          safeStation,
+        ],
       }),
     });
   });

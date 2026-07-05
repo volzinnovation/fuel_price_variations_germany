@@ -17,6 +17,11 @@ Die tägliche Aktualisierung läuft via GitHub Actions und schreibt die Ergebnis
 Erforderlich:
 - GitHub Secrets `TK_USER` und `TK_PASS` (Zugang zum Tankerkönig Data Repository)
 
+Die CI-Workflows installieren Python-Pakete aus `requirements.lock` mit
+Hash-Prüfung. `requirements.txt` bleibt die Eingabeliste für Updates; nach
+Änderungen an den direkten Abhängigkeiten muss `requirements.lock` neu erzeugt
+werden.
+
 Abbildung der MTS-K Tankstellen ID auf Ordnerstrukur aus
 
 Beispiel OMV Bad Herrenalb (ID b4ed695f-2cfc-4688-8ecf-268b10cdb93e)

@@ -133,6 +133,15 @@
         return candidate;
       }
 
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
+      }
+
       function setActiveFuelNav() {
         const activeId =
           fuelConfig.key === "diesel"
@@ -182,12 +191,12 @@
           brentStepsEl.innerHTML = `
             <div class="breakdown-operator">−</div>
             <div class="breakdown-step">
-              <span>${crudeLabel}</span>
+              <span>${escapeHtml(crudeLabel)}</span>
               <strong>${TankzeitFuelBreakdown.formatEuroPerLiter(brentPerLiter)}</strong>
             </div>
             <div class="breakdown-operator">=</div>
             <div class="breakdown-step breakdown-step-result">
-              <span>${operatorLabel}</span>
+              <span>${escapeHtml(operatorLabel)}</span>
               <strong>${TankzeitFuelBreakdown.formatEuroPerLiter(operatingDelta)}</strong>
             </div>
           `;

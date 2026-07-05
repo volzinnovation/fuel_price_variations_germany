@@ -261,7 +261,47 @@
       }
 
       function hrefForHtml(url) {
-        return String(url).replaceAll("&", "&amp;");
+        return escapeHtml(url);
+      }
+
+      const STATION_ID_PATTERN =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+      function toFiniteNumber(value) {
+        const number = Number(value);
+        return Number.isFinite(number) ? number : null;
+      }
+
+      function normalizeStation(station) {
+        if (!station) return null;
+        const id = String(station.id || "").trim();
+        const lat = toFiniteNumber(station.lat);
+        const lng = toFiniteNumber(station.lng);
+        const dist = toFiniteNumber(station.dist);
+        if (!STATION_ID_PATTERN.test(id) || lat === null || lng === null) {
+          return null;
+        }
+
+        const normalized = {
+          id,
+          name: String(station.name || station.brand || "Tankstelle"),
+          brand: String(station.brand || ""),
+          lat,
+          lng,
+          dist,
+        };
+        const price = toFiniteNumber(station[FUEL]);
+        if (livePricesAvailable) {
+          if (price === null || price <= 0) return null;
+          normalized[FUEL] = price;
+        } else {
+          normalized[FUEL] = price;
+        }
+        return normalized;
+      }
+
+      function normalizeStations(stations) {
+        return (stations || []).map(normalizeStation).filter(Boolean);
       }
 
       function mapsUrl(lat, lng) {
@@ -473,7 +513,7 @@
       }
 
       async function renderStations(stations) {
-        const limited = stations.slice(0, 10);
+        const limited = normalizeStations(stations).slice(0, 10);
         stationsEl.innerHTML = limited
           .map((s) => {
             const isSaved = ids.includes(s.id);
@@ -536,7 +576,9 @@
           const prices = await fetchJson(url);
           setLivePriceAvailability(true);
           const stations = sortStations(
-            (prices.stations || []).filter((s) => s.isOpen && s[FUEL] != null),
+            normalizeStations(
+              (prices.stations || []).filter((s) => s.isOpen && s[FUEL] != null),
+            ),
           );
           if (!stations.length) {
             stationsEl.innerHTML =
@@ -551,7 +593,7 @@
             try {
               setLivePriceAvailability(false);
               const fallbackStations = sortStations(
-                await loadFallbackStations(lat, lng),
+                normalizeStations(await loadFallbackStations(lat, lng)),
               );
               if (!fallbackStations.length) {
                 stationsEl.innerHTML =

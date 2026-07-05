@@ -103,6 +103,17 @@ def format_text(value: object) -> str:
     return html.escape(str(value or "").strip())
 
 
+def json_for_script(value: object) -> str:
+    return (
+        json.dumps(value, ensure_ascii=False)
+        .replace("&", "\\u0026")
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("\u2028", "\\u2028")
+        .replace("\u2029", "\\u2029")
+    )
+
+
 def truncate_text(value: object, limit: int) -> str:
     text = re.sub(r"\s+", " ", str(value or "").strip())
     if len(text) <= limit:
@@ -487,7 +498,7 @@ def build_legacy_alias_page(canonical_url: str) -> str:
     <meta name="robots" content="noindex,follow" />
     <title>Weiterleitung | tankzeit.de</title>
     <script>
-      location.replace({json.dumps(canonical_url)});
+      location.replace({json_for_script(canonical_url)});
     </script>
   </head>
   <body>
@@ -658,7 +669,7 @@ def build_station_page(
     <meta name="twitter:image:alt" content="{format_text(SITE_SOCIAL_IMAGE_ALT)}" />
     <meta name="theme-color" content="#0f766e" />
     <link rel="stylesheet" href="/styles.css" />
-    <script type="application/ld+json">{json.dumps(structured_data, ensure_ascii=False)}</script>
+    <script type="application/ld+json">{json_for_script(structured_data)}</script>
   </head>
   <body class="station-page">
     <main class="station-shell">
