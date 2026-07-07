@@ -82,7 +82,7 @@ class BuildSiteTests(unittest.TestCase):
             _path, html = build_station_page(_station(), {})
 
         self.assertIn('<meta name="twitter:card" content="summary_large_image" />', html)
-        self.assertIn('content="https://tankzeit.de/img/social-card.png"', html)
+        self.assertIn('content="https://tankzeit.de/img/social-card-v2.png"', html)
         self.assertIn(
             'content="Diesel im Tagesprofil meist günstig: 18 - 24h. Direktlinks zu Diesel-, E10- und E5-Charts auf tankzeit.de."',
             html,

@@ -12,3 +12,4 @@ data2/.DS_Store
 __pycache__/
 output/
 output/play-store/
+docs/gamification-spec.md

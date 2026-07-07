@@ -513,13 +513,21 @@ p {
   opacity: 0.9;
 }
 
-.row-highlight {
-  background: rgba(15, 118, 110, 0.1);
+.table tbody tr.row-highlight {
+  background:
+    linear-gradient(90deg, rgba(15, 118, 110, 0.18), rgba(20, 184, 166, 0.1));
+  box-shadow: inset 4px 0 0 var(--accent);
+}
+
+.table tbody tr.row-highlight td {
+  background: transparent;
 }
 
 @media (prefers-color-scheme: dark) {
-  .row-highlight {
-    background: rgba(20, 184, 166, 0.15);
+  .table tbody tr.row-highlight {
+    background:
+      linear-gradient(90deg, rgba(20, 184, 166, 0.24), rgba(20, 184, 166, 0.1));
+    box-shadow: inset 4px 0 0 var(--accent-light);
   }
 }
 
@@ -540,6 +548,13 @@ p {
     margin-bottom: 10px;
     box-shadow: var(--shadow-sm);
     border: 1px solid rgba(128, 128, 128, 0.1);
+  }
+  .table tr.row-highlight {
+    background:
+      linear-gradient(135deg, rgba(15, 118, 110, 0.18), rgba(20, 184, 166, 0.08)),
+      var(--card);
+    border-color: rgba(15, 118, 110, 0.3);
+    box-shadow: inset 4px 0 0 var(--accent), var(--shadow-sm);
   }
   .table td {
     display: flex;
@@ -563,6 +578,16 @@ p {
   .station-favorite-cell::before {
     content: "";
     display: none;
+  }
+}
+
+@media (prefers-color-scheme: dark) and (max-width: 600px) {
+  .table tr.row-highlight {
+    background:
+      linear-gradient(135deg, rgba(20, 184, 166, 0.24), rgba(20, 184, 166, 0.1)),
+      var(--card);
+    border-color: rgba(20, 184, 166, 0.34);
+    box-shadow: inset 4px 0 0 var(--accent-light), var(--shadow-sm);
   }
 }
 

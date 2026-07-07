@@ -22,7 +22,7 @@ ROBOTS_PATH = ROOT / "robots.txt"
 SITE_ORIGIN = "https://tankzeit.de"
 SITE_NAME = "tankzeit.de"
 SITE_LOGO_URL = f"{SITE_ORIGIN}/favicon-512.png"
-SITE_SOCIAL_IMAGE_URL = f"{SITE_ORIGIN}/img/social-card.png"
+SITE_SOCIAL_IMAGE_URL = f"{SITE_ORIGIN}/img/social-card-v2.png"
 SITE_SOCIAL_IMAGE_ALT = (
     "Tankzeit Vorschaugrafik mit Logo und Hinweis auf beste Tankzeiten für Diesel, E10 und E5"
 )
