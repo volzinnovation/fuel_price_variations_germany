@@ -211,25 +211,17 @@ def summarize_observations(
     }
 
 
-def build_station_savings_distribution(
+def build_savings_distribution(
     observations: list[ProfileObservation],
     *,
+    grain: str,
     bin_width_eur: float = 0.05,
 ) -> dict[str, object]:
-    savings_by_station: dict[str, list[float]] = {}
-    for row in observations:
-        savings_by_station.setdefault(row.station_uuid, []).append(
-            max(0.0, row.raw_saving)
-        )
-
-    station_savings = [
-        float(median(values)) for values in savings_by_station.values() if values
-    ]
-    if not station_savings:
+    savings = [max(0.0, row.raw_saving) for row in observations]
+    if not savings:
         return {
-            "grain": "station",
-            "aggregation": "median consumer saving across available fuels",
-            "station_count": 0,
+            "grain": grain,
+            "sample_size": 0,
             "bin_width_eur_per_liter": bin_width_eur,
             "bins": [],
             "savings_eur_per_liter": {
@@ -241,10 +233,10 @@ def build_station_savings_distribution(
             },
         }
 
-    maximum = max(station_savings)
+    maximum = max(savings)
     bin_count = max(1, math.ceil(maximum / bin_width_eur))
     counts = [0] * bin_count
-    for saving in station_savings:
+    for saving in savings:
         index = min(int(saving / bin_width_eur), bin_count - 1)
         counts[index] += 1
 
@@ -258,16 +250,15 @@ def build_station_savings_distribution(
         for index, count in enumerate(counts)
     ]
     return {
-        "grain": "station",
-        "aggregation": "median consumer saving across available fuels",
-        "station_count": len(station_savings),
+        "grain": grain,
+        "sample_size": len(savings),
         "bin_width_eur_per_liter": bin_width_eur,
         "bins": bins,
         "savings_eur_per_liter": {
-            "minimum": round(min(station_savings), 3),
-            "average": round(sum(station_savings) / len(station_savings), 3),
-            "median": round(float(median(station_savings)), 3),
-            "p95": round(float(percentile(station_savings, 0.95)), 3),
+            "minimum": round(min(savings), 3),
+            "average": round(sum(savings) / len(savings), 3),
+            "median": round(float(median(savings)), 3),
+            "p95": round(float(percentile(savings, 0.95)), 3),
             "maximum": round(maximum, 3),
         },
     }
@@ -356,9 +347,19 @@ def build_summary(
         },
         "generated_at": generated_at.astimezone(BERLIN).isoformat(timespec="seconds"),
         "overall": summarize_observations(observations, overall_excluded),
-        "station_savings_distribution": build_station_savings_distribution(
-            observations
-        ),
+        "savings_distributions": {
+            "all": build_savings_distribution(
+                observations,
+                grain="station_fuel",
+            ),
+            **{
+                fuel: build_savings_distribution(
+                    [row for row in observations if row.fuel == fuel],
+                    grain="station",
+                )
+                for fuel in FUELS
+            },
+        },
         "fuels": {
             fuel: summarize_observations(
                 [row for row in observations if row.fuel == fuel],
@@ -373,7 +374,8 @@ def build_summary(
             "reference": "median price from 12:00-12:59 on the prior local day",
             "advice_price": "median price from 11:00-11:59 on the completed local day",
             "consumer_saving": "max(0, prior_noon_price - advice_price)",
-            "station_distribution": "median consumer saving across available fuels per station",
+            "all_fuels_distribution": "one observation per eligible station and fuel",
+            "fuel_distribution": "one observation per eligible station for the selected fuel",
             "confirmation": "11:00 price is a strict or tied minimum of the 12:00-to-11:59 cycle",
             "flat_profiles": "positive zero-span profiles are included as inferred unchanged prices",
         },
