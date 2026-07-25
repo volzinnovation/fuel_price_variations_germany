@@ -22,7 +22,7 @@
       <div class="app-install-head">
         <div class="app-install-copy">
           <p class="app-install-kicker">Auch als App</p>
-          <h2>Tankzeit immer dabei</h2>
+          <h2>Tankzeit für jede Tankstelle genau</h2>
           <p>
             Für
             <a class="app-install-copy-link" href="${IOS_LINK}">iPhone im App Store</a>
