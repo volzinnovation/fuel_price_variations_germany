@@ -1,0 +1,53 @@
+name: Nightly web advice
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["Daily data update"]
+    types:
+      - completed
+
+concurrency:
+  group: master-data-writer
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  generate-web-advice:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout latest master
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Generate 11:00 web advice
+        env:
+          TZ: Europe/Berlin
+        run: python scripts/generate_simple_advice.py
+
+      - name: Configure git
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "<>"
+
+      - name: Commit web advice
+        run: |
+          git add data/simple
+          if git diff --cached --quiet; then
+            echo "No web advice changes to commit."
+            exit 0
+          fi
+          git commit -m "Nightly web advice"
+          git fetch origin master
+          git rebase origin/master
+          git push origin master
