@@ -523,33 +523,6 @@ body.simple-page {
   vertical-align: super;
 }
 
-.simple-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: clamp(48px, 8vw, 88px);
-  padding: 22px 4px calc(4px + env(safe-area-inset-bottom));
-  color: var(--simple-muted);
-  border-top: 1px solid var(--simple-line);
-  font-size: 0.8rem;
-}
-
-.simple-footer span {
-  color: var(--simple-ink);
-  font-weight: 800;
-}
-
-.simple-footer a {
-  color: var(--simple-green);
-  font-weight: 800;
-  text-decoration: none;
-}
-
-.simple-footer a:hover,
-.simple-footer a:focus-visible {
-  text-decoration: underline;
-}
-
 @media (max-width: 720px) {
   .simple-page .app {
     padding-inline: 12px;

@@ -113,9 +113,9 @@ test("index.html renders the single-purpose per-fuel audit", async ({
   await expect(
     page.getByRole("button", { name: "Standort verwenden" }),
   ).toHaveCount(0);
-  await expect(page.locator("#stationen, .nav-bar")).toHaveCount(0);
-  await expect(page.locator(".simple-footer").getByRole("link", { name: "Info" }))
-    .toHaveAttribute("href", "info.html");
+  await expect(page.locator("#stationen, .nav-bar, .simple-footer")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Wie wir rechnen" }))
+    .toHaveAttribute("href", "info.html#methode");
 });
 
 test("e10.html shows E10 tankzeit ending exactly at noon", async ({ page }) => {
