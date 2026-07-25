@@ -1,0 +1,5 @@
+date,fuel,eligible_station_fuels,confirmed_station_fuels,confirmation_rate,minimum_saving_eur_per_liter,average_saving_eur_per_liter,median_saving_eur_per_liter,p95_saving_eur_per_liter,maximum_saving_eur_per_liter,flat_profiles_inferred,excluded_station_fuels
+2026-07-24,all,37347,37190,0.995796,0.0,0.198,0.2,0.28,0.75,646,12591
+2026-07-24,diesel,12758,12686,0.994356,0.0,0.192,0.19,0.29,0.46,236,3888
+2026-07-24,e10,12059,12023,0.997015,0.0,0.202,0.21,0.28,0.47,186,4587
+2026-07-24,e5,12530,12481,0.996089,0.0,0.2,0.21,0.28,0.75,224,4116
