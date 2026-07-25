@@ -116,6 +116,11 @@ test("index.html renders the single-purpose per-fuel audit", async ({
   await expect(page.locator("#stationen, .nav-bar, .simple-footer")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Wie wir rechnen" }))
     .toHaveAttribute("href", "info.html#methode");
+  await expect(page.getByRole("link", { name: "Impressum", exact: true }))
+    .toHaveAttribute("href", "https://tankzeit.de/info.html");
+
+  await page.goto(`${baseUrl}/info.html`);
+  await expect(page.locator(".nav-bar")).toHaveCount(0);
 });
 
 test("e10.html shows E10 tankzeit ending exactly at noon", async ({ page }) => {

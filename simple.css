@@ -523,6 +523,25 @@ body.simple-page {
   vertical-align: super;
 }
 
+.simple-legal {
+  margin-top: clamp(42px, 7vw, 72px);
+  padding: 18px 4px calc(4px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--simple-line);
+  text-align: right;
+}
+
+.simple-legal a {
+  color: var(--simple-green);
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.simple-legal a:hover,
+.simple-legal a:focus-visible {
+  text-decoration: underline;
+}
+
 @media (max-width: 720px) {
   .simple-page .app {
     padding-inline: 12px;
