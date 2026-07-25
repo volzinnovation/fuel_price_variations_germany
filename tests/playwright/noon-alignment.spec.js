@@ -76,8 +76,16 @@ test("index.html keeps the app promo first and renders the simple Diesel view", 
   await expect(page.getByRole("heading", { level: 1 })).toContainText(
     "11–11:59",
   );
-  await expect(page.locator("#simple-median-value")).toHaveText("21");
+  await expect(page.locator("#simple-median-value")).toHaveText("20");
   expect(await page.locator(".simple-histogram-bar").count()).toBeGreaterThan(0);
+  await page.locator('[data-analysis-fuel="diesel"]').click();
+  await expect(page.locator("#simple-median-value")).toHaveText("19");
+  await expect(page.locator("#simple-max-value")).toHaveText("46 ct");
+  await page.locator('[data-analysis-fuel="e10"]').click();
+  await expect(page.locator("#simple-median-value")).toHaveText("21");
+  await expect(page.locator("#simple-max-value")).toHaveText("47 ct");
+  await page.locator('[data-analysis-fuel="e5"]').click();
+  await expect(page.locator("#simple-max-value")).toHaveText("75 ct");
 
   await page.getByRole("button", { name: "Standort verwenden" }).click();
   const station = page.locator(`[id="station-${stationId}"]`);

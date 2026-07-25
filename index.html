@@ -98,10 +98,43 @@
             11 Uhr am Folgetag – über alle aktuellen Tankstellenprofile.
           </p>
         </div>
+        <div
+          class="simple-analysis-fuels"
+          role="group"
+          aria-label="Auswertung nach Kraftstoff"
+        >
+          <span>Auswertung</span>
+          <button
+            class="simple-analysis-fuel is-active"
+            type="button"
+            data-analysis-fuel="all"
+            aria-pressed="true"
+          >Alle</button>
+          <button
+            class="simple-analysis-fuel"
+            type="button"
+            data-analysis-fuel="diesel"
+            aria-pressed="false"
+          >Diesel</button>
+          <button
+            class="simple-analysis-fuel"
+            type="button"
+            data-analysis-fuel="e10"
+            aria-pressed="false"
+          >E10</button>
+          <button
+            class="simple-analysis-fuel"
+            type="button"
+            data-analysis-fuel="e5"
+            aria-pressed="false"
+          >E5</button>
+        </div>
         <div class="simple-evidence">
           <div class="simple-savings">
             <span class="simple-average-label">
-              Typischer Vorteil <sup>1</sup>
+              Typischer Vorteil ·
+              <span id="simple-metric-scope">alle Kraftstoffe</span>
+              <sup>1</sup>
             </span>
             <div class="simple-average">
               <strong id="simple-median-value">20</strong>
@@ -148,7 +181,9 @@
               <h3 id="histogram-title">So oft kommt welche Ersparnis vor</h3>
             </div>
             <p>
-              Jede Säule zeigt, wie viele Tankstellen in einer
+              Jede Säule zeigt, wie viele
+              <span id="simple-histogram-unit">Stations-/Kraftstoffprofile</span>
+              in einer
               5-Cent-Spanne liegen.<sup>2</sup>
             </p>
           </div>

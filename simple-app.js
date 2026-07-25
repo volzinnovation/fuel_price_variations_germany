@@ -24,6 +24,8 @@
   let livePricesAvailable = true;
   let currentStations = [];
   let allStations = [];
+  let adviceSummary = null;
+  let analysisFuel = "all";
 
   const stationsEl = document.getElementById("simple-stations");
   const statusEl = document.getElementById("simple-status");
@@ -109,36 +111,51 @@
   }
 
   function renderAdvice(summary) {
-    const overall = summary.overall || {};
-    const distribution = summary.station_savings_distribution || {};
-    const distributionSavings =
+    const stats =
+      analysisFuel === "all"
+        ? summary.overall || {}
+        : summary.fuels?.[analysisFuel] || {};
+    const distribution = summary.savings_distributions?.[analysisFuel] || {};
+    const savings =
       distribution.savings_eur_per_liter ||
-      overall.savings_eur_per_liter ||
+      stats.savings_eur_per_liter ||
       {};
-    const overallSavings = overall.savings_eur_per_liter || distributionSavings;
-    const medianSaving = safeNumber(distributionSavings.median) || 0;
-    const maximum = safeNumber(overallSavings.maximum) || 0;
+    const medianSaving = safeNumber(savings.median) || 0;
+    const maximum = safeNumber(savings.maximum) || 0;
     const medianPercent = maximum > 0 ? (medianSaving / maximum) * 100 : 0;
+    const scopeLabel =
+      analysisFuel === "all"
+        ? "alle Kraftstoffe"
+        : fuelLabels[analysisFuel];
+    const profileLabel =
+      analysisFuel === "all"
+        ? "Stations-/Kraftstoffprofilen"
+        : `${fuelLabels[analysisFuel]}-Stationsprofilen`;
 
+    document.getElementById("simple-metric-scope").textContent = scopeLabel;
     document.getElementById("simple-median-value").textContent =
       Math.round(medianSaving * 100);
     document.getElementById("simple-min-value").textContent =
-      formatCents(overallSavings.minimum);
+      formatCents(savings.minimum);
     document.getElementById("simple-max-value").textContent =
       formatCents(maximum);
     document.getElementById("simple-median-marker").style.left =
       `${Math.min(100, Math.max(0, medianPercent))}%`;
     document.getElementById("simple-confirmation-rate").textContent =
-      formatPercent(overall.confirmation_rate);
+      formatPercent(stats.confirmation_rate);
     document.getElementById("simple-confirmation-copy").textContent =
-      `${Number(overall.confirmed_station_fuels || 0).toLocaleString("de-DE")} von ${Number(overall.eligible_station_fuels || 0).toLocaleString("de-DE")} aktuellen Stations-/Kraftstoffprofilen bestätigen 11:00 als günstigsten oder gleich günstigen Zeitpunkt.`;
+      `${Number(stats.confirmed_station_fuels || 0).toLocaleString("de-DE")} von ${Number(stats.eligible_station_fuels || 0).toLocaleString("de-DE")} aktuellen ${profileLabel} bestätigen 11:00 als günstigsten oder gleich günstigen Zeitpunkt.`;
     document.getElementById("simple-audit-meta").textContent =
-      `Nachtanalyse vom ${formatDate(summary.analysis_date)} · ${Number(overall.excluded_station_fuels || 0).toLocaleString("de-DE")} stale, unvollständige oder unplausible Profile nicht eingerechnet.`;
-    renderHistogram(distribution);
-    renderStatNotes(summary, distribution);
+      `Nachtanalyse vom ${formatDate(summary.analysis_date)} · ${Number(stats.excluded_station_fuels || 0).toLocaleString("de-DE")} veraltete, unvollständige oder unplausible Profile nicht eingerechnet.`;
+    document.getElementById("simple-histogram-unit").textContent =
+      analysisFuel === "all"
+        ? "Stations-/Kraftstoffprofile"
+        : `${fuelLabels[analysisFuel]}-Stationen`;
+    renderHistogram(distribution, profileLabel);
+    renderStatNotes(stats, distribution);
   }
 
-  function renderHistogram(distribution) {
+  function renderHistogram(distribution, profileLabel) {
     const histogramEl = document.getElementById("simple-histogram");
     const bins = Array.isArray(distribution.bins) ? distribution.bins : [];
     const savings = distribution.savings_eur_per_liter || {};
@@ -166,8 +183,8 @@
           <span
             class="simple-histogram-bar${index === medianBinIndex ? " is-median" : ""}"
             style="--bar-height: ${height}%"
-            title="${escapeHtml(`${lower} bis ${upper}: ${count.toLocaleString("de-DE")} Tankstellen`)}"
-            aria-label="${escapeHtml(`${lower} bis ${upper}: ${count.toLocaleString("de-DE")} Tankstellen`)}"
+            title="${escapeHtml(`${lower} bis ${upper}: ${count.toLocaleString("de-DE")} ${profileLabel}`)}"
+            aria-label="${escapeHtml(`${lower} bis ${upper}: ${count.toLocaleString("de-DE")} ${profileLabel}`)}"
           ></span>
         `;
       })
@@ -178,34 +195,50 @@
       `${formatCents(savings.maximum)}/L`;
   }
 
-  function renderStatNotes(summary, distribution) {
-    const overall = summary.overall || {};
+  function renderStatNotes(stats, distribution) {
     const savings = distribution.savings_eur_per_liter || {};
-    const stationCount = Number(distribution.station_count || 0).toLocaleString(
+    const sampleSize = Number(distribution.sample_size || 0).toLocaleString(
       "de-DE",
     );
     const eligible = Number(
-      overall.eligible_station_fuels || 0,
+      stats.eligible_station_fuels || 0,
     ).toLocaleString("de-DE");
     const excluded = Number(
-      overall.excluded_station_fuels || 0,
+      stats.excluded_station_fuels || 0,
     ).toLocaleString("de-DE");
+    const observationLabel =
+      analysisFuel === "all"
+        ? "Stations-/Kraftstoffprofile; jede Stations-Kraftstoff-Kombination zählt einmal"
+        : `${fuelLabels[analysisFuel]}-Stationen; jede Station zählt einmal`;
+    const medianSubject =
+      analysisFuel === "all" ? "Beobachtungen" : "Stationen";
     document.getElementById("simple-stat-notes").innerHTML = `
-      <li>Median ${formatCents(savings.median)}/L: Je die Hälfte der Stationen liegt darunter bzw. darüber.</li>
-      <li>Verteilung: n = ${stationCount} Stationen; je Station zählt der Median der verfügbaren Kraftstoffe.</li>
+      <li>Median ${formatCents(savings.median)}/L: Je die Hälfte der ${medianSubject} liegt darunter bzw. darüber.</li>
+      <li>Verteilung: n = ${sampleSize} ${observationLabel}.</li>
       <li>Mittelwert ${formatCentsPrecise(savings.average)}/L · P95 ${formatCents(savings.p95)}/L · Minimum ${formatCents(savings.minimum)}/L · Maximum ${formatCents(savings.maximum)}/L.</li>
-      <li>Regeltest: n = ${eligible} Stations-/Kraftstoffprofile · ${formatPercent(overall.confirmation_rate)} Bestätigung · Einzelprofil-Spanne ${formatCents(overall.savings_eur_per_liter?.minimum)}/L bis ${formatCents(overall.savings_eur_per_liter?.maximum)}/L · ${excluded} Profile ausgeschlossen.</li>
+      <li>Regeltest: n = ${eligible} Profile · ${formatPercent(stats.confirmation_rate)} Bestätigung · ${excluded} Profile ausgeschlossen · Fenster 12:00–12:59 Vortag → 11:00–11:59 Folgetag.</li>
     `;
   }
 
   async function loadAdvice() {
     try {
-      renderAdvice(await fetchFirstJson(adviceUrls));
+      adviceSummary = await fetchFirstJson(adviceUrls);
+      renderAdvice(adviceSummary);
     } catch (error) {
       console.warn("Advice summary unavailable", error);
       document.getElementById("simple-audit-meta").textContent =
         "Die Nachtanalyse ist momentan nicht erreichbar.";
     }
+  }
+
+  function selectAnalysisFuel(nextFuel) {
+    analysisFuel = nextFuel;
+    document.querySelectorAll(".simple-analysis-fuel").forEach((button) => {
+      const active = button.dataset.analysisFuel === analysisFuel;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
+    if (adviceSummary) renderAdvice(adviceSummary);
   }
 
   function berlinTimeParts() {
@@ -482,6 +515,11 @@
 
   document.querySelectorAll(".simple-fuel").forEach((button) => {
     button.addEventListener("click", () => selectFuel(button.dataset.fuel));
+  });
+  document.querySelectorAll(".simple-analysis-fuel").forEach((button) => {
+    button.addEventListener("click", () =>
+      selectAnalysisFuel(button.dataset.analysisFuel),
+    );
   });
   sortSelect.addEventListener("change", () => renderStations(allStations));
   locationButton.addEventListener("click", requestLocation);
