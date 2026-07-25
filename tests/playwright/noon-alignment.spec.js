@@ -62,31 +62,32 @@ test.afterAll(async () => {
   });
 });
 
-test("index.html shows Diesel tankzeit ending exactly at noon", async ({ page }) => {
+test("index.html keeps the app promo first and renders the simple Diesel view", async ({
+  page,
+}) => {
   await routeFixtureResponses(page);
+  await useBerlinLocation(page);
 
   await page.goto(`${baseUrl}/index.html`);
-  await page.evaluate(() => {
-    handleLocation({ coords: { latitude: 52.52, longitude: 13.405 } });
-  });
-
-  await expect(page.locator(`#${stationId}-minimum`)).toHaveText(
-    expectedTankzeitText(stationStatsFixture),
+  await expect(page.locator("main > *").first()).toHaveAttribute(
+    "id",
+    "app-install-promo",
   );
-  await expect(page.locator(`#${stationId}-profile`)).toContainText("2.050");
-  await expect(page.locator("thead th")).toHaveText([
-    "",
-    "Name",
-    "Tankzeit",
-    "Preis €/l",
-    "Preisverlauf",
-    "Entfernung",
-  ]);
-  await expect(page.locator(`#${stationId} td`).nth(1).locator("a")).toHaveAttribute(
+  await expect(page.getByRole("heading", { level: 1 })).toContainText(
+    "11–11:59",
+  );
+  await expect(page.locator("#simple-median-value")).toHaveText("21");
+  expect(await page.locator(".simple-histogram-bar").count()).toBeGreaterThan(0);
+
+  await page.getByRole("button", { name: "Standort verwenden" }).click();
+  const station = page.locator(`[id="station-${stationId}"]`);
+  await expect(station).toContainText("11:00–11:59 empfohlen");
+  await expect(station.locator(".simple-station-price")).toContainText("1,950");
+  await expect(station.locator(".simple-station-name a")).toHaveAttribute(
     "href",
     `station/${stationId}.html`,
   );
-  await expect(page.locator(`#${stationId} td`).nth(5)).toHaveText("1.2 km");
+  await expect(station).toContainText("1.2 km");
 });
 
 test("e10.html shows E10 tankzeit ending exactly at noon", async ({ page }) => {
@@ -120,20 +121,17 @@ test("index.html falls back to the local station catalog when live prices are un
   page,
 }) => {
   await routeFailureFallbackResponses(page);
+  await useBerlinLocation(page);
 
   await page.goto(`${baseUrl}/index.html`);
-  await page.evaluate(() => {
-    handleLocation({ coords: { latitude: 52.52, longitude: 13.405 } });
-  });
+  await page.getByRole("button", { name: "Standort verwenden" }).click();
 
-  await expect(page.locator("#status")).toContainText(
-    "Livepreise sind derzeit nicht verfügbar.",
+  await expect(page.locator("#simple-status")).toContainText(
+    "Livepreise sind gerade nicht erreichbar.",
   );
-  await expect(page.locator(`#${stationId}`)).toContainText("Livepreis nicht verfügbar");
-  await expect(page.locator(`#${stationId}-minimum`)).toHaveText(
-    expectedTankzeitText(stationStatsFixture),
+  await expect(page.locator(`[id="station-${stationId}"]`)).toContainText(
+    "kein Livepreis",
   );
-  await expect(page.locator(`#${stationId}-profile`)).toContainText("2.050");
 });
 
 test("price.html renders query-controlled station labels as text", async ({ page }) => {
@@ -153,16 +151,15 @@ test("index.html rejects malformed live station fields before rendering", async 
   page,
 }) => {
   await routeMalformedStationResponse(page);
+  await useBerlinLocation(page);
 
   await page.goto(`${baseUrl}/index.html`);
-  await page.evaluate(() => {
-    handleLocation({ coords: { latitude: 52.52, longitude: 13.405 } });
-  });
+  await page.getByRole("button", { name: "Standort verwenden" }).click();
 
-  await expect(page.locator("#stations tr")).toHaveCount(1);
-  await expect(page.locator(`#${stationId}`)).toBeVisible();
-  await expect(page.locator("#stations")).not.toContainText("Bad Station");
-  await expect(page.locator("#stations img")).toHaveCount(0);
+  await expect(page.locator(".simple-station")).toHaveCount(1);
+  await expect(page.locator(`[id="station-${stationId}"]`)).toBeVisible();
+  await expect(page.locator("#simple-stations")).not.toContainText("Bad Station");
+  await expect(page.locator("#simple-stations img")).toHaveCount(0);
   expect(await page.evaluate(() => window.__xss_station)).toBeUndefined();
 });
 
@@ -249,7 +246,7 @@ test("management.html renders the noon-cycle with midnight in the middle", async
     const responseUrl = new URL(response.url());
     return (
       response.request().method() === "GET" &&
-      responseUrl.pathname === managementPath &&
+      responseUrl.pathname.endsWith(managementPath) &&
       response.ok()
     );
   });
@@ -306,7 +303,7 @@ async function routeFixtureResponses(page) {
   await page.route("**/data2/**/management_boxplots.json", (route) => {
     const request = route.request();
     const requestUrl = new URL(request.url());
-    if (requestUrl.pathname !== managementPath) {
+    if (!requestUrl.pathname.endsWith(managementPath)) {
       route.fulfill({
         status: 404,
         body: "",
@@ -324,7 +321,12 @@ async function routeFixtureResponses(page) {
   });
   await page.route("**/data2/**/noon.csv", (route) => {
     const requestUrl = new URL(route.request().url());
-    const body = noonCsvByPath[requestUrl.pathname];
+    const dataPathStart = requestUrl.pathname.indexOf("/data2/");
+    const dataPath =
+      dataPathStart >= 0
+        ? requestUrl.pathname.slice(dataPathStart)
+        : requestUrl.pathname;
+    const body = noonCsvByPath[dataPath];
     if (!body) {
       route.fulfill({
         status: 404,
@@ -333,6 +335,14 @@ async function routeFixtureResponses(page) {
       return;
     }
     route.fulfill(csvResponse(body));
+  });
+}
+
+async function useBerlinLocation(page) {
+  await page.context().grantPermissions(["geolocation"], { origin: baseUrl });
+  await page.context().setGeolocation({
+    latitude: 52.52,
+    longitude: 13.405,
   });
 }
 

@@ -101,10 +101,11 @@
       </a>
     </nav>
 
+    <script src="web-config.js?v=20260725-simple-v1"></script>
     <script src="app-stats.js"></script>
     <script src="fuel-breakdown.js?v=20260501-energy-tax-rebate"></script>
     <script>
-      const DATA_BASE = "data2/";
+      const DATA_BASE = window.TankzeitWebConfig?.dataBase || "data2/";
       const TANKERKOENIG_APOLOGY =
         "Entschuldigung, Tankerkönig ist derzeit nicht erreichbar. Bitte versuche es später erneut.";
       const NO_LIVE_PRICE_TEXT = "Livepreis nicht verfügbar";

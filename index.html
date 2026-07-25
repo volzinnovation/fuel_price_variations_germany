@@ -6,7 +6,7 @@
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
-    <meta name="theme-color" content="#0f766e" />
+    <meta name="theme-color" content="#073e36" />
     <meta
       name="robots"
       content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1"
@@ -19,7 +19,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta
       name="description"
-      content="Finde die beste Zeit zum Tanken. Tankzeit analysiert aktuelle Preismuster deutscher Tankstellen für Diesel und E10 und zeigt dir, wann du Geld sparen kannst."
+      content="Die einfache Tankregel: Tanke zwischen 11:00 und 11:59 Uhr. Tankzeit prüft das Preisfenster jede Nacht für deutsche Tankstellen."
     />
     <meta
       name="google-site-verification"
@@ -33,178 +33,218 @@
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="de_DE" />
     <meta property="og:site_name" content="tankzeit.de" />
-    <meta
-      property="og:title"
-      content="Tankzeit | Beste Tankzeiten für Diesel, E10 und E5"
-    />
+    <meta property="og:title" content="Tankzeit | Tanke zwischen 11 und 11:59" />
     <meta
       property="og:description"
-      content="Historische Preisprofile deutscher Tankstellen. Finde günstige Zeitfenster und öffne die Charts für Diesel, E10 und E5."
+      content="Eine klare Tankregel, jede Nacht mit deutschen Tankstellenpreisen geprüft."
     />
     <meta property="og:url" content="https://tankzeit.de/" />
     <meta property="og:image" content="https://tankzeit.de/img/social-card-v2.png" />
-    <meta property="og:image:type" content="image/png" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta
-      property="og:image:alt"
-      content="Tankzeit Vorschaugrafik mit Logo und Hinweis auf beste Tankzeiten für Diesel, E10 und E5"
-    />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta
-      name="twitter:title"
-      content="Tankzeit | Beste Tankzeiten für Diesel, E10 und E5"
-    />
-    <meta
-      name="twitter:description"
-      content="Historische Preisprofile deutscher Tankstellen. Finde günstige Zeitfenster und öffne die Charts für Diesel, E10 und E5."
-    />
-    <meta name="twitter:image" content="https://tankzeit.de/img/social-card-v2.png" />
-    <meta
-      name="twitter:image:alt"
-      content="Tankzeit Vorschaugrafik mit Logo und Hinweis auf beste Tankzeiten für Diesel, E10 und E5"
-    />
-    <title>Tankzeit.de: Beste Tankzeit finden und Geld sparen</title>
+    <title>Tankzeit: Tanke zwischen 11:00 und 11:59 Uhr</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="preload" href="styles.css?v=20260409-app-promo-v18" as="style" />
     <link
-      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&amp;display=swap"
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&amp;display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260409-app-promo-v18" />
+    <link rel="stylesheet" href="styles.css?v=20260725-simple-v1" />
+    <link rel="stylesheet" href="simple.css?v=20260725-simple-v1" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
-        "@graph": [
-          {
-            "@type": "WebSite",
-            "@id": "https://tankzeit.de/#website",
-            "url": "https://tankzeit.de/",
-            "name": "tankzeit.de",
-            "alternateName": "Tankzeit",
-            "description": "Finde die beste Zeit zum Tanken. Tankzeit analysiert aktuelle Preismuster deutscher Tankstellen und zeigt dir, wann du Geld sparen kannst.",
-            "inLanguage": "de-DE",
-            "publisher": {
-              "@id": "https://tankzeit.de/#organization"
-            },
-            "image": {
-              "@id": "https://tankzeit.de/#logo"
-            }
-          },
-          {
-            "@type": "Organization",
-            "@id": "https://tankzeit.de/#organization",
-            "name": "tankzeit.de",
-            "url": "https://tankzeit.de/",
-            "logo": {
-              "@id": "https://tankzeit.de/#logo"
-            }
-          },
-          {
-            "@type": "ImageObject",
-            "@id": "https://tankzeit.de/#logo",
-            "url": "https://tankzeit.de/favicon-512.png",
-            "contentUrl": "https://tankzeit.de/favicon-512.png",
-            "width": 512,
-            "height": 512,
-            "caption": "Tankzeit Logo"
-          }
-        ]
+        "@type": "WebSite",
+        "url": "https://tankzeit.de/",
+        "name": "tankzeit.de",
+        "description": "Die einfache Tankregel: Tanke zwischen 11:00 und 11:59 Uhr. Jede Nacht mit deutschen Tankstellenpreisen geprüft.",
+        "inLanguage": "de-DE"
       }
     </script>
   </head>
-  <body>
+  <body class="simple-page">
     <main class="app">
-      <header>
-        <div class="brand">
-          <h1>Tankzeit</h1>
-          <p>
-            Wann tanken am günstigsten ist. Wir zeigen Dir die beste Tankzeit.
-            So einfach lässt sich bei Spritpreisen sparen.
-          </p>
-        </div>
-        <label class="filter-chip" for="sort-mode">
-          <span class="filter-chip-label">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 7h16M7 12h10M10 17h4" />
-            </svg>
-            Sortierung
-          </span>
-          <select id="sort-mode" aria-label="Stationen sortieren">
-            <option value="distance">Distanz</option>
-            <option value="price">Preis</option>
-          </select>
-        </label>
+      <header class="simple-header">
+        <a class="simple-brand" href="index.html" aria-label="Tankzeit Startseite">
+          <span class="simple-brand-mark" aria-hidden="true">11</span>
+          tankzeit.de
+        </a>
+        <a class="simple-header-link" href="info.html#methode">Wie wir rechnen</a>
       </header>
 
-      <section class="hero" id="location-hint">
-        <div class="tip">
-          <strong>Hinweis:</strong> Wir brauchen deinen Standort, um nahe
-          Tankstellen zu finden. Bitte erlaube den Zugriff im Browser.
+      <section class="simple-hero" aria-labelledby="simple-title">
+        <div>
+          <p class="simple-eyebrow">Die Tankregel seit April</p>
+          <h1 id="simple-title">Tanke zwischen <span>11–11:59.</span></h1>
+          <p class="simple-hero-copy">
+            Unabhängig von Tankstelle und Kraftstoff ist das die verlässlich
+            günstigste Stunde des täglichen Preiszyklus. Wir prüfen die Regel
+            jede Nacht neu.
+          </p>
+          <p class="simple-now" id="simple-now">Nächstes Tankfenster wird berechnet</p>
         </div>
-        <div class="tip">
-          Falls der automatische Abruf nicht klappt, kannst du den Button als
-          Backup erneut verwenden.
-        </div>
-        <div class="location-actions">
-          <button class="btn primary" id="location-request-btn" type="button">
-            Standort abrufen
-          </button>
+        <div class="simple-clock" aria-hidden="true">
+          <span class="simple-clock-label simple-clock-label--12">12</span>
+          <span class="simple-clock-label simple-clock-label--11">11</span>
+          <span class="simple-clock-label simple-clock-label--6">6</span>
+          <span class="simple-clock-center"></span>
         </div>
       </section>
 
-      <div id="status" class="status"></div>
+      <section class="simple-section" aria-labelledby="savings-title">
+        <div class="simple-section-heading">
+          <h2 id="savings-title">Was du sparen kannst</h2>
+          <p>
+            Verglichen wird der Preis um 12 Uhr am Vortag mit dem Preis ab
+            11 Uhr am Folgetag – über alle aktuellen Tankstellenprofile.
+          </p>
+        </div>
+        <div class="simple-evidence">
+          <div class="simple-savings">
+            <span class="simple-average-label">
+              Typischer Vorteil <sup>1</sup>
+            </span>
+            <div class="simple-average">
+              <strong id="simple-median-value">20</strong>
+              <span>Cent / Liter</span>
+            </div>
+            <div class="simple-range" aria-label="Beobachtete Ersparnisspanne">
+              <div class="simple-range-track">
+                <span class="simple-range-fill"></span>
+                <span
+                  class="simple-average-marker"
+                  id="simple-median-marker"
+                  title="Median"
+                ></span>
+              </div>
+              <div class="simple-range-labels">
+                <span>
+                  <strong id="simple-min-value">0 ct</strong>
+                  ganztägig gleich, z. B. Trigema
+                </span>
+                <span>
+                  <strong id="simple-max-value">75 ct</strong>
+                  höchster beobachteter Vorteil
+                </span>
+              </div>
+            </div>
+          </div>
+          <aside class="simple-proof">
+            <div>
+              <strong id="simple-confirmation-rate">99,58 %</strong>
+              <p id="simple-confirmation-copy">
+                37.190 von 37.347 aktuellen Stations-/Kraftstoffprofilen
+                bestätigen 11:00 als günstigsten oder gleich günstigen Zeitpunkt.
+              </p>
+            </div>
+            <p class="simple-proof-meta" id="simple-audit-meta">
+              Nachtanalyse wird geladen …
+            </p>
+          </aside>
+        </div>
+        <div class="simple-histogram-card" aria-labelledby="histogram-title">
+          <div class="simple-histogram-heading">
+            <div>
+              <p class="simple-eyebrow">Verteilung</p>
+              <h3 id="histogram-title">So oft kommt welche Ersparnis vor</h3>
+            </div>
+            <p>
+              Jede Säule zeigt, wie viele Tankstellen in einer
+              5-Cent-Spanne liegen.<sup>2</sup>
+            </p>
+          </div>
+          <div
+            class="simple-histogram"
+            id="simple-histogram"
+            role="img"
+            aria-label="Histogramm der Ersparnis je Tankstelle"
+          ></div>
+          <div class="simple-histogram-axis">
+            <span id="simple-histogram-min">0 ct/L</span>
+            <span>Vorteil gegenüber Vortag 12 Uhr</span>
+            <span id="simple-histogram-max">75 ct/L</span>
+          </div>
+        </div>
+        <ol class="simple-stat-notes" id="simple-stat-notes">
+          <li>Median und Verteilungsdetails werden geladen.</li>
+        </ol>
+        <p class="simple-method">
+          Ersparnisse werden nie negativ dargestellt. Profile mit konstantem
+          Tagespreis zählen als 0 Cent; Ausreißer und unvollständige Daten
+          bleiben im Audit sichtbar, aber fließen nicht als vermeintliche
+          Ersparnis ein.
+        </p>
+      </section>
 
-      <section class="card">
-        <table class="table">
-          <thead>
-            <tr>
-              <th></th>
-              <th>Name</th>
-              <th>Tankzeit</th>
-              <th id="price-heading">Preis €/l</th>
-              <th>Preisverlauf</th>
-              <th>Entfernung</th>
-            </tr>
-          </thead>
-          <tbody id="stations">
-            <tr>
-              <td colspan="6">Wir laden die Daten...</td>
-            </tr>
-          </tbody>
-        </table>
+      <section class="simple-section" id="stationen" aria-labelledby="stations-title">
+        <div class="simple-section-heading">
+          <h2 id="stations-title">In deiner Nähe</h2>
+          <p>
+            Livepreise, Favoriten, Preisverläufe und Stationsdetails bleiben
+            vollständig verfügbar.
+          </p>
+        </div>
+        <div class="simple-controls">
+          <div class="simple-fuels" role="group" aria-label="Kraftstoff wählen">
+            <button class="simple-fuel" type="button" data-fuel="diesel">Diesel</button>
+            <button class="simple-fuel" type="button" data-fuel="e10">E10</button>
+            <button class="simple-fuel" type="button" data-fuel="e5">E5</button>
+          </div>
+          <div class="simple-control-actions">
+            <select class="simple-sort" id="simple-sort" aria-label="Stationen sortieren">
+              <option value="distance">Nach Distanz</option>
+              <option value="price">Nach Preis</option>
+            </select>
+            <button class="simple-location" id="simple-location" type="button">
+              Standort verwenden
+            </button>
+          </div>
+        </div>
+        <p class="simple-status" id="simple-status" role="status"></p>
+        <div class="simple-stations" id="simple-stations">
+          <div class="simple-empty">
+            Teile deinen Standort, um offene Tankstellen im Umkreis von 10 km
+            zu sehen.
+          </div>
+        </div>
+      </section>
+
+      <section class="simple-section" aria-labelledby="more-title">
+        <div class="simple-section-heading">
+          <h2 id="more-title">Mehr Tankzeit</h2>
+        </div>
+        <div class="simple-more">
+          <a href="favoriten.html">
+            <strong>Favoriten</strong>
+            <span>Deine gespeicherten Stationen und deren aktuelle Preise.</span>
+          </a>
+          <a href="management.html">
+            <strong>Statistik</strong>
+            <span>Deutschlandweite Preisbewegungen und Tagesverteilungen.</span>
+          </a>
+          <a href="price.html">
+            <strong>Preis erklärt</strong>
+            <span>Steuern, Rohöl und weitere Bestandteile des Literpreises.</span>
+          </a>
+        </div>
       </section>
     </main>
 
     <nav class="nav-bar" aria-label="Hauptnavigation">
-      <a href="index.html" class="nav-item active diesel" aria-current="page">
-        <svg viewBox="0 0 24 24">
-          <line x1="3" x2="15" y1="22" y2="22" />
-          <line x1="4" x2="14" y1="9" y2="9" />
-          <path d="M14 22V4a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v18" />
-          <path d="M14 13h2a2 2 0 0 1 2 2v2a2 2 0 0 0 4 0v-6.5a2.5 2.5 0 0 0-.73-1.77L18 5" />
+      <a href="index.html" class="nav-item active" aria-current="page">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 7v5l-3 2" />
         </svg>
-        <span>Diesel</span>
-      </a>
-      <a href="e10.html" class="nav-item e10">
-        <svg viewBox="0 0 24 24">
-          <path
-            d="M12 22s8-4 8-10c0-4.42-3.58-8-8-8s-8 3.58-8 8c0 6 8 10 8 10z"
-          />
-        </svg>
-        <span>E10</span>
+        <span>Tanken</span>
       </a>
       <a href="favoriten.html" class="nav-item">
-        <svg viewBox="0 0 24 24">
-          <path
-            d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
-          />
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
         </svg>
         <span>Favoriten</span>
       </a>
       <a href="management.html" class="nav-item">
-        <svg viewBox="0 0 24 24">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
           <rect x="3" y="10" width="4" height="11" />
           <rect x="10" y="5" width="4" height="16" />
           <rect x="17" y="8" width="4" height="13" />
@@ -212,7 +252,7 @@
         <span>Statistik</span>
       </a>
       <a href="info.html" class="nav-item">
-        <svg viewBox="0 0 24 24">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
           <circle cx="12" cy="12" r="10" />
           <path d="M12 16v-4M12 8h.01" />
         </svg>
@@ -220,421 +260,10 @@
       </a>
     </nav>
 
-    <script src="app-stats.js"></script>
-    <script src="station-catalog.js"></script>
-    <script>
-      const DATA_BASE = "data2/";
-      const FUEL = "diesel";
-      const TANKERKOENIG_APOLOGY =
-        "Entschuldigung, Tankerkönig ist derzeit nicht erreichbar. Bitte versuche es später erneut.";
-      const NO_LIVE_PRICE_TEXT = "Livepreis nicht verfügbar";
-      const FALLBACK_STATUS_MESSAGE =
-        "Livepreise sind derzeit nicht verfügbar. Wir zeigen nahe Tankstellen aus dem lokalen Verzeichnis.";
-      const SEARCH_RADIUS_KM = 10;
-
-      const statusEl = document.getElementById("status");
-      const stationsEl = document.getElementById("stations");
-      const sortModeEl = document.getElementById("sort-mode");
-      const locationRequestBtn = document.getElementById("location-request-btn");
-      const priceHeadingEl = document.getElementById("price-heading");
-      const ids = JSON.parse(localStorage.getItem("ids")) || [];
-      const fav = JSON.parse(localStorage.getItem("fav")) || [];
-      const SORT_STORAGE_KEY = `tankzeit_sort_${FUEL}`;
-      const LOCATION_OPTIONS = { enableHighAccuracy: false, maximumAge: 300000 };
-      const LOCATION_DEADLINE_MS = 25000;
-      let currentCenter = null;
-      let livePricesAvailable = true;
-      let locationWatchId = null;
-      let locationDeadlineId = null;
-
-      sortModeEl.value = localStorage.getItem(SORT_STORAGE_KEY) || "distance";
-      sortModeEl.addEventListener("change", () => {
-        localStorage.setItem(SORT_STORAGE_KEY, sortModeEl.value);
-        if (currentCenter) {
-          loadStations(currentCenter.lat, currentCenter.lng);
-        }
-      });
-
-      function escapeHtml(value) {
-        return String(value ?? "")
-          .replaceAll("&", "&amp;")
-          .replaceAll("<", "&lt;")
-          .replaceAll(">", "&gt;")
-          .replaceAll('"', "&quot;")
-          .replaceAll("'", "&#39;");
-      }
-
-      function hrefForHtml(url) {
-        return escapeHtml(url);
-      }
-
-      const STATION_ID_PATTERN =
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-      function toFiniteNumber(value) {
-        const number = Number(value);
-        return Number.isFinite(number) ? number : null;
-      }
-
-      function normalizeStation(station) {
-        if (!station) return null;
-        const id = String(station.id || "").trim();
-        const lat = toFiniteNumber(station.lat);
-        const lng = toFiniteNumber(station.lng);
-        const dist = toFiniteNumber(station.dist);
-        if (!STATION_ID_PATTERN.test(id) || lat === null || lng === null) {
-          return null;
-        }
-
-        const normalized = {
-          id,
-          name: String(station.name || station.brand || "Tankstelle"),
-          brand: String(station.brand || ""),
-          lat,
-          lng,
-          dist,
-        };
-        const price = toFiniteNumber(station[FUEL]);
-        if (livePricesAvailable) {
-          if (price === null || price <= 0) return null;
-          normalized[FUEL] = price;
-        } else {
-          normalized[FUEL] = price;
-        }
-        return normalized;
-      }
-
-      function normalizeStations(stations) {
-        return (stations || []).map(normalizeStation).filter(Boolean);
-      }
-
-      function mapsUrl(lat, lng) {
-        return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
-      }
-
-      function chartUrl(stationId, stationName, lat, lng) {
-        return `chart.html?id=${stationId}&fuel=${FUEL}&name=${encodeURIComponent(stationName)}&lat=${lat}&lng=${lng}`;
-      }
-
-      function stationDetailUrl(stationId) {
-        return `station/${stationId}.html`;
-      }
-
-      function formatDistanceKm(distance) {
-        const value = Number(distance);
-        return Number.isFinite(value) ? `${value.toFixed(1)} km` : "-";
-      }
-
-      function setStatus(message, type = "info") {
-        statusEl.textContent = message;
-        statusEl.className = `status ${type === "error" ? "error" : ""}`;
-        statusEl.style.display = "block";
-      }
-
-      function clearStatus() {
-        statusEl.style.display = "none";
-      }
-
-      function setLivePriceAvailability(isAvailable) {
-        livePricesAvailable = isAvailable;
-        const priceOption = sortModeEl.querySelector('option[value="price"]');
-        if (priceOption) {
-          priceOption.disabled = !isAvailable;
-        }
-        if (!isAvailable && sortModeEl.value === "price") {
-          sortModeEl.value = "distance";
-          localStorage.setItem(SORT_STORAGE_KEY, "distance");
-        }
-        if (priceHeadingEl) {
-          priceHeadingEl.textContent = isAvailable ? "Preis €/l" : "Livepreis";
-        }
-      }
-
-      function addAndStore(id, name, lat, lng) {
-        if (!ids.includes(id)) {
-          fav.push({ id, name, lat, lng });
-          ids.push(id);
-          localStorage.setItem("fav", JSON.stringify(fav));
-          localStorage.setItem("ids", JSON.stringify(ids));
-        }
-      }
-
-      function setLocationButtonBusy(isBusy) {
-        if (!locationRequestBtn) return;
-        locationRequestBtn.disabled = isBusy;
-        locationRequestBtn.textContent = isBusy
-          ? "Standort wird geladen..."
-          : "Standort abrufen";
-      }
-
-      function geoError(err) {
-        clearLocationRequest();
-        setLocationButtonBusy(false);
-        console.warn("Geolocation failed", {
-          code: err?.code,
-          message: err?.message,
-        });
-        let message = "Standort konnte nicht ermittelt werden.";
-        if (err && err.code === 1)
-          message =
-            "Standortzugriff wurde verweigert. Bitte Browser-Freigabe aktivieren.";
-        if (err && err.code === 2)
-          message =
-            "Standort ist aktuell nicht verfügbar. Das ist oft nur vorübergehend, wenn GPS, WLAN oder Browser-Standortdienste noch nicht bereit sind.";
-        if (err && err.code === 3)
-          message =
-            "Standortabfrage ist abgelaufen. Bitte erneut versuchen.";
-        setStatus(
-          `${message} Bitte versuche es erneut über den Standort-Button.`,
-          "error",
-        );
-      }
-
-      function clearLocationRequest() {
-        if (locationWatchId !== null && navigator.geolocation) {
-          navigator.geolocation.clearWatch(locationWatchId);
-          locationWatchId = null;
-        }
-        if (locationDeadlineId !== null) {
-          window.clearTimeout(locationDeadlineId);
-          locationDeadlineId = null;
-        }
-      }
-
-      function handleLocation(position) {
-        clearLocationRequest();
-        setLocationButtonBusy(false);
-        clearStatus();
-        const hint = document.getElementById("location-hint");
-        if (hint) hint.style.display = "none";
-        loadStations(position.coords.latitude, position.coords.longitude);
-      }
-
-      function requestLocation() {
-        if (!navigator.geolocation) {
-          geoError({ code: 2 });
-          return;
-        }
-        clearLocationRequest();
-        setLocationButtonBusy(true);
-        setStatus("Standort wird ermittelt...");
-        locationWatchId = navigator.geolocation.watchPosition(
-          handleLocation,
-          (err) => {
-            console.warn("Geolocation pending", {
-              code: err?.code,
-              message: err?.message,
-            });
-            if (err && err.code === 1) {
-              geoError(err);
-              return;
-            }
-            setStatus(
-              "Standort wird noch ermittelt. Das kann beim ersten Abruf etwas länger dauern.",
-            );
-          },
-          LOCATION_OPTIONS,
-        );
-        locationDeadlineId = window.setTimeout(() => {
-          geoError({ code: 3, message: "Location request deadline exceeded." });
-        }, LOCATION_DEADLINE_MS);
-      }
-
-      function isTankerkoenigRequest(url) {
-        return url.includes("tankerkoenig.de");
-      }
-
-      async function fetchJson(url) {
-        let response;
-        try {
-          response = await fetch(url);
-        } catch (err) {
-          if (isTankerkoenigRequest(url)) {
-            throw new Error(TANKERKOENIG_APOLOGY);
-          }
-          throw err;
-        }
-        if (!response.ok) {
-          if (isTankerkoenigRequest(url)) {
-            throw new Error(TANKERKOENIG_APOLOGY);
-          }
-          throw new Error(`Request failed: ${response.status}`);
-        }
-        const payload = await response.json();
-        if (isTankerkoenigRequest(url) && payload && payload.ok === false) {
-          throw new Error(TANKERKOENIG_APOLOGY);
-        }
-        return payload;
-      }
-
-      function compareNullableNumbers(left, right) {
-        const hasLeft = Number.isFinite(left);
-        const hasRight = Number.isFinite(right);
-        if (!hasLeft && !hasRight) return 0;
-        if (!hasLeft) return 1;
-        if (!hasRight) return -1;
-        return left - right;
-      }
-
-      function sortStations(stations) {
-        const sortMode =
-          !livePricesAvailable && sortModeEl.value === "price"
-            ? "distance"
-            : sortModeEl.value;
-        return [...stations].sort((left, right) => {
-          const primary =
-            sortMode === "price"
-              ? compareNullableNumbers(left[FUEL], right[FUEL])
-              : compareNullableNumbers(left.dist, right.dist);
-          if (primary !== 0) return primary;
-
-          const secondary =
-            sortMode === "price"
-              ? compareNullableNumbers(left.dist, right.dist)
-              : compareNullableNumbers(left[FUEL], right[FUEL]);
-          if (secondary !== 0) return secondary;
-
-          return `${left.name} ${left.brand || ""}`.localeCompare(
-            `${right.name} ${right.brand || ""}`,
-            "de",
-            { sensitivity: "base" },
-          );
-        });
-      }
-
-      function formatStationName(station) {
-        return station.brand
-          ? `${escapeHtml(station.name)} (${escapeHtml(station.brand)})`
-          : escapeHtml(station.name);
-      }
-
-      async function loadFallbackStations(lat, lng) {
-        const catalog = await TankzeitStationCatalog.loadCatalog();
-        return TankzeitStationCatalog.findNearbyStations(catalog, lat, lng, {
-          limit: 50,
-          radiusKm: SEARCH_RADIUS_KM,
-        });
-      }
-
-      async function renderStations(stations) {
-        const limited = normalizeStations(stations).slice(0, 10);
-        stationsEl.innerHTML = limited
-          .map((s) => {
-            const isSaved = ids.includes(s.id);
-            const stationDetailsHref = hrefForHtml(stationDetailUrl(s.id));
-            const priceHistoryHref = hrefForHtml(
-              chartUrl(s.id, s.name, s.lat, s.lng),
-            );
-            return `
-            <tr id="${s.id}">
-              <td class="station-favorite-cell"><button class="fav" data-id="${s.id}" ${isSaved ? "disabled" : ""}>${isSaved ? "❤️" : "🤍"}</button></td>
-              <td data-label="Name"><a href="${stationDetailsHref}">${formatStationName(s)}</a></td>
-              <td data-label="Tankzeit" id="${s.id}-minimum">-</td>
-              <td data-label="Preis">${livePricesAvailable ? `${s[FUEL]} €/l` : NO_LIVE_PRICE_TEXT}</td>
-              <td data-label="Preisverlauf" id="${s.id}-profile"><a href="${priceHistoryHref}">Details</a></td>
-              <td data-label="Entfernung">${formatDistanceKm(s.dist)}</td>
-            </tr>
-          `;
-          })
-          .join("");
-
-        document.querySelectorAll(".fav:not([disabled])").forEach((btn) => {
-          btn.addEventListener("click", () => {
-            const station = limited.find((s) => s.id === btn.dataset.id);
-            addAndStore(
-              station.id,
-              station.brand || station.name,
-              station.lat,
-              station.lng,
-            );
-            btn.textContent = "❤️";
-            btn.disabled = true;
-          });
-        });
-
-        await Promise.allSettled(
-          limited.map(async (s) => {
-            const statsUrl = `${DATA_BASE}${s.id.split("-").join("/")}/${FUEL}.json`;
-            const stats = await fetchJson(statsUrl);
-            const profileEl = document.getElementById(`${s.id}-profile`);
-            const minimumEl = document.getElementById(`${s.id}-minimum`);
-            const priceHistoryHref = hrefForHtml(
-              chartUrl(s.id, s.name, s.lat, s.lng),
-            );
-            profileEl.innerHTML = `<a href="${priceHistoryHref}">${escapeHtml(TankzeitStats.profileText(stats, "Details"))}</a>`;
-            minimumEl.textContent = TankzeitStats.relativeMinimumText(
-              stats,
-              stats.text || "-",
-            );
-
-            if (TankzeitStats.isNowInRelativeMinimumWindow(stats)) {
-              const row = document.getElementById(s.id);
-              row.classList.add("row-highlight");
-            }
-          }),
-        );
-      }
-
-      async function loadStations(lat, lng) {
-        currentCenter = { lat, lng };
-        setStatus("Stationen werden geladen...");
-        const url = `https://creativecommons.tankerkoenig.de/json/list.php?rad=10&type=all&sort=dist&lat=${lat}&lng=${lng}&apikey=fe8673d1-47be-1156-77e4-040e06cb785c`;
-        try {
-          const prices = await fetchJson(url);
-          setLivePriceAvailability(true);
-          const stations = sortStations(
-            normalizeStations(
-              (prices.stations || []).filter((s) => s.isOpen && s[FUEL] != null),
-            ),
-          );
-          if (!stations.length) {
-            stationsEl.innerHTML =
-              "<tr><td colspan='6'>Keine offenen Stationen gefunden.</td></tr>";
-            setStatus("Keine Stationen im Umkreis.");
-            return;
-          }
-          await renderStations(stations);
-          clearStatus();
-        } catch (err) {
-          if (err && err.message === TANKERKOENIG_APOLOGY) {
-            try {
-              setLivePriceAvailability(false);
-              const fallbackStations = sortStations(
-                normalizeStations(await loadFallbackStations(lat, lng)),
-              );
-              if (!fallbackStations.length) {
-                stationsEl.innerHTML =
-                  "<tr><td colspan='6'>Keine Stationen im Umkreis gefunden.</td></tr>";
-                setStatus(
-                  "Livepreise sind derzeit nicht verfügbar. Im lokalen Verzeichnis wurden keine Stationen im Umkreis gefunden.",
-                );
-                return;
-              }
-              await renderStations(fallbackStations);
-              setStatus(FALLBACK_STATUS_MESSAGE);
-              return;
-            } catch (fallbackErr) {
-              console.warn("Local station fallback failed", fallbackErr);
-              stationsEl.innerHTML =
-                "<tr><td colspan='6'>Livepreise und lokales Stationsverzeichnis sind derzeit nicht verfügbar.</td></tr>";
-              setStatus(
-                "Livepreise sind derzeit nicht verfügbar und das lokale Stationsverzeichnis konnte nicht geladen werden.",
-                "error",
-              );
-              return;
-            }
-          }
-          const message =
-            "Fehler beim Laden der Daten. Bitte später erneut versuchen.";
-          stationsEl.innerHTML = `<tr><td colspan='6'>${message}</td></tr>`;
-          setStatus(message, "error");
-        }
-      }
-
-      setLivePriceAvailability(true);
-      locationRequestBtn.addEventListener("click", requestLocation);
-      requestLocation();
-    </script>
+    <script src="web-config.js?v=20260725-simple-v1"></script>
+    <script src="fuel-breakdown.js?v=20260501-energy-tax-rebate"></script>
+    <script src="station-catalog.js?v=20260725-simple-v1"></script>
     <script src="app-install-promo.js?v=20260409-app-promo-v12"></script>
+    <script src="simple-app.js?v=20260725-simple-v1"></script>
   </body>
 </html>

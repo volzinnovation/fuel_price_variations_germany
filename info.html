@@ -67,6 +67,28 @@
       </header>
 
       <section class="card">
+        <div class="info-section" id="methode">
+          <h2>11-Uhr-Regel &amp; Nachtanalyse</h2>
+          <p>
+            Tankzeit prüft nach jedem abgeschlossenen Preistag alle aktuellen
+            Stations-/Kraftstoffprofile. Verglichen wird der Medianpreis von
+            12:00–12:59 Uhr am Vortag mit dem Medianpreis von 11:00–11:59 Uhr
+            am Folgetag. 11 Uhr gilt als bestätigt, wenn dieser Preis das
+            günstigste oder ein gleich günstiges Stundenmittel im
+            Mittag-bis-Mittag-Zyklus ist.
+          </p>
+          <p>
+            Für die Ersparnis gilt
+            <strong>max(0, Vortag 12 Uhr − Folgetag 11 Uhr)</strong>. Negative
+            Werte werden also nicht als Ersparnis ausgegeben. Im Histogramm
+            zählt jede Tankstelle einmal; bei mehreren Kraftstoffen verwenden
+            wir deren Median. Unvollständige, veraltete oder unplausible
+            Profile werden ausgewiesen und nicht eingerechnet. Median,
+            Mittelwert, P95, Minimum, Maximum und Stichprobengrößen stehen als
+            Fußnoten direkt unter der Grafik.
+          </p>
+        </div>
+
         <div class="info-section">
           <h2>Open Data</h2>
           <p>
@@ -156,7 +178,7 @@
         <div class="info-section">
           <h2>Funktionen</h2>
           <p>
-            <strong>Diesel & E10:</strong> Aktuelle Preise und beste Tankzeiten
+            <strong>Diesel, E10 &amp; E5:</strong> Aktuelle Preise und beste Tankzeiten
             für Tankstellen in deiner Nähe.<br />
             <strong>Favoriten:</strong> Speichere deine bevorzugten Tankstellen
             für schnellen Zugriff.<br />

@@ -1,5 +1,6 @@
 (function () {
-  const STATIONS_URL = "data/stations.json";
+  const STATIONS_URL =
+    window.TankzeitWebConfig?.stationsUrl || "data/stations.json";
   let stationCatalogPromise = null;
 
   function toFiniteNumber(value) {

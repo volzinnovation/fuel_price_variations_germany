@@ -242,6 +242,7 @@
       </a>
     </nav>
 
+    <script src="web-config.js?v=20260725-simple-v1"></script>
     <script>
       const MIN_DATE_STR = "2026-02-04";
 
@@ -653,12 +654,14 @@
 
       function urlForDate(d) {
         const p = dateParts(d);
-        return `data2/${p.y}/${p.m}/${p.d}/management_boxplots.json`;
+        const dataBase = window.TankzeitWebConfig?.dataBase || "data2/";
+        return `${dataBase}${p.y}/${p.m}/${p.d}/management_boxplots.json`;
       }
 
       function urlForNoonDate(d) {
         const p = dateParts(d);
-        return `data2/${p.y}/${p.m}/${p.d}/noon.csv`;
+        const dataBase = window.TankzeitWebConfig?.dataBase || "data2/";
+        return `${dataBase}${p.y}/${p.m}/${p.d}/noon.csv`;
       }
 
       function csvFuelNumber(row, fuel) {
