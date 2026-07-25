@@ -165,8 +165,8 @@ class SimpleAdviceTests(unittest.TestCase):
             0.2,
         )
         self.assertEqual(summary["overall"]["excluded_station_fuels"], 2)
-        distribution = summary["station_savings_distribution"]
-        self.assertEqual(distribution["station_count"], 3)
+        distribution = summary["savings_distributions"]["all"]
+        self.assertEqual(distribution["sample_size"], 3)
         self.assertEqual(
             sum(bin_row["count"] for bin_row in distribution["bins"]),
             3,
@@ -174,6 +174,10 @@ class SimpleAdviceTests(unittest.TestCase):
         self.assertEqual(
             distribution["savings_eur_per_liter"]["median"],
             0.0,
+        )
+        self.assertEqual(
+            summary["savings_distributions"]["diesel"]["sample_size"],
+            2,
         )
         self.assertEqual(summary["cycle"]["start"], "2026-07-23T12:00:00+02:00")
         self.assertEqual(summary["cycle"]["end"], "2026-07-24T11:59:59+02:00")

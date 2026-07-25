@@ -12,7 +12,7 @@
     "end": "11:59",
     "label": "11:00–11:59 Uhr"
   },
-  "generated_at": "2026-07-25T14:52:06+02:00",
+  "generated_at": "2026-07-25T15:02:01+02:00",
   "overall": {
     "eligible_station_fuels": 37347,
     "confirmed_station_fuels": 37190,
@@ -33,79 +33,362 @@
       "maximum": 0.75
     }
   },
-  "station_savings_distribution": {
-    "grain": "station",
-    "aggregation": "median consumer saving across available fuels",
-    "station_count": 12785,
-    "bin_width_eur_per_liter": 0.05,
-    "bins": [
-      {
-        "lower": 0.0,
-        "upper": 0.05,
-        "count": 471,
-        "includes_upper": false
-      },
-      {
-        "lower": 0.05,
-        "upper": 0.1,
-        "count": 327,
-        "includes_upper": false
-      },
-      {
-        "lower": 0.1,
-        "upper": 0.15,
-        "count": 966,
-        "includes_upper": false
-      },
-      {
-        "lower": 0.15,
-        "upper": 0.2,
-        "count": 3375,
-        "includes_upper": false
-      },
-      {
-        "lower": 0.2,
-        "upper": 0.25,
-        "count": 5786,
-        "includes_upper": false
-      },
-      {
-        "lower": 0.25,
-        "upper": 0.3,
-        "count": 1579,
-        "includes_upper": false
-      },
-      {
-        "lower": 0.3,
-        "upper": 0.35,
-        "count": 226,
-        "includes_upper": false
-      },
-      {
-        "lower": 0.35,
-        "upper": 0.4,
-        "count": 49,
-        "includes_upper": false
-      },
-      {
-        "lower": 0.4,
-        "upper": 0.45,
-        "count": 4,
-        "includes_upper": false
-      },
-      {
-        "lower": 0.45,
-        "upper": 0.5,
-        "count": 2,
-        "includes_upper": true
+  "savings_distributions": {
+    "all": {
+      "grain": "station_fuel",
+      "sample_size": 37347,
+      "bin_width_eur_per_liter": 0.05,
+      "bins": [
+        {
+          "lower": 0.0,
+          "upper": 0.05,
+          "count": 1278,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.05,
+          "upper": 0.1,
+          "count": 981,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.15,
+          "count": 2741,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.15,
+          "upper": 0.2,
+          "count": 11227,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.25,
+          "count": 15542,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.25,
+          "upper": 0.3,
+          "count": 4647,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.35,
+          "count": 730,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.35,
+          "upper": 0.4,
+          "count": 179,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.45,
+          "count": 16,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.45,
+          "upper": 0.5,
+          "count": 5,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.55,
+          "count": 0,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.55,
+          "upper": 0.6,
+          "count": 0,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.65,
+          "count": 0,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.65,
+          "upper": 0.7,
+          "count": 0,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.75,
+          "count": 1,
+          "includes_upper": true
+        }
+      ],
+      "savings_eur_per_liter": {
+        "minimum": 0.0,
+        "average": 0.198,
+        "median": 0.2,
+        "p95": 0.28,
+        "maximum": 0.75
       }
-    ],
-    "savings_eur_per_liter": {
-      "minimum": 0.0,
-      "average": 0.198,
-      "median": 0.21,
-      "p95": 0.28,
-      "maximum": 0.47
+    },
+    "diesel": {
+      "grain": "station",
+      "sample_size": 12758,
+      "bin_width_eur_per_liter": 0.05,
+      "bins": [
+        {
+          "lower": 0.0,
+          "upper": 0.05,
+          "count": 483,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.05,
+          "upper": 0.1,
+          "count": 346,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.15,
+          "count": 1003,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.15,
+          "upper": 0.2,
+          "count": 4810,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.25,
+          "count": 4202,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.25,
+          "upper": 0.3,
+          "count": 1518,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.35,
+          "count": 306,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.35,
+          "upper": 0.4,
+          "count": 86,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.45,
+          "count": 3,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.45,
+          "upper": 0.5,
+          "count": 1,
+          "includes_upper": true
+        }
+      ],
+      "savings_eur_per_liter": {
+        "minimum": 0.0,
+        "average": 0.192,
+        "median": 0.19,
+        "p95": 0.29,
+        "maximum": 0.46
+      }
+    },
+    "e10": {
+      "grain": "station",
+      "sample_size": 12059,
+      "bin_width_eur_per_liter": 0.05,
+      "bins": [
+        {
+          "lower": 0.0,
+          "upper": 0.05,
+          "count": 362,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.05,
+          "upper": 0.1,
+          "count": 352,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.15,
+          "count": 797,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.15,
+          "upper": 0.2,
+          "count": 3236,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.25,
+          "count": 5491,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.25,
+          "upper": 0.3,
+          "count": 1550,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.35,
+          "count": 221,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.35,
+          "upper": 0.4,
+          "count": 40,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.45,
+          "count": 8,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.45,
+          "upper": 0.5,
+          "count": 2,
+          "includes_upper": true
+        }
+      ],
+      "savings_eur_per_liter": {
+        "minimum": 0.0,
+        "average": 0.202,
+        "median": 0.21,
+        "p95": 0.28,
+        "maximum": 0.47
+      }
+    },
+    "e5": {
+      "grain": "station",
+      "sample_size": 12530,
+      "bin_width_eur_per_liter": 0.05,
+      "bins": [
+        {
+          "lower": 0.0,
+          "upper": 0.05,
+          "count": 433,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.05,
+          "upper": 0.1,
+          "count": 283,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.15,
+          "count": 941,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.15,
+          "upper": 0.2,
+          "count": 3181,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.25,
+          "count": 5849,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.25,
+          "upper": 0.3,
+          "count": 1579,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.3,
+          "upper": 0.35,
+          "count": 203,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.35,
+          "upper": 0.4,
+          "count": 53,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.45,
+          "count": 5,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.45,
+          "upper": 0.5,
+          "count": 2,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.55,
+          "count": 0,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.55,
+          "upper": 0.6,
+          "count": 0,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.6,
+          "upper": 0.65,
+          "count": 0,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.65,
+          "upper": 0.7,
+          "count": 0,
+          "includes_upper": false
+        },
+        {
+          "lower": 0.7,
+          "upper": 0.75,
+          "count": 1,
+          "includes_upper": true
+        }
+      ],
+      "savings_eur_per_liter": {
+        "minimum": 0.0,
+        "average": 0.2,
+        "median": 0.21,
+        "p95": 0.28,
+        "maximum": 0.75
+      }
     }
   },
   "fuels": {
@@ -869,7 +1152,8 @@
     "reference": "median price from 12:00-12:59 on the prior local day",
     "advice_price": "median price from 11:00-11:59 on the completed local day",
     "consumer_saving": "max(0, prior_noon_price - advice_price)",
-    "station_distribution": "median consumer saving across available fuels per station",
+    "all_fuels_distribution": "one observation per eligible station and fuel",
+    "fuel_distribution": "one observation per eligible station for the selected fuel",
     "confirmation": "11:00 price is a strict or tied minimum of the 12:00-to-11:59 cycle",
     "flat_profiles": "positive zero-span profiles are included as inferred unchanged prices"
   }
