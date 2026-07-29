@@ -62,31 +62,65 @@ test.afterAll(async () => {
   });
 });
 
-test("index.html shows Diesel tankzeit ending exactly at noon", async ({ page }) => {
-  await routeFixtureResponses(page);
+test("index.html renders the single-purpose per-fuel audit", async ({
+  page,
+}) => {
+  await routeCommonResponses(page);
 
   await page.goto(`${baseUrl}/index.html`);
-  await page.evaluate(() => {
-    handleLocation({ coords: { latitude: 52.52, longitude: 13.405 } });
-  });
-
-  await expect(page.locator(`#${stationId}-minimum`)).toHaveText(
-    expectedTankzeitText(stationStatsFixture),
+  await expect(page.locator(".simple-hero + section")).toHaveAttribute(
+    "id",
+    "app-install-promo",
   );
-  await expect(page.locator(`#${stationId}-profile`)).toContainText("2.050");
-  await expect(page.locator("thead th")).toHaveText([
-    "",
-    "Name",
-    "Tankzeit",
-    "Preis €/l",
-    "Preisverlauf",
-    "Entfernung",
-  ]);
-  await expect(page.locator(`#${stationId} td`).nth(1).locator("a")).toHaveAttribute(
+  await expect(
+    page.getByRole("heading", {
+      level: 2,
+      name: "Tankzeit für jede Tankstelle genau",
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Tankzeit im App Store öffnen" }),
+  ).toHaveAttribute(
     "href",
-    `station/${stationId}.html`,
+    "https://apps.apple.com/de/app/tankzeit/id6759522835",
   );
-  await expect(page.locator(`#${stationId} td`).nth(5)).toHaveText("1.2 km");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    "Tanke zwischen 11:00 und 11:59 Uhr.",
+  );
+  await expect(page.locator(".simple-clock-window path")).toHaveAttribute(
+    "d",
+    "M50 50 L25 6.699 A50 50 0 0 1 50 0 Z",
+  );
+  await expect(page.locator("#simple-median-value")).toHaveText("19");
+  await expect(page.locator("#simple-max-value")).toHaveText("46 ct");
+  await expect(page.locator("#simple-confirmation-copy")).toContainText(
+    "bestätigen 11:00 als günstigsten Zeitraum.",
+  );
+  expect(await page.locator(".simple-histogram-bar").count()).toBeGreaterThan(0);
+  await expect(page.locator(".simple-histogram-bar.is-median")).toHaveAttribute(
+    "data-median-label",
+    "Median 19 ct/L",
+  );
+  await page.locator('[data-analysis-fuel="e10"]').click();
+  await expect(page.locator("#simple-median-value")).toHaveText("21");
+  await expect(page.locator("#simple-max-value")).toHaveText("47 ct");
+  await expect(page.locator(".simple-histogram-bar.is-median")).toHaveAttribute(
+    "data-median-label",
+    "Median 21 ct/L",
+  );
+  await page.locator('[data-analysis-fuel="e5"]').click();
+  await expect(page.locator("#simple-max-value")).toHaveText("75 ct");
+  await expect(
+    page.getByRole("button", { name: "Standort verwenden" }),
+  ).toHaveCount(0);
+  await expect(page.locator("#stationen, .nav-bar, .simple-footer")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Wie wir sparen" }))
+    .toHaveAttribute("href", "info.html#methode");
+  await expect(page.getByRole("link", { name: "Impressum", exact: true }))
+    .toHaveAttribute("href", "https://tankzeit.de/info.html");
+
+  await page.goto(`${baseUrl}/info.html`);
+  await expect(page.locator(".nav-bar")).toHaveCount(0);
 });
 
 test("e10.html shows E10 tankzeit ending exactly at noon", async ({ page }) => {
@@ -116,26 +150,6 @@ test("e10.html shows E10 tankzeit ending exactly at noon", async ({ page }) => {
   await expect(page.locator(`#${stationId} td`).nth(5)).toHaveText("1.2 km");
 });
 
-test("index.html falls back to the local station catalog when live prices are unavailable", async ({
-  page,
-}) => {
-  await routeFailureFallbackResponses(page);
-
-  await page.goto(`${baseUrl}/index.html`);
-  await page.evaluate(() => {
-    handleLocation({ coords: { latitude: 52.52, longitude: 13.405 } });
-  });
-
-  await expect(page.locator("#status")).toContainText(
-    "Livepreise sind derzeit nicht verfügbar.",
-  );
-  await expect(page.locator(`#${stationId}`)).toContainText("Livepreis nicht verfügbar");
-  await expect(page.locator(`#${stationId}-minimum`)).toHaveText(
-    expectedTankzeitText(stationStatsFixture),
-  );
-  await expect(page.locator(`#${stationId}-profile`)).toContainText("2.050");
-});
-
 test("price.html renders query-controlled station labels as text", async ({ page }) => {
   await routeCommonResponses(page);
   const payload = '<img src=x onerror="window.__xss_price=1">';
@@ -147,23 +161,6 @@ test("price.html renders query-controlled station labels as text", async ({ page
   await expect(page.locator("#brent-steps")).toContainText(payload);
   await expect(page.locator("#brent-steps img")).toHaveCount(0);
   expect(await page.evaluate(() => window.__xss_price)).toBeUndefined();
-});
-
-test("index.html rejects malformed live station fields before rendering", async ({
-  page,
-}) => {
-  await routeMalformedStationResponse(page);
-
-  await page.goto(`${baseUrl}/index.html`);
-  await page.evaluate(() => {
-    handleLocation({ coords: { latitude: 52.52, longitude: 13.405 } });
-  });
-
-  await expect(page.locator("#stations tr")).toHaveCount(1);
-  await expect(page.locator(`#${stationId}`)).toBeVisible();
-  await expect(page.locator("#stations")).not.toContainText("Bad Station");
-  await expect(page.locator("#stations img")).toHaveCount(0);
-  expect(await page.evaluate(() => window.__xss_station)).toBeUndefined();
 });
 
 test("e10.html rejects malformed live station fields before rendering", async ({
@@ -249,7 +246,7 @@ test("management.html renders the noon-cycle with midnight in the middle", async
     const responseUrl = new URL(response.url());
     return (
       response.request().method() === "GET" &&
-      responseUrl.pathname === managementPath &&
+      responseUrl.pathname.endsWith(managementPath) &&
       response.ok()
     );
   });
@@ -306,7 +303,7 @@ async function routeFixtureResponses(page) {
   await page.route("**/data2/**/management_boxplots.json", (route) => {
     const request = route.request();
     const requestUrl = new URL(request.url());
-    if (requestUrl.pathname !== managementPath) {
+    if (!requestUrl.pathname.endsWith(managementPath)) {
       route.fulfill({
         status: 404,
         body: "",
@@ -324,7 +321,12 @@ async function routeFixtureResponses(page) {
   });
   await page.route("**/data2/**/noon.csv", (route) => {
     const requestUrl = new URL(route.request().url());
-    const body = noonCsvByPath[requestUrl.pathname];
+    const dataPathStart = requestUrl.pathname.indexOf("/data2/");
+    const dataPath =
+      dataPathStart >= 0
+        ? requestUrl.pathname.slice(dataPathStart)
+        : requestUrl.pathname;
+    const body = noonCsvByPath[dataPath];
     if (!body) {
       route.fulfill({
         status: 404,
@@ -333,34 +335,6 @@ async function routeFixtureResponses(page) {
       return;
     }
     route.fulfill(csvResponse(body));
-  });
-}
-
-async function routeFailureFallbackResponses(page) {
-  await routeCommonResponses(page);
-  await page.route("https://creativecommons.tankerkoenig.de/json/list.php**", (route) => {
-    route.fulfill({
-      status: 200,
-      contentType: "application/json; charset=utf-8",
-      body: JSON.stringify({
-        ok: false,
-        status: "error",
-        message: "Key existiert nicht oder ist deaktiviert",
-      }),
-    });
-  });
-  await page.route("**/data/stations.json", (route) => {
-    route.fulfill(
-      jsonResponse([
-        {
-          uuid: stationId,
-          name: "Noon Test Station",
-          brand: "Fallback",
-          latitude: 52.5202,
-          longitude: 13.4052,
-        },
-      ]),
-    );
   });
 }
 

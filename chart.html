@@ -97,6 +97,7 @@
       </a>
     </nav>
 
+    <script src="web-config.js?v=20260725-simple-v1"></script>
     <script src="app-stats.js"></script>
     <script>
       const params = new URLSearchParams(window.location.search);
@@ -106,7 +107,7 @@
       const lat = params.get("lat");
       const lng = params.get("lng");
       const APP_TIME_ZONE = "Europe/Berlin";
-      const DATA_BASE = "data2/";
+      const DATA_BASE = window.TankzeitWebConfig?.dataBase || "data2/";
       const HISTORY_START = "2026-04-01";
       let chartInstance = null;
       let activeView = params.get("view") === "profile" ? "profile" : "history";
@@ -1012,6 +1013,6 @@
         refreshChartTheme();
       });
     </script>
-    <script src="app-install-promo.js?v=20260409-app-promo-v12"></script>
+    <script src="app-install-promo.js?v=20260729-app-promo-v14"></script>
   </body>
 </html>
