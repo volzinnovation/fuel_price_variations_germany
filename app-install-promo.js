@@ -88,7 +88,13 @@
     promo.className = "app-install-promo";
     promo.setAttribute("aria-label", "Tankzeit als App");
     promo.innerHTML = promoMarkup();
-    container.prepend(promo);
+
+    const simpleHero = container.querySelector(".simple-hero");
+    if (simpleHero?.querySelector(".simple-clock")) {
+      simpleHero.insertAdjacentElement("afterend", promo);
+    } else {
+      container.prepend(promo);
+    }
 
     promo
       .querySelector(".app-install-dismiss")

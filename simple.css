@@ -25,8 +25,8 @@ body.simple-page {
 }
 
 .simple-page .app-install-promo {
-  order: -1;
-  margin-bottom: 18px;
+  width: min(100%, 760px);
+  margin: 18px auto 0;
 }
 
 .simple-header {

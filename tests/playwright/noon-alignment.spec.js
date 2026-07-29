@@ -68,7 +68,7 @@ test("index.html renders the single-purpose per-fuel audit", async ({
   await routeCommonResponses(page);
 
   await page.goto(`${baseUrl}/index.html`);
-  await expect(page.locator("main > *").first()).toHaveAttribute(
+  await expect(page.locator(".simple-hero + section")).toHaveAttribute(
     "id",
     "app-install-promo",
   );
@@ -114,7 +114,7 @@ test("index.html renders the single-purpose per-fuel audit", async ({
     page.getByRole("button", { name: "Standort verwenden" }),
   ).toHaveCount(0);
   await expect(page.locator("#stationen, .nav-bar, .simple-footer")).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "Wie wir rechnen" }))
+  await expect(page.getByRole("link", { name: "Wie wir sparen" }))
     .toHaveAttribute("href", "info.html#methode");
   await expect(page.getByRole("link", { name: "Impressum", exact: true }))
     .toHaveAttribute("href", "https://tankzeit.de/info.html");
